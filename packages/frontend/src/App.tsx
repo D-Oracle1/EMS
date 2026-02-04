@@ -14,6 +14,11 @@ import Reports from './pages/Reports';
 import Staff from './pages/Staff';
 import Settings from './pages/Settings';
 import ChangePassword from './pages/ChangePassword';
+import Verification from './pages/Verification';
+import Documents from './pages/Documents';
+import AuditLogs from './pages/AuditLogs';
+import JournalEntry from './pages/JournalEntry';
+import Attendance from './pages/Attendance';
 import LoadingSpinner from './components/LoadingSpinner';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -58,6 +63,11 @@ function App() {
         <Route path="fixed-deposits" element={<FixedDeposits />} />
         <Route path="reports" element={<Reports />} />
         <Route path="staff" element={<Staff />} />
+        <Route path="verification" element={<Verification />} />
+        <Route path="documents" element={<Documents />} />
+        <Route path="audit-logs" element={<AuditLogs />} />
+        <Route path="accounting/journal/new" element={<JournalEntry />} />
+        <Route path="attendance" element={<Attendance />} />
         <Route path="settings" element={<Settings />} />
         <Route path="change-password" element={<ChangePassword />} />
       </Route>
