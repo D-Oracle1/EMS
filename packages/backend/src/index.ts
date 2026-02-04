@@ -24,6 +24,10 @@ import fixedDepositRoutes from './routes/fixed-deposit.routes.js';
 import accountingRoutes from './routes/accounting.routes.js';
 import reportRoutes from './routes/report.routes.js';
 import documentRoutes from './routes/document.routes.js';
+import hrRoutes from './routes/hr.routes.js';
+import verificationRoutes from './routes/verification.routes.js';
+import notificationRoutes from './routes/notification.routes.js';
+import batchRoutes from './routes/batch.routes.js';
 
 const app = express();
 
@@ -112,6 +116,10 @@ apiRouter.use('/fixed-deposits', fixedDepositRoutes);
 apiRouter.use('/accounting', accountingRoutes);
 apiRouter.use('/reports', reportRoutes);
 apiRouter.use('/documents', documentRoutes);
+apiRouter.use('/hr', hrRoutes);
+apiRouter.use('/verification', verificationRoutes);
+apiRouter.use('/notifications', notificationRoutes);
+apiRouter.use('/batch', batchRoutes);
 
 app.use('/api/v1', apiRouter);
 

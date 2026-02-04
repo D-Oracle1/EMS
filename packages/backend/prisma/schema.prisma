@@ -166,6 +166,8 @@ model Staff {
   performanceReviewsConducted PerformanceReview[] @relation("ReviewerStaff")
   verificationTasks VerificationTask[]
   sessions          UserSession[]
+  leaveRequests     LeaveRequest[] @relation("LeaveRequestStaff")
+  leaveApprovals    LeaveRequest[] @relation("LeaveRequestApprover")
 
   @@index([departmentId])
   @@index([roleId])
@@ -269,6 +271,39 @@ enum ReviewStatus {
   DRAFT
   SUBMITTED
   ACKNOWLEDGED
+}
+
+// Leave Requests
+model LeaveRequest {
+  id              String   @id @default(uuid())
+  staffId         String
+  leaveType       String   // ANNUAL, SICK, MATERNITY, PATERNITY, COMPASSIONATE, UNPAID
+  startDate       DateTime @db.Date
+  endDate         DateTime @db.Date
+  days            Int
+  reason          String
+  status          LeaveStatus @default(PENDING)
+
+  approverId      String?
+  approvedAt      DateTime?
+  approverComments String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  staff           Staff    @relation("LeaveRequestStaff", fields: [staffId], references: [id])
+  approver        Staff?   @relation("LeaveRequestApprover", fields: [approverId], references: [id])
+
+  @@index([staffId])
+  @@index([status])
+  @@index([startDate, endDate])
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
 }
 
 // ============================================================================
