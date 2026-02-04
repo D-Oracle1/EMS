@@ -1,0 +1,1542 @@
+// Hylink Finance Limited - Enterprise Management System
+// Database Schema - Audit-Ready, Double-Entry Compliant
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// CORE SYSTEM TABLES
+// ============================================================================
+
+// System Configuration
+model SystemConfig {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String
+  category  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category])
+}
+
+// Branches/Locations
+model Branch {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
+  address     String?
+  phone       String?
+  email       String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  staff       Staff[]
+  customers   Customer[]
+  loans       Loan[]
+  savings     SavingsAccount[]
+  fixedDeposits FixedDeposit[]
+  journalEntries JournalEntry[]
+}
+
+// ============================================================================
+// USER & ACCESS CONTROL
+// ============================================================================
+
+// Departments
+model Department {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  staff       Staff[]
+  journalEntries JournalEntry[]
+}
+
+// Roles with hierarchical structure
+model Role {
+  id              String   @id @default(uuid())
+  code            String   @unique
+  name            String
+  description     String?
+  level           Int      @default(0) // Higher = more authority
+  approvalLimit   Decimal? @db.Decimal(18, 2) // Financial approval limit
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  permissions     RolePermission[]
+  staff           Staff[]
+}
+
+// Granular Permissions
+model Permission {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  module      String   // HR, LOANS, SAVINGS, ACCOUNTS, etc.
+  action      String   // CREATE, READ, UPDATE, DELETE, APPROVE, etc.
+  description String?
+  createdAt   DateTime @default(now())
+
+  rolePermissions RolePermission[]
+
+  @@unique([module, action])
+  @@index([module])
+}
+
+// Role-Permission Junction
+model RolePermission {
+  id           String   @id @default(uuid())
+  roleId       String
+  permissionId String
+  createdAt    DateTime @default(now())
+
+  role         Role       @relation(fields: [roleId], references: [id])
+  permission   Permission @relation(fields: [permissionId], references: [id])
+
+  @@unique([roleId, permissionId])
+}
+
+// Staff/Users
+model Staff {
+  id                String    @id @default(uuid())
+  employeeId        String    @unique
+  email             String    @unique
+  passwordHash      String
+  firstName         String
+  lastName          String
+  middleName        String?
+  phone             String?
+  dateOfBirth       DateTime?
+  gender            String?
+  address           String?
+  emergencyContact  String?
+  nationalId        String?
+  profilePhoto      String?
+
+  departmentId      String
+  roleId            String
+  branchId          String?
+  supervisorId      String?
+
+  hireDate          DateTime  @default(now())
+  terminationDate   DateTime?
+  status            StaffStatus @default(ACTIVE)
+
+  lastLoginAt       DateTime?
+  failedLoginAttempts Int     @default(0)
+  lockedUntil       DateTime?
+  passwordChangedAt DateTime?
+  mustChangePassword Boolean  @default(true)
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  createdBy         String?
+
+  department        Department @relation(fields: [departmentId], references: [id])
+  role              Role       @relation(fields: [roleId], references: [id])
+  branch            Branch?    @relation(fields: [branchId], references: [id])
+  supervisor        Staff?     @relation("StaffSupervisor", fields: [supervisorId], references: [id])
+  subordinates      Staff[]    @relation("StaffSupervisor")
+
+  // Activity Relations
+  auditLogs         AuditLog[]
+  createdLoans      Loan[]     @relation("LoanCreatedBy")
+  verifiedLoans     LoanVerification[] @relation("VerificationOfficer")
+  approvedLoans     LoanApproval[]
+  disbursedLoans    LoanDisbursement[]
+  savingsTransactions SavingsTransaction[]
+  fixedDepositCreated FixedDeposit[]
+  journalEntriesCreated JournalEntry[] @relation("JournalCreatedBy")
+  journalEntriesApproved JournalEntry[] @relation("JournalApprovedBy")
+  documentsUploaded Document[]
+  attendanceRecords Attendance[]
+  performanceReviews PerformanceReview[] @relation("ReviewedStaff")
+  performanceReviewsConducted PerformanceReview[] @relation("ReviewerStaff")
+  verificationTasks VerificationTask[]
+  sessions          UserSession[]
+
+  @@index([departmentId])
+  @@index([roleId])
+  @@index([branchId])
+  @@index([status])
+}
+
+enum StaffStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  TERMINATED
+  ON_LEAVE
+}
+
+// User Sessions for security
+model UserSession {
+  id          String   @id @default(uuid())
+  staffId     String
+  token       String   @unique
+  ipAddress   String?
+  userAgent   String?
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  revokedAt   DateTime?
+
+  staff       Staff    @relation(fields: [staffId], references: [id])
+
+  @@index([staffId])
+  @@index([expiresAt])
+}
+
+// ============================================================================
+// HR MODULE
+// ============================================================================
+
+// Attendance Records
+model Attendance {
+  id          String   @id @default(uuid())
+  staffId     String
+  date        DateTime @db.Date
+  clockIn     DateTime?
+  clockOut    DateTime?
+  status      AttendanceStatus @default(PRESENT)
+  notes       String?
+  ipAddress   String?
+  location    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  staff       Staff    @relation(fields: [staffId], references: [id])
+
+  @@unique([staffId, date])
+  @@index([date])
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  HALF_DAY
+  ON_LEAVE
+  HOLIDAY
+}
+
+// Performance Reviews
+model PerformanceReview {
+  id              String   @id @default(uuid())
+  staffId         String
+  reviewerId      String
+  reviewPeriod    String   // e.g., "Q1 2024", "Annual 2024"
+  reviewDate      DateTime
+
+  // Metrics (1-5 scale)
+  productivity    Int
+  quality         Int
+  attendance      Int
+  teamwork        Int
+  initiative      Int
+
+  overallRating   Decimal  @db.Decimal(3, 2)
+  strengths       String?
+  areasForImprovement String?
+  goals           String?
+  comments        String?
+
+  status          ReviewStatus @default(DRAFT)
+  acknowledgedAt  DateTime?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  staff           Staff    @relation("ReviewedStaff", fields: [staffId], references: [id])
+  reviewer        Staff    @relation("ReviewerStaff", fields: [reviewerId], references: [id])
+
+  @@index([staffId])
+  @@index([reviewPeriod])
+}
+
+enum ReviewStatus {
+  DRAFT
+  SUBMITTED
+  ACKNOWLEDGED
+}
+
+// ============================================================================
+// CUSTOMER MODULE
+// ============================================================================
+
+model Customer {
+  id                String   @id @default(uuid())
+  customerNumber    String   @unique
+
+  // Personal Information
+  customerType      CustomerType @default(INDIVIDUAL)
+  title             String?
+  firstName         String
+  lastName          String
+  middleName        String?
+  dateOfBirth       DateTime?
+  gender            String?
+  maritalStatus     String?
+
+  // Contact
+  email             String?
+  phone             String
+  alternatePhone    String?
+  address           String
+  city              String?
+  state             String?
+  country           String   @default("Nigeria")
+
+  // Identification
+  nationalId        String?
+  bvn               String?  // Bank Verification Number
+  passportNumber    String?
+  driversLicense    String?
+
+  // Employment
+  occupation        String?
+  employer          String?
+  employerAddress   String?
+  monthlyIncome     Decimal? @db.Decimal(18, 2)
+
+  // Next of Kin
+  nokName           String?
+  nokRelationship   String?
+  nokPhone          String?
+  nokAddress        String?
+
+  // For Corporate Customers
+  companyName       String?
+  rcNumber          String?  // Registration Number
+  taxId             String?
+
+  branchId          String?
+  profilePhoto      String?
+  status            CustomerStatus @default(ACTIVE)
+  riskRating        RiskRating @default(MEDIUM)
+
+  kycVerified       Boolean  @default(false)
+  kycVerifiedAt     DateTime?
+  kycVerifiedBy     String?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  createdBy         String?
+
+  branch            Branch?  @relation(fields: [branchId], references: [id])
+
+  loans             Loan[]
+  savingsAccounts   SavingsAccount[]
+  fixedDeposits     FixedDeposit[]
+  documents         Document[]
+  ledgerAccounts    LedgerAccount[]
+
+  @@index([customerNumber])
+  @@index([phone])
+  @@index([email])
+  @@index([branchId])
+  @@index([status])
+}
+
+enum CustomerType {
+  INDIVIDUAL
+  CORPORATE
+  GROUP
+}
+
+enum CustomerStatus {
+  ACTIVE
+  INACTIVE
+  BLACKLISTED
+  DECEASED
+}
+
+enum RiskRating {
+  LOW
+  MEDIUM
+  HIGH
+  VERY_HIGH
+}
+
+// ============================================================================
+// LOANS MODULE
+// ============================================================================
+
+// Loan Products Configuration
+model LoanProduct {
+  id                String   @id @default(uuid())
+  code              String   @unique
+  name              String
+  description       String?
+
+  minAmount         Decimal  @db.Decimal(18, 2)
+  maxAmount         Decimal  @db.Decimal(18, 2)
+  minTenure         Int      // In months
+  maxTenure         Int
+
+  interestRate      Decimal  @db.Decimal(5, 2) // Annual rate
+  interestType      InterestType @default(FLAT)
+
+  processingFee     Decimal  @db.Decimal(5, 2) // Percentage
+  insuranceFee      Decimal? @db.Decimal(5, 2)
+  lateFee           Decimal? @db.Decimal(18, 2)
+
+  gracePeriodDays   Int      @default(0)
+  penaltyRate       Decimal? @db.Decimal(5, 2) // Per day
+
+  requiresCollateral Boolean @default(false)
+  requiresGuarantor  Boolean @default(false)
+
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  loans             Loan[]
+
+  // Accounting Configuration
+  loanReceivableAccountId String?
+  interestIncomeAccountId String?
+  feeIncomeAccountId      String?
+}
+
+enum InterestType {
+  FLAT
+  REDUCING_BALANCE
+  COMPOUND
+}
+
+// Main Loan Table
+model Loan {
+  id                String   @id @default(uuid())
+  loanNumber        String   @unique
+
+  customerId        String
+  productId         String
+  branchId          String?
+
+  // Loan Terms
+  principalAmount   Decimal  @db.Decimal(18, 2)
+  interestRate      Decimal  @db.Decimal(5, 2)
+  tenure            Int      // Months
+
+  processingFee     Decimal  @db.Decimal(18, 2)
+  insuranceFee      Decimal  @db.Decimal(18, 2) @default(0)
+  totalFees         Decimal  @db.Decimal(18, 2)
+
+  totalInterest     Decimal  @db.Decimal(18, 2)
+  totalRepayment    Decimal  @db.Decimal(18, 2)
+
+  monthlyInstalment Decimal  @db.Decimal(18, 2)
+
+  // Purpose & Details
+  purpose           String?
+  collateralDetails String?
+  guarantorDetails  String?
+
+  // Workflow Status
+  status            LoanStatus @default(DRAFT)
+
+  // Dates
+  applicationDate   DateTime @default(now())
+  approvedAt        DateTime?
+  disbursedAt       DateTime?
+  firstRepaymentDate DateTime?
+  maturityDate      DateTime?
+  closedAt          DateTime?
+
+  // Tracking
+  createdById       String
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  customer          Customer @relation(fields: [customerId], references: [id])
+  product           LoanProduct @relation(fields: [productId], references: [id])
+  branch            Branch?  @relation(fields: [branchId], references: [id])
+  createdBy         Staff    @relation("LoanCreatedBy", fields: [createdById], references: [id])
+
+  verifications     LoanVerification[]
+  approvals         LoanApproval[]
+  disbursement      LoanDisbursement?
+  schedule          LoanSchedule[]
+  repayments        LoanRepayment[]
+  journalEntries    JournalEntry[]
+  documents         Document[]
+
+  @@index([loanNumber])
+  @@index([customerId])
+  @@index([status])
+  @@index([createdById])
+  @@index([applicationDate])
+}
+
+enum LoanStatus {
+  DRAFT
+  PENDING_VERIFICATION
+  VERIFICATION_IN_PROGRESS
+  VERIFIED
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  PENDING_DISBURSEMENT
+  DISBURSED
+  ACTIVE
+  OVERDUE
+  DEFAULTED
+  CLOSED
+  WRITTEN_OFF
+}
+
+// Loan Verification Reports
+model LoanVerification {
+  id                  String   @id @default(uuid())
+  loanId              String
+  officerId           String
+
+  verificationType    VerificationType
+
+  // Address Verification
+  addressVerified     Boolean?
+  addressComments     String?
+
+  // Employment Verification
+  employmentVerified  Boolean?
+  employmentComments  String?
+
+  // Property Verification (for collateral)
+  propertyExists      Boolean?
+  propertyCondition   String?
+  estimatedValue      Decimal? @db.Decimal(18, 2)
+  propertyComments    String?
+
+  // Risk Assessment
+  riskLevel           RiskRating?
+  recommendation      VerificationRecommendation?
+
+  // General
+  findings            String?
+  photos              String[] // Array of document IDs
+  documents           String[] // Array of document IDs
+  gpsCoordinates      String?
+  visitedAt           DateTime?
+
+  status              VerificationStatus @default(PENDING)
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  submittedAt         DateTime?
+
+  loan                Loan     @relation(fields: [loanId], references: [id])
+  officer             Staff    @relation("VerificationOfficer", fields: [officerId], references: [id])
+
+  @@index([loanId])
+  @@index([officerId])
+  @@index([status])
+}
+
+enum VerificationType {
+  ADDRESS
+  EMPLOYMENT
+  COLLATERAL
+  GUARANTOR
+  COMPREHENSIVE
+}
+
+enum VerificationStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  REJECTED
+}
+
+enum VerificationRecommendation {
+  APPROVE
+  APPROVE_WITH_CONDITIONS
+  DECLINE
+  FURTHER_REVIEW
+}
+
+// Loan Approvals (Multi-level)
+model LoanApproval {
+  id            String   @id @default(uuid())
+  loanId        String
+  approverId    String
+  level         Int      // 1 = Manager, 2 = Director, etc.
+
+  decision      ApprovalDecision
+  comments      String?
+  conditions    String?
+
+  approvedAmount Decimal? @db.Decimal(18, 2) // Can be different from requested
+
+  createdAt     DateTime @default(now())
+
+  loan          Loan     @relation(fields: [loanId], references: [id])
+  approver      Staff    @relation(fields: [approverId], references: [id])
+
+  @@index([loanId])
+  @@index([approverId])
+}
+
+enum ApprovalDecision {
+  APPROVED
+  REJECTED
+  REFERRED_UP
+  RETURNED_FOR_REVIEW
+}
+
+// Loan Disbursement
+model LoanDisbursement {
+  id                String   @id @default(uuid())
+  loanId            String   @unique
+
+  disbursedAmount   Decimal  @db.Decimal(18, 2)
+  disbursementMode  DisbursementMode
+
+  // Bank Transfer Details
+  bankName          String?
+  accountNumber     String?
+  accountName       String?
+
+  // Cheque Details
+  chequeNumber      String?
+
+  // Cash Details
+  cashReceiverName  String?
+  cashReceiverIdType String?
+  cashReceiverIdNumber String?
+
+  reference         String?
+  notes             String?
+
+  disbursedById     String
+  disbursedAt       DateTime @default(now())
+
+  journalEntryId    String?
+
+  loan              Loan     @relation(fields: [loanId], references: [id])
+  disbursedBy       Staff    @relation(fields: [disbursedById], references: [id])
+
+  @@index([disbursedAt])
+}
+
+enum DisbursementMode {
+  BANK_TRANSFER
+  CHEQUE
+  CASH
+  MOBILE_MONEY
+}
+
+// Loan Repayment Schedule
+model LoanSchedule {
+  id                String   @id @default(uuid())
+  loanId            String
+  installmentNumber Int
+
+  dueDate           DateTime
+  principalDue      Decimal  @db.Decimal(18, 2)
+  interestDue       Decimal  @db.Decimal(18, 2)
+  feesDue           Decimal  @db.Decimal(18, 2) @default(0)
+  totalDue          Decimal  @db.Decimal(18, 2)
+
+  principalPaid     Decimal  @db.Decimal(18, 2) @default(0)
+  interestPaid      Decimal  @db.Decimal(18, 2) @default(0)
+  feesPaid          Decimal  @db.Decimal(18, 2) @default(0)
+  penaltyPaid       Decimal  @db.Decimal(18, 2) @default(0)
+  totalPaid         Decimal  @db.Decimal(18, 2) @default(0)
+
+  outstandingBalance Decimal @db.Decimal(18, 2)
+
+  status            ScheduleStatus @default(PENDING)
+  paidDate          DateTime?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  loan              Loan     @relation(fields: [loanId], references: [id])
+  repayments        LoanRepayment[]
+
+  @@unique([loanId, installmentNumber])
+  @@index([dueDate])
+  @@index([status])
+}
+
+enum ScheduleStatus {
+  PENDING
+  PARTIAL
+  PAID
+  OVERDUE
+  WAIVED
+}
+
+// Loan Repayments
+model LoanRepayment {
+  id              String   @id @default(uuid())
+  loanId          String
+  scheduleId      String?
+
+  receiptNumber   String   @unique
+
+  amount          Decimal  @db.Decimal(18, 2)
+  principalPortion Decimal @db.Decimal(18, 2)
+  interestPortion Decimal  @db.Decimal(18, 2)
+  feesPortion     Decimal  @db.Decimal(18, 2) @default(0)
+  penaltyPortion  Decimal  @db.Decimal(18, 2) @default(0)
+
+  paymentMode     PaymentMode
+  paymentReference String?
+
+  collectedById   String
+  collectedAt     DateTime @default(now())
+
+  notes           String?
+  journalEntryId  String?
+
+  createdAt       DateTime @default(now())
+
+  schedule        LoanSchedule? @relation(fields: [scheduleId], references: [id])
+
+  @@index([loanId])
+  @@index([receiptNumber])
+  @@index([collectedAt])
+}
+
+enum PaymentMode {
+  CASH
+  BANK_TRANSFER
+  CHEQUE
+  MOBILE_MONEY
+  POS
+  DIRECT_DEBIT
+}
+
+// ============================================================================
+// SAVINGS MODULE
+// ============================================================================
+
+// Savings Products Configuration
+model SavingsProduct {
+  id                String   @id @default(uuid())
+  code              String   @unique
+  name              String
+  description       String?
+
+  savingsType       SavingsType
+
+  minBalance        Decimal  @db.Decimal(18, 2) @default(0)
+  maxBalance        Decimal? @db.Decimal(18, 2)
+  minDeposit        Decimal  @db.Decimal(18, 2) @default(0)
+  maxDailyWithdrawal Decimal? @db.Decimal(18, 2)
+
+  interestRate      Decimal  @db.Decimal(5, 2) @default(0)
+  interestFrequency InterestFrequency @default(MONTHLY)
+
+  allowWithdrawal   Boolean  @default(true)
+  withdrawalNotice  Int      @default(0) // Days
+
+  monthlyFee        Decimal  @db.Decimal(18, 2) @default(0)
+  transactionFee    Decimal  @db.Decimal(18, 2) @default(0)
+
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  accounts          SavingsAccount[]
+
+  // Accounting Configuration
+  liabilityAccountId String?
+  interestExpenseAccountId String?
+}
+
+enum SavingsType {
+  DAILY
+  TARGET
+  FIXED
+  CORPORATE
+  JUNIOR
+  CURRENT
+}
+
+enum InterestFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  ANNUALLY
+}
+
+// Savings Accounts
+model SavingsAccount {
+  id              String   @id @default(uuid())
+  accountNumber   String   @unique
+
+  customerId      String
+  productId       String
+  branchId        String?
+
+  currentBalance  Decimal  @db.Decimal(18, 2) @default(0)
+  availableBalance Decimal @db.Decimal(18, 2) @default(0)
+  holdAmount      Decimal  @db.Decimal(18, 2) @default(0)
+
+  // For Target Savings
+  targetAmount    Decimal? @db.Decimal(18, 2)
+  targetDate      DateTime?
+
+  interestAccrued Decimal  @db.Decimal(18, 2) @default(0)
+  lastInterestDate DateTime?
+
+  status          AccountStatus @default(ACTIVE)
+
+  openedAt        DateTime @default(now())
+  closedAt        DateTime?
+  lastTransactionAt DateTime?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  customer        Customer @relation(fields: [customerId], references: [id])
+  product         SavingsProduct @relation(fields: [productId], references: [id])
+  branch          Branch?  @relation(fields: [branchId], references: [id])
+
+  transactions    SavingsTransaction[]
+  journalEntries  JournalEntry[]
+
+  @@index([accountNumber])
+  @@index([customerId])
+  @@index([status])
+}
+
+enum AccountStatus {
+  ACTIVE
+  DORMANT
+  FROZEN
+  CLOSED
+}
+
+// Savings Transactions
+model SavingsTransaction {
+  id              String   @id @default(uuid())
+  accountId       String
+
+  transactionRef  String   @unique
+  transactionType SavingsTransactionType
+
+  amount          Decimal  @db.Decimal(18, 2)
+  balanceBefore   Decimal  @db.Decimal(18, 2)
+  balanceAfter    Decimal  @db.Decimal(18, 2)
+
+  paymentMode     PaymentMode
+  paymentReference String?
+
+  description     String?
+  narration       String?
+
+  processedById   String
+  processedAt     DateTime @default(now())
+
+  valueDate       DateTime @default(now())
+  journalEntryId  String?
+
+  // For reversals
+  isReversed      Boolean  @default(false)
+  reversedAt      DateTime?
+  reversalRef     String?
+
+  createdAt       DateTime @default(now())
+
+  account         SavingsAccount @relation(fields: [accountId], references: [id])
+  processedBy     Staff    @relation(fields: [processedById], references: [id])
+
+  @@index([accountId])
+  @@index([transactionRef])
+  @@index([processedAt])
+  @@index([transactionType])
+}
+
+enum SavingsTransactionType {
+  DEPOSIT
+  WITHDRAWAL
+  INTEREST_CREDIT
+  FEE_DEBIT
+  TRANSFER_IN
+  TRANSFER_OUT
+  REVERSAL
+  ADJUSTMENT
+}
+
+// ============================================================================
+// FIXED DEPOSIT MODULE
+// ============================================================================
+
+// Fixed Deposit Rates Configuration
+model FixedDepositRate {
+  id              String   @id @default(uuid())
+  minTenure       Int      // Days
+  maxTenure       Int
+  minAmount       Decimal  @db.Decimal(18, 2)
+  maxAmount       Decimal? @db.Decimal(18, 2)
+  interestRate    Decimal  @db.Decimal(5, 2)
+  isActive        Boolean  @default(true)
+  effectiveFrom   DateTime @default(now())
+  effectiveTo     DateTime?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([isActive])
+}
+
+// Fixed Deposits
+model FixedDeposit {
+  id                  String   @id @default(uuid())
+  certificateNumber   String   @unique
+
+  customerId          String
+  branchId            String?
+
+  principalAmount     Decimal  @db.Decimal(18, 2)
+  interestRate        Decimal  @db.Decimal(5, 2)
+  tenure              Int      // Days
+
+  interestAmount      Decimal  @db.Decimal(18, 2)
+  maturityAmount      Decimal  @db.Decimal(18, 2)
+
+  // Interest Payment Option
+  interestPayment     InterestPaymentOption @default(AT_MATURITY)
+  interestAccountId   String?  // For monthly/quarterly interest
+
+  startDate           DateTime
+  maturityDate        DateTime
+
+  // Funding Details
+  fundingMode         PaymentMode
+  fundingReference    String?
+
+  // Maturity Instructions
+  maturityInstruction MaturityInstruction @default(ROLLOVER_PRINCIPAL_AND_INTEREST)
+
+  status              FixedDepositStatus @default(ACTIVE)
+
+  // Interest Accrual Tracking
+  accruedInterest     Decimal  @db.Decimal(18, 2) @default(0)
+  lastAccrualDate     DateTime?
+
+  // Termination
+  terminatedAt        DateTime?
+  terminationReason   String?
+  penaltyAmount       Decimal? @db.Decimal(18, 2)
+  amountPaid          Decimal? @db.Decimal(18, 2)
+
+  createdById         String
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  customer            Customer @relation(fields: [customerId], references: [id])
+  branch              Branch?  @relation(fields: [branchId], references: [id])
+  createdBy           Staff    @relation(fields: [createdById], references: [id])
+
+  interestPayments    FixedDepositInterest[]
+  journalEntries      JournalEntry[]
+
+  @@index([certificateNumber])
+  @@index([customerId])
+  @@index([status])
+  @@index([maturityDate])
+}
+
+enum InterestPaymentOption {
+  AT_MATURITY
+  MONTHLY
+  QUARTERLY
+}
+
+enum MaturityInstruction {
+  ROLLOVER_PRINCIPAL_AND_INTEREST
+  ROLLOVER_PRINCIPAL_ONLY
+  PAY_OUT
+  TRANSFER_TO_SAVINGS
+}
+
+enum FixedDepositStatus {
+  ACTIVE
+  MATURED
+  WITHDRAWN
+  ROLLED_OVER
+  PREMATURE_CLOSED
+}
+
+// Fixed Deposit Interest Payments
+model FixedDepositInterest {
+  id              String   @id @default(uuid())
+  fixedDepositId  String
+
+  periodStart     DateTime
+  periodEnd       DateTime
+  daysInPeriod    Int
+
+  interestAmount  Decimal  @db.Decimal(18, 2)
+  status          InterestPaymentStatus @default(ACCRUED)
+
+  paidAt          DateTime?
+  paymentMode     PaymentMode?
+  paymentReference String?
+  journalEntryId  String?
+
+  createdAt       DateTime @default(now())
+
+  fixedDeposit    FixedDeposit @relation(fields: [fixedDepositId], references: [id])
+
+  @@index([fixedDepositId])
+  @@index([status])
+}
+
+enum InterestPaymentStatus {
+  ACCRUED
+  PAID
+  CAPITALIZED
+}
+
+// ============================================================================
+// VERIFICATION MODULE (FIELD OPERATIONS)
+// ============================================================================
+
+// Verification Tasks (General - not just for loans)
+model VerificationTask {
+  id                String   @id @default(uuid())
+
+  taskType          TaskType
+  referenceType     String   // LOAN, CUSTOMER, etc.
+  referenceId       String
+
+  assignedToId      String
+
+  priority          TaskPriority @default(NORMAL)
+  dueDate           DateTime?
+
+  // Location
+  address           String
+  city              String?
+  gpsCoordinates    String?
+
+  instructions      String?
+
+  // Results
+  status            TaskStatus @default(ASSIGNED)
+  startedAt         DateTime?
+  completedAt       DateTime?
+
+  findings          String?
+  recommendation    String?
+
+  photos            String[] // Document IDs
+  attachments       String[] // Document IDs
+
+  visitAttempts     Int      @default(0)
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  assignedTo        Staff    @relation(fields: [assignedToId], references: [id])
+
+  @@index([assignedToId])
+  @@index([status])
+  @@index([referenceType, referenceId])
+}
+
+enum TaskType {
+  ADDRESS_VERIFICATION
+  EMPLOYMENT_VERIFICATION
+  COLLATERAL_VERIFICATION
+  GUARANTOR_VERIFICATION
+  KYC_VERIFICATION
+  BUSINESS_VERIFICATION
+}
+
+enum TaskPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum TaskStatus {
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+// ============================================================================
+// ACCOUNTING MODULE - CHART OF ACCOUNTS & DOUBLE-ENTRY
+// ============================================================================
+
+// Chart of Accounts
+model ChartOfAccounts {
+  id              String   @id @default(uuid())
+  accountCode     String   @unique
+  accountName     String
+  accountType     AccountType
+
+  parentId        String?
+  level           Int      @default(1)
+
+  description     String?
+
+  isHeader        Boolean  @default(false)  // Parent accounts
+  isActive        Boolean  @default(true)
+  isSystemAccount Boolean  @default(false)  // Cannot be deleted
+
+  normalBalance   BalanceType // DEBIT or CREDIT
+
+  // For bank accounts
+  bankName        String?
+  bankAccountNumber String?
+
+  openingBalance  Decimal  @db.Decimal(18, 2) @default(0)
+  currentBalance  Decimal  @db.Decimal(18, 2) @default(0)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  parent          ChartOfAccounts? @relation("AccountHierarchy", fields: [parentId], references: [id])
+  children        ChartOfAccounts[] @relation("AccountHierarchy")
+
+  debitEntries    JournalEntryLine[] @relation("DebitAccount")
+  creditEntries   JournalEntryLine[] @relation("CreditAccount")
+  ledgerAccounts  LedgerAccount[]
+
+  @@index([accountCode])
+  @@index([accountType])
+  @@index([parentId])
+}
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  INCOME
+  EXPENSE
+}
+
+enum BalanceType {
+  DEBIT
+  CREDIT
+}
+
+// Customer/Loan Sub-Ledger Accounts
+model LedgerAccount {
+  id              String   @id @default(uuid())
+
+  accountId       String   // Links to ChartOfAccounts
+  customerId      String?
+
+  ledgerType      LedgerType
+  referenceType   String?  // LOAN, SAVINGS, FD
+  referenceId     String?
+
+  currentBalance  Decimal  @db.Decimal(18, 2) @default(0)
+
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  account         ChartOfAccounts @relation(fields: [accountId], references: [id])
+  customer        Customer? @relation(fields: [customerId], references: [id])
+
+  @@unique([accountId, referenceType, referenceId])
+  @@index([customerId])
+  @@index([ledgerType])
+}
+
+enum LedgerType {
+  CUSTOMER_LOAN
+  CUSTOMER_SAVINGS
+  CUSTOMER_FD
+  SUSPENSE
+  CONTROL
+}
+
+// Journal Entries (Header)
+model JournalEntry {
+  id              String   @id @default(uuid())
+  entryNumber     String   @unique
+
+  entryDate       DateTime @db.Date
+  valueDate       DateTime @db.Date
+
+  entryType       JournalEntryType
+
+  description     String
+  narration       String?
+
+  // Source Transaction Reference
+  sourceModule    String?   // LOANS, SAVINGS, FD, MANUAL
+  sourceType      String?   // DISBURSEMENT, REPAYMENT, DEPOSIT, etc.
+  sourceId        String?
+
+  // Links to source records
+  loanId          String?
+  savingsAccountId String?
+  fixedDepositId  String?
+
+  totalDebit      Decimal  @db.Decimal(18, 2)
+  totalCredit     Decimal  @db.Decimal(18, 2)
+
+  status          JournalStatus @default(DRAFT)
+
+  branchId        String?
+  departmentId    String?
+
+  createdById     String
+  approvedById    String?
+
+  createdAt       DateTime @default(now())
+  postedAt        DateTime?
+  approvedAt      DateTime?
+
+  // For reversals
+  isReversed      Boolean  @default(false)
+  reversedAt      DateTime?
+  reversalEntryId String?
+  reversalReason  String?
+
+  branch          Branch?  @relation(fields: [branchId], references: [id])
+  department      Department? @relation(fields: [departmentId], references: [id])
+  createdBy       Staff    @relation("JournalCreatedBy", fields: [createdById], references: [id])
+  approvedBy      Staff?   @relation("JournalApprovedBy", fields: [approvedById], references: [id])
+
+  loan            Loan?    @relation(fields: [loanId], references: [id])
+  savingsAccount  SavingsAccount? @relation(fields: [savingsAccountId], references: [id])
+  fixedDeposit    FixedDeposit? @relation(fields: [fixedDepositId], references: [id])
+
+  lines           JournalEntryLine[]
+
+  @@index([entryNumber])
+  @@index([entryDate])
+  @@index([sourceModule, sourceType, sourceId])
+  @@index([status])
+}
+
+enum JournalEntryType {
+  STANDARD
+  OPENING
+  CLOSING
+  ADJUSTMENT
+  REVERSAL
+  ACCRUAL
+  SYSTEM
+}
+
+enum JournalStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  POSTED
+  REJECTED
+  REVERSED
+}
+
+// Journal Entry Lines (Double-Entry)
+model JournalEntryLine {
+  id              String   @id @default(uuid())
+  journalEntryId  String
+  lineNumber      Int
+
+  accountId       String   // ChartOfAccounts
+
+  debitAmount     Decimal  @db.Decimal(18, 2) @default(0)
+  creditAmount    Decimal  @db.Decimal(18, 2) @default(0)
+
+  description     String?
+
+  // Sub-ledger reference
+  customerId      String?
+  referenceType   String?
+  referenceId     String?
+
+  createdAt       DateTime @default(now())
+
+  journalEntry    JournalEntry @relation(fields: [journalEntryId], references: [id])
+  debitAccount    ChartOfAccounts @relation("DebitAccount", fields: [accountId], references: [id])
+  creditAccount   ChartOfAccounts @relation("CreditAccount", fields: [accountId], references: [id])
+
+  @@index([journalEntryId])
+  @@index([accountId])
+}
+
+// Financial Period Lock
+model FinancialPeriod {
+  id              String   @id @default(uuid())
+  year            Int
+  month           Int
+
+  startDate       DateTime @db.Date
+  endDate         DateTime @db.Date
+
+  status          PeriodStatus @default(OPEN)
+
+  closedById      String?
+  closedAt        DateTime?
+  closingNotes    String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([year, month])
+  @@index([status])
+}
+
+enum PeriodStatus {
+  OPEN
+  SOFT_CLOSE
+  HARD_CLOSE
+}
+
+// ============================================================================
+// DOCUMENT ARCHIVE
+// ============================================================================
+
+model DocumentCategory {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
+  description String?
+  parentId    String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  parent      DocumentCategory? @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children    DocumentCategory[] @relation("CategoryHierarchy")
+  documents   Document[]
+}
+
+model Document {
+  id              String   @id @default(uuid())
+
+  documentNumber  String   @unique
+
+  categoryId      String
+
+  title           String
+  description     String?
+
+  // File Information
+  fileName        String
+  fileType        String
+  fileSize        Int
+  filePath        String
+  checksum        String   // For integrity verification
+
+  // Metadata
+  documentDate    DateTime?
+  expiryDate      DateTime?
+
+  // References
+  customerId      String?
+  loanId          String?
+  staffId         String?
+
+  departmentCode  String?
+
+  // Version Control
+  version         Int      @default(1)
+  previousVersionId String?
+
+  // Access Control
+  isConfidential  Boolean  @default(false)
+  accessLevel     String   @default("INTERNAL")
+
+  // Status
+  status          DocumentStatus @default(DRAFT)
+
+  uploadedById    String
+  uploadedAt      DateTime @default(now())
+
+  approvedById    String?
+  approvedAt      DateTime?
+
+  // Soft delete
+  isDeleted       Boolean  @default(false)
+  deletedAt       DateTime?
+  deletedById     String?
+  deletionReason  String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  category        DocumentCategory @relation(fields: [categoryId], references: [id])
+  customer        Customer? @relation(fields: [customerId], references: [id])
+  loan            Loan?    @relation(fields: [loanId], references: [id])
+  uploadedBy      Staff    @relation(fields: [uploadedById], references: [id])
+
+  @@index([documentNumber])
+  @@index([categoryId])
+  @@index([customerId])
+  @@index([loanId])
+  @@index([status])
+}
+
+enum DocumentStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  ARCHIVED
+  SUPERSEDED
+}
+
+// ============================================================================
+// AUDIT & COMPLIANCE
+// ============================================================================
+
+// Comprehensive Audit Log
+model AuditLog {
+  id              String   @id @default(uuid())
+
+  // Who
+  userId          String?
+  userEmail       String?
+  userRole        String?
+
+  // What
+  action          AuditAction
+  module          String
+  entityType      String
+  entityId        String?
+
+  // Details
+  description     String
+
+  oldValues       Json?    // Previous state
+  newValues       Json?    // New state
+  changedFields   String[] // List of changed fields
+
+  // Context
+  ipAddress       String?
+  userAgent       String?
+  sessionId       String?
+
+  // Additional metadata
+  metadata        Json?
+
+  createdAt       DateTime @default(now())
+
+  user            Staff?   @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([module])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@index([action])
+}
+
+enum AuditAction {
+  CREATE
+  READ
+  UPDATE
+  DELETE
+  APPROVE
+  REJECT
+  LOGIN
+  LOGOUT
+  LOGIN_FAILED
+  PASSWORD_CHANGE
+  EXPORT
+  PRINT
+  REVERSAL
+}
+
+// Approval Workflow History
+model ApprovalHistory {
+  id              String   @id @default(uuid())
+
+  entityType      String   // LOAN, JOURNAL, DOCUMENT, etc.
+  entityId        String
+
+  workflowStep    String
+  stepOrder       Int
+
+  action          ApprovalAction
+  actorId         String
+  actorRole       String
+
+  comments        String?
+  conditions      String?
+
+  previousStatus  String?
+  newStatus       String
+
+  createdAt       DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([actorId])
+  @@index([createdAt])
+}
+
+enum ApprovalAction {
+  SUBMITTED
+  APPROVED
+  REJECTED
+  RETURNED
+  ESCALATED
+  RECALLED
+}
+
+// System Notifications
+model Notification {
+  id              String   @id @default(uuid())
+
+  userId          String
+
+  type            NotificationType
+  title           String
+  message         String
+
+  entityType      String?
+  entityId        String?
+  actionUrl       String?
+
+  isRead          Boolean  @default(false)
+  readAt          DateTime?
+
+  createdAt       DateTime @default(now())
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+enum NotificationType {
+  INFO
+  WARNING
+  ERROR
+  APPROVAL_REQUIRED
+  TASK_ASSIGNED
+  PAYMENT_RECEIVED
+  LOAN_OVERDUE
+  MATURITY_REMINDER
+}
+
+// Sequence Generator for Reference Numbers
+model Sequence {
+  id              String   @id @default(uuid())
+  code            String   @unique
+  prefix          String
+  currentValue    Int      @default(0)
+  padLength       Int      @default(6)
+  resetFrequency  String?  // DAILY, MONTHLY, YEARLY, NEVER
+  lastResetAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
