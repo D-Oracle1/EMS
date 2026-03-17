@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
-import { markOverdueLoans, accrueFixedDepositInterest, markAbsentees, getBatchJobStatus } from '@/actions/batch.actions';
+import { markOverdueLoans, accrueFixedDepositInterest, markAbsentees, getBatchJobStatus, runMonthlySavingsInterestBatch, runMaturityProcessingBatch } from '@/actions/batch.actions';
 import type { SessionUser } from '@/types';
 
 export default function SettingsPage() {
@@ -42,6 +42,12 @@ export default function SettingsPage() {
           break;
         case 'absentees':
           result = await markAbsentees();
+          break;
+        case 'savings-interest':
+          result = await runMonthlySavingsInterestBatch();
+          break;
+        case 'savings-maturity':
+          result = await runMaturityProcessingBatch();
           break;
         default:
           return;
@@ -99,7 +105,7 @@ export default function SettingsPage() {
           </p>
 
           {batchStatus && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-4">
               <div className="text-center p-3 rounded-lg bg-muted">
                 <p className="text-2xl font-bold">{batchStatus.activeLoans}</p>
                 <p className="text-xs text-muted-foreground">Active Loans</p>
@@ -113,8 +119,16 @@ export default function SettingsPage() {
                 <p className="text-xs text-muted-foreground">Active FDs</p>
               </div>
               <div className="text-center p-3 rounded-lg bg-muted">
+                <p className="text-2xl font-bold text-blue-600">{batchStatus.activeFixedSavings}</p>
+                <p className="text-xs text-muted-foreground">Fixed Savings</p>
+              </div>
+              <div className="text-center p-3 rounded-lg bg-muted">
+                <p className="text-2xl font-bold text-orange-600">{batchStatus.pendingTerminations}</p>
+                <p className="text-xs text-muted-foreground">Pending Exits</p>
+              </div>
+              <div className="text-center p-3 rounded-lg bg-muted">
                 <p className="text-2xl font-bold">{batchStatus.pendingVerifications}</p>
-                <p className="text-xs text-muted-foreground">Pending Verifications</p>
+                <p className="text-xs text-muted-foreground">Verifications</p>
               </div>
             </div>
           )}
@@ -147,6 +161,25 @@ export default function SettingsPage() {
               </div>
               <Button variant="outline" onClick={() => runBatchJob('absentees')} disabled={loading !== null}>
                 {loading === 'absentees' ? 'Running...' : 'Run'}
+              </Button>
+            </div>
+            <Separator />
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">Monthly Savings Interest</p>
+                <p className="text-sm text-muted-foreground">Accrue monthly interest on all active fixed-term savings accounts and roll pending deposits into eligible balance</p>
+              </div>
+              <Button variant="outline" onClick={() => runBatchJob('savings-interest')} disabled={loading !== null}>
+                {loading === 'savings-interest' ? 'Running...' : 'Run'}
+              </Button>
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">Process Matured Savings</p>
+                <p className="text-sm text-muted-foreground">Pay out and complete all fixed savings accounts that have reached their maturity date</p>
+              </div>
+              <Button variant="outline" onClick={() => runBatchJob('savings-maturity')} disabled={loading !== null}>
+                {loading === 'savings-maturity' ? 'Running...' : 'Run'}
               </Button>
             </div>
           </div>

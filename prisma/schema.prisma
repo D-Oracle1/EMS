@@ -182,6 +182,8 @@ model Staff {
   restructuringsApproved  LoanRestructuring[] @relation("RestructuringApprovedBy")
   withdrawalRequests      WithdrawalRequest[] @relation("WithdrawalRequested")
   withdrawalApprovals     WithdrawalRequest[] @relation("WithdrawalApproved")
+  terminationRequests     SavingsTermination[] @relation("TerminationRequested")
+  terminationApprovals    SavingsTermination[] @relation("TerminationApproved")
 
   @@index([departmentId])
   @@index([roleId])
@@ -926,6 +928,15 @@ model SavingsProduct {
   monthlyFee        Decimal  @db.Decimal(18, 2) @default(0)
   transactionFee    Decimal  @db.Decimal(18, 2) @default(0)
 
+  // Fixed-Term Savings Engine Configuration
+  durationMonths                Int?
+  totalInterestRate             Decimal?  @db.Decimal(5, 2)   // Total rate for full term
+  monthlyInterestRate           Decimal?  @db.Decimal(5, 2)   // Auto: totalInterestRate / durationMonths
+  interestEligibilityDelayMonths Int      @default(0)          // Months before deposits earn interest
+  allowEarlyTermination         Boolean   @default(false)
+  defaultTerminationPenaltyRate Decimal?  @db.Decimal(5, 2)   // % penalty on approved interest
+  createdById                   String?
+
   isActive          Boolean  @default(true)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -974,6 +985,14 @@ model SavingsAccount {
   interestAccrued Decimal  @db.Decimal(18, 2) @default(0)
   lastInterestDate DateTime?
 
+  // Fixed-Term Savings Fields
+  eligibleBalance  Decimal  @db.Decimal(18, 2) @default(0)   // Balance currently earning interest
+  pendingDeposits  Decimal  @db.Decimal(18, 2) @default(0)   // Deposits awaiting next month roll
+  totalDeposits    Decimal  @db.Decimal(18, 2) @default(0)   // Cumulative deposits ever made
+  startDate        DateTime?
+  maturityDate     DateTime?
+  createdById      String?
+
   status          AccountStatus @default(ACTIVE)
 
   openedAt        DateTime @default(now())
@@ -994,11 +1013,13 @@ model SavingsAccount {
 
   transactions        SavingsTransaction[]
   withdrawalRequests  WithdrawalRequest[]
+  terminations        SavingsTermination[]
   journalEntries      JournalEntry[]
 
   @@index([accountNumber])
   @@index([customerId])
   @@index([status])
+  @@index([maturityDate])
 }
 
 enum AccountStatus {
@@ -1006,6 +1027,10 @@ enum AccountStatus {
   DORMANT
   FROZEN
   CLOSED
+  MATURED
+  TERMINATION_REQUESTED
+  TERMINATED
+  COMPLETED
 }
 
 // Savings Transactions
@@ -1052,6 +1077,9 @@ enum SavingsTransactionType {
   DEPOSIT
   WITHDRAWAL
   INTEREST_CREDIT
+  INTEREST_ACCRUAL
+  MATURITY_PAYOUT
+  TERMINATION_PAYOUT
   FEE_DEBIT
   TRANSFER_IN
   TRANSFER_OUT
@@ -1101,6 +1129,49 @@ enum WithdrawalRequestStatus {
   REJECTED
   PROCESSED
   CANCELLED
+}
+
+// Early Termination Requests for Fixed-Term Savings
+model SavingsTermination {
+  id                String    @id @default(uuid())
+  requestNumber     String    @unique
+
+  accountId         String
+  requestedById     String
+
+  requestDate       DateTime  @default(now())
+  principalAmount   Decimal   @db.Decimal(18, 2)
+  accruedInterest   Decimal   @db.Decimal(18, 2) @default(0)
+
+  // Admin decision fields
+  approvedInterest  Decimal?  @db.Decimal(18, 2)
+  penaltyAmount     Decimal?  @db.Decimal(18, 2)
+  payoutAmount      Decimal?  @db.Decimal(18, 2)
+  notes             String?
+  rejectionReason   String?
+
+  status            TerminationStatus @default(PENDING)
+
+  approvedById      String?
+  approvedAt        DateTime?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  account           SavingsAccount @relation(fields: [accountId], references: [id])
+  requestedBy       Staff          @relation("TerminationRequested", fields: [requestedById], references: [id])
+  approvedBy        Staff?         @relation("TerminationApproved", fields: [approvedById], references: [id])
+
+  @@index([accountId])
+  @@index([status])
+  @@index([requestDate])
+}
+
+enum TerminationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PAID
 }
 
 // ============================================================================

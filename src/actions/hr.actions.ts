@@ -1,9 +1,107 @@
 'use server';
 
+import { createHmac } from 'crypto';
+import QRCode from 'qrcode';
 import { prisma } from '@/lib/prisma';
 import { getSession, requirePermission, requireAnyPermission } from '@/lib/auth-utils';
 import { auditLog } from '@/lib/audit';
 import type { ActionResult } from '@/types';
+
+// ── Attendance QR helpers ────────────────────────────────────────────────────
+
+function getAttendanceSecret(): string {
+  const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
+  if (!secret) throw new Error('AUTH_SECRET not configured');
+  return secret + ':attendance';
+}
+
+function buildAttendanceToken(date: string, branchId: string): string {
+  const payload = Buffer.from(JSON.stringify({ date, branchId })).toString('base64url');
+  const sig = createHmac('sha256', getAttendanceSecret()).update(payload).digest('base64url');
+  return `HYLINK-ATT.${payload}.${sig}`;
+}
+
+export async function generateAttendanceQR(): Promise<ActionResult<{ qrDataUrl: string; token: string; date: string }>> {
+  try {
+    const user = await requireAnyPermission(['HR:ATTENDANCE_MANAGE', 'HR:STAFF_UPDATE']);
+    const today = new Date().toISOString().slice(0, 10);
+    const branchId = user.branchId ?? 'HQ';
+    const token = buildAttendanceToken(today, branchId);
+    const qrDataUrl = await QRCode.toDataURL(token, {
+      width: 300,
+      margin: 2,
+      color: { dark: '#0f172a', light: '#ffffff' },
+    });
+    return { success: true, data: { qrDataUrl, token, date: today } };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function clockInWithQR(token: string): Promise<ActionResult> {
+  try {
+    const { user } = await getSession();
+
+    const parts = token.split('.');
+    if (parts.length !== 3 || parts[0] !== 'HYLINK-ATT') {
+      return { success: false, error: 'Invalid QR code' };
+    }
+
+    const [, payload, sig] = parts;
+    const expectedSig = createHmac('sha256', getAttendanceSecret()).update(payload).digest('base64url');
+    if (sig !== expectedSig) {
+      return { success: false, error: 'QR code signature is invalid' };
+    }
+
+    let parsed: { date: string; branchId: string };
+    try {
+      parsed = JSON.parse(Buffer.from(payload, 'base64url').toString());
+    } catch {
+      return { success: false, error: 'QR code data is malformed' };
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    if (parsed.date !== today) {
+      return { success: false, error: "QR code has expired — please scan today's code" };
+    }
+
+    const todayDate = new Date();
+    todayDate.setHours(0, 0, 0, 0);
+
+    const existing = await prisma.attendance.findFirst({
+      where: { staffId: user.id, date: todayDate },
+    });
+
+    if (existing?.clockIn) {
+      return { success: false, error: 'Already clocked in today' };
+    }
+
+    const now = new Date();
+    const nineAM = new Date(todayDate);
+    nineAM.setHours(9, 0, 0, 0);
+    const status = now > nineAM ? 'LATE' : 'PRESENT';
+
+    if (existing) {
+      await prisma.attendance.update({
+        where: { id: existing.id },
+        data: { clockIn: now, status: status as any, location: 'QR_SCAN' },
+      });
+    } else {
+      await prisma.attendance.create({
+        data: { staffId: user.id, date: todayDate, clockIn: now, status: status as any, location: 'QR_SCAN' },
+      });
+    }
+
+    await auditLog({
+      userId: user.id, action: 'CREATE', module: 'HR', entityType: 'ATTENDANCE',
+      description: `Clocked in via QR at ${now.toISOString()} — Status: ${status}`,
+    });
+
+    return { success: true, message: `Clocked in successfully${status === 'LATE' ? ' (Late)' : ''}` };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
 
 export async function clockIn(location?: string): Promise<ActionResult> {
   try {

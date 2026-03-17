@@ -11,12 +11,13 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession();
   const user = session?.user as SessionUser | undefined;
 
-  // When user must change password, show a minimal layout without navigation
   if (user?.mustChangePassword) {
     return (
-      <div className="min-h-screen bg-muted/30">
-        <div className="flex h-16 items-center border-b bg-background px-6">
-          <span className="text-lg font-bold">Hylink Finance</span>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-indigo-50/40">
+        <div className="flex h-16 items-center border-b bg-white/90 backdrop-blur-md px-6 shadow-sm">
+          <span className="text-lg font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+            Hylink Finance
+          </span>
           <span className="ml-2 text-sm text-muted-foreground">EMS</span>
         </div>
         <main className="p-4 lg:p-6">{children}</main>
@@ -25,9 +26,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-gradient-to-br from-slate-50/80 via-white to-indigo-50/30">
       <Sidebar mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
-      <div className="flex-1 lg:ml-64 transition-all duration-300">
+      <div className="flex-1 lg:ml-64 transition-all duration-300 min-w-0">
         <Header onMenuToggle={() => setMobileOpen((v) => !v)} />
         <main className="p-4 lg:p-6">{children}</main>
       </div>

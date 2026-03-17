@@ -112,7 +112,7 @@ export async function markAbsentees(): Promise<ActionResult> {
           data: {
             staffId: staff.id,
             date: today,
-            status: 'ABSENT' as any,
+            status: 'ABSENT',
           },
         });
       }
@@ -129,17 +129,60 @@ export async function markAbsentees(): Promise<ActionResult> {
   }
 }
 
+export async function runMonthlySavingsInterestBatch(): Promise<ActionResult> {
+  try {
+    const user = await requirePermission('SETTINGS:MANAGE');
+
+    // Delegate to the fixed savings actions module
+    const { runMonthlySavingsInterest } = await import('./fixed-savings.actions');
+    const result = await runMonthlySavingsInterest();
+
+    if (result.success) {
+      await auditLog({
+        userId: user.id, action: 'UPDATE', module: 'SAVINGS', entityType: 'SAVINGS_ACCOUNT',
+        description: `Manual monthly savings interest run: ${result.message}`,
+      });
+    }
+
+    return result;
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function runMaturityProcessingBatch(): Promise<ActionResult> {
+  try {
+    const user = await requirePermission('SETTINGS:MANAGE');
+
+    const { processMaturedAccounts } = await import('./fixed-savings.actions');
+    const result = await processMaturedAccounts();
+
+    if (result.success) {
+      await auditLog({
+        userId: user.id, action: 'UPDATE', module: 'SAVINGS', entityType: 'SAVINGS_ACCOUNT',
+        description: `Manual maturity processing run: ${result.message}`,
+      });
+    }
+
+    return result;
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
 export async function getBatchJobStatus() {
   await requirePermission('ADMIN:SYSTEM');
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const [overdueLoans, activeFDs, activeLoans, pendingVerifications] = await Promise.all([
+  const [overdueLoans, activeFDs, activeLoans, pendingVerifications, activeFixedSavings, pendingTerminations] = await Promise.all([
     prisma.loan.count({ where: { status: 'OVERDUE' } }),
     prisma.fixedDeposit.count({ where: { status: 'ACTIVE' } }),
     prisma.loan.count({ where: { status: 'ACTIVE' } }),
     prisma.verificationTask.count({ where: { status: 'PENDING' } }),
+    prisma.savingsAccount.count({ where: { maturityDate: { not: null }, status: 'ACTIVE' } }),
+    prisma.savingsTermination.count({ where: { status: 'PENDING' } }),
   ]);
 
   return {
@@ -147,6 +190,8 @@ export async function getBatchJobStatus() {
     activeFDs,
     activeLoans,
     pendingVerifications,
+    activeFixedSavings,
+    pendingTerminations,
     lastRun: today.toISOString(),
   };
 }

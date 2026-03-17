@@ -7,7 +7,6 @@ import {
   LogOut,
   RefreshCw,
   CheckCircle,
-  AlertTriangle,
   Calendar,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -24,13 +23,15 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { formatDate, formatDateTime } from '@/lib/utils';
+import { formatDate } from '@/lib/utils';
 import {
-  clockIn,
   clockOut,
+  clockInWithQR,
   getAttendanceStatus,
   getAttendanceRecords,
 } from '@/actions/hr.actions';
+import { QRScanner } from './qr-scanner';
+import { QRDisplay } from './qr-display';
 import type { SessionUser } from '@/types';
 
 const attendanceStatusVariant: Record<string, 'success' | 'error' | 'warning' | 'info' | 'default'> = {
@@ -50,10 +51,14 @@ export function AttendanceClient({ user }: AttendanceClientProps) {
   const [records, setRecords] = useState<any[]>([]);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [showScanner, setShowScanner] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const isManager = user.permissions.includes('HR:STAFF_READ');
   const isSystemAdmin = user.roleCode === 'SUPER_ADMIN';
+  const canGenerateQR =
+    user.permissions.includes('HR:ATTENDANCE_MANAGE') ||
+    user.permissions.includes('HR:STAFF_UPDATE');
 
   const fetchStatus = () => {
     startTransition(async () => {
@@ -87,11 +92,12 @@ export function AttendanceClient({ user }: AttendanceClientProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleClockIn = () => {
+  const handleQRScan = (token: string) => {
+    setShowScanner(false);
     startTransition(async () => {
-      const result = await clockIn();
+      const result = await clockInWithQR(token);
       if (result.success) {
-        toast.success(result.message);
+        toast.success(result.message || 'Clocked in successfully');
         fetchStatus();
       } else {
         toast.error(result.error || 'Clock in failed');
@@ -118,152 +124,170 @@ export function AttendanceClient({ user }: AttendanceClientProps) {
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Attendance</h1>
-        <p className="text-muted-foreground">
-          {isSystemAdmin ? 'View all staff attendance records' : 'Track your daily attendance'}
-        </p>
-      </div>
-
-      {/* Clock In/Out Card - Hidden for System Admin */}
-      {!isSystemAdmin && <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Clock className="h-5 w-5" />
-            Today&apos;s Attendance
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between">
-            <div className="space-y-2">
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-muted-foreground">Status:</span>
-                {status?.status ? (
-                  <Badge variant={attendanceStatusVariant[status.status] || 'default'}>
-                    {status.status}
-                  </Badge>
-                ) : (
-                  <Badge variant="secondary">NOT CLOCKED IN</Badge>
-                )}
-              </div>
-              {status?.clockIn && (
-                <div className="flex items-center gap-3">
-                  <span className="text-sm text-muted-foreground">Clock In:</span>
-                  <span className="text-sm font-medium">{formatTime(status.clockIn)}</span>
-                </div>
-              )}
-              {status?.clockOut && (
-                <div className="flex items-center gap-3">
-                  <span className="text-sm text-muted-foreground">Clock Out:</span>
-                  <span className="text-sm font-medium">{formatTime(status.clockOut)}</span>
-                </div>
-              )}
-            </div>
-            <div className="flex items-center gap-3">
-              {!status?.isClockedIn && !status?.clockOut && (
-                <Button onClick={handleClockIn} disabled={isPending}>
-                  <LogIn className="mr-2 h-4 w-4" />
-                  {isPending ? 'Processing...' : 'Clock In'}
-                </Button>
-              )}
-              {status?.isClockedIn && (
-                <Button onClick={handleClockOut} variant="outline" disabled={isPending}>
-                  <LogOut className="mr-2 h-4 w-4" />
-                  {isPending ? 'Processing...' : 'Clock Out'}
-                </Button>
-              )}
-              {status?.clockOut && (
-                <div className="flex items-center gap-2 text-green-600">
-                  <CheckCircle className="h-5 w-5" />
-                  <span className="text-sm font-medium">Day Complete</span>
-                </div>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>}
-
-      {/* Attendance Records (Managers & System Admin) */}
-      {(isManager || isSystemAdmin) && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
-              Attendance Records
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-end gap-3 mb-4">
-              <div className="space-y-1">
-                <Label htmlFor="att-start" className="text-xs">Start Date</Label>
-                <Input
-                  id="att-start"
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="w-[160px]"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="att-end" className="text-xs">End Date</Label>
-                <Input
-                  id="att-end"
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="w-[160px]"
-                />
-              </div>
-              <Button variant="outline" onClick={fetchRecords} disabled={isPending}>
-                <RefreshCw className={`mr-2 h-4 w-4 ${isPending ? 'animate-spin' : ''}`} />
-                Filter
-              </Button>
-            </div>
-
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Employee</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Clock In</TableHead>
-                  <TableHead>Clock Out</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {records.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                      {isPending ? 'Loading...' : 'No attendance records found'}
-                    </TableCell>
-                  </TableRow>
-                )}
-                {records.map((record) => (
-                  <TableRow key={record.id}>
-                    <TableCell>
-                      <div className="font-medium">
-                        {record.staff.firstName} {record.staff.lastName}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {record.staff.employeeId}
-                      </div>
-                    </TableCell>
-                    <TableCell>{formatDate(record.date)}</TableCell>
-                    <TableCell>{record.clockIn ? formatTime(record.clockIn) : '-'}</TableCell>
-                    <TableCell>{record.clockOut ? formatTime(record.clockOut) : '-'}</TableCell>
-                    <TableCell>
-                      <Badge variant={attendanceStatusVariant[record.status] || 'default'}>
-                        {record.status}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+    <>
+      {/* QR Scanner overlay */}
+      {showScanner && (
+        <QRScanner
+          onScan={handleQRScan}
+          onClose={() => setShowScanner(false)}
+        />
       )}
-    </div>
+
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Attendance</h1>
+          <p className="text-muted-foreground">
+            {isSystemAdmin ? 'View all staff attendance records' : 'Track your daily attendance'}
+          </p>
+        </div>
+
+        {/* Admin QR Display — visible to managers with QR generation permission */}
+        {canGenerateQR && <QRDisplay />}
+
+        {/* Clock In/Out Card — hidden for System Admin */}
+        {!isSystemAdmin && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Clock className="h-5 w-5" />
+                Today&apos;s Attendance
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-muted-foreground">Status:</span>
+                    {status?.status ? (
+                      <Badge variant={attendanceStatusVariant[status.status] || 'default'}>
+                        {status.status}
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary">NOT CLOCKED IN</Badge>
+                    )}
+                  </div>
+                  {status?.clockIn && (
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm text-muted-foreground">Clock In:</span>
+                      <span className="text-sm font-medium">{formatTime(status.clockIn)}</span>
+                    </div>
+                  )}
+                  {status?.clockOut && (
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm text-muted-foreground">Clock Out:</span>
+                      <span className="text-sm font-medium">{formatTime(status.clockOut)}</span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  {!status?.isClockedIn && !status?.clockOut && (
+                    <Button
+                      onClick={() => setShowScanner(true)}
+                      disabled={isPending}
+                    >
+                      <LogIn className="mr-2 h-4 w-4" />
+                      Clock In
+                    </Button>
+                  )}
+                  {status?.isClockedIn && (
+                    <Button onClick={handleClockOut} variant="outline" disabled={isPending}>
+                      <LogOut className="mr-2 h-4 w-4" />
+                      {isPending ? 'Processing...' : 'Clock Out'}
+                    </Button>
+                  )}
+                  {status?.clockOut && (
+                    <div className="flex items-center gap-2 text-green-600">
+                      <CheckCircle className="h-5 w-5" />
+                      <span className="text-sm font-medium">Day Complete</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Attendance Records — Managers & System Admin */}
+        {(isManager || isSystemAdmin) && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Calendar className="h-5 w-5" />
+                Attendance Records
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-end gap-3 mb-4">
+                <div className="space-y-1">
+                  <Label htmlFor="att-start" className="text-xs">Start Date</Label>
+                  <Input
+                    id="att-start"
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-[160px]"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="att-end" className="text-xs">End Date</Label>
+                  <Input
+                    id="att-end"
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="w-[160px]"
+                  />
+                </div>
+                <Button variant="outline" onClick={fetchRecords} disabled={isPending}>
+                  <RefreshCw className={`mr-2 h-4 w-4 ${isPending ? 'animate-spin' : ''}`} />
+                  Filter
+                </Button>
+              </div>
+
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Employee</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Clock In</TableHead>
+                    <TableHead>Clock Out</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {records.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                        {isPending ? 'Loading...' : 'No attendance records found'}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {records.map((record) => (
+                    <TableRow key={record.id}>
+                      <TableCell>
+                        <div className="font-medium">
+                          {record.staff.firstName} {record.staff.lastName}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {record.staff.employeeId}
+                        </div>
+                      </TableCell>
+                      <TableCell>{formatDate(record.date)}</TableCell>
+                      <TableCell>{record.clockIn ? formatTime(record.clockIn) : '-'}</TableCell>
+                      <TableCell>{record.clockOut ? formatTime(record.clockOut) : '-'}</TableCell>
+                      <TableCell>
+                        <Badge variant={attendanceStatusVariant[record.status] || 'default'}>
+                          {record.status}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </>
   );
 }
