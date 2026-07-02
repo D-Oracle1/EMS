@@ -1,0 +1,234 @@
+'use server';
+
+/**
+ * Savings Dashboard — aggregations scoped strictly to the Savings module.
+ * No loans, fixed deposits, or other modules leak in here.
+ */
+
+import { prisma } from '@/lib/prisma';
+import { requireAnyPermission } from '@/lib/auth-utils';
+
+const READ_PERMS = ['SAVINGS:READ', 'SAVINGS:CREATE', 'SAVINGS:DEPOSIT', 'SAVINGS:MANAGE'];
+
+function startOfToday(): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function startOfMonth(offset = 0): Date {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth() + offset, 1);
+}
+
+export interface SavingsDashboard {
+  portfolio: {
+    activeAccounts: number;
+    totalPortfolio: number;
+    totalPendingDeposits: number;
+    totalEligibleBalance: number;
+  };
+  interest: {
+    totalAllocated: number;
+    outstandingLiability: number;
+    thisMonth: number;
+  };
+  deposits: {
+    todayCount: number;
+    todayAmount: number;
+    monthCount: number;
+    monthAmount: number;
+  };
+  statusCounts: Record<string, number>;
+  completed: { count: number; totalPaidOut: number };
+  upcomingMaturities: Array<{
+    id: string;
+    accountNumber: string;
+    customerName: string;
+    productName: string;
+    maturityDate: string;
+    daysToMaturity: number;
+    projectedPayout: number;
+  }>;
+  productBreakdown: Array<{ productId: string; name: string; accountCount: number; totalBalance: number }>;
+  mostPopularProduct: { name: string; accountCount: number } | null;
+  depositsByMonth: Array<{ label: string; amount: number }>;
+}
+
+export async function getSavingsDashboard(): Promise<SavingsDashboard> {
+  await requireAnyPermission(READ_PERMS);
+
+  const today = startOfToday();
+  const monthStart = startOfMonth();
+  const in60Days = new Date();
+  in60Days.setDate(in60Days.getDate() + 60);
+
+  // Build the last 6 month windows (oldest → newest)
+  const monthWindows = Array.from({ length: 6 }, (_, i) => {
+    const from = startOfMonth(-(5 - i));
+    const to = startOfMonth(-(4 - i));
+    return {
+      label: from.toLocaleDateString('en-NG', { month: 'short', year: '2-digit' }),
+      from,
+      to,
+    };
+  });
+
+  const [
+    portfolioAgg,
+    pendingAgg,
+    eligibleAgg,
+    interestAllocatedAgg,
+    outstandingLiabilityAgg,
+    interestThisMonthAgg,
+    todayDepositsAgg,
+    monthDepositsAgg,
+    statusGroups,
+    completedCount,
+    completedPayoutAgg,
+    maturingAccounts,
+    productGroups,
+    ...monthDeposits
+  ] = await Promise.all([
+    prisma.savingsAccount.aggregate({
+      where: { status: 'ACTIVE', isDeleted: false },
+      _count: true,
+      _sum: { currentBalance: true },
+    }),
+    prisma.savingsAccount.aggregate({
+      where: { status: 'ACTIVE', isDeleted: false },
+      _sum: { pendingDeposits: true },
+    }),
+    prisma.savingsAccount.aggregate({
+      where: { status: 'ACTIVE', isDeleted: false },
+      _sum: { eligibleBalance: true },
+    }),
+    prisma.savingsInterest.aggregate({ _sum: { interestAmount: true } }),
+    prisma.savingsAccount.aggregate({
+      where: { status: 'ACTIVE', isDeleted: false },
+      _sum: { interestAccrued: true },
+    }),
+    prisma.savingsInterest.aggregate({
+      where: { generatedAt: { gte: monthStart } },
+      _sum: { interestAmount: true },
+    }),
+    prisma.savingsTransaction.aggregate({
+      where: { transactionType: 'DEPOSIT', processedAt: { gte: today } },
+      _count: true,
+      _sum: { amount: true },
+    }),
+    prisma.savingsTransaction.aggregate({
+      where: { transactionType: 'DEPOSIT', processedAt: { gte: monthStart } },
+      _count: true,
+      _sum: { amount: true },
+    }),
+    prisma.savingsAccount.groupBy({
+      by: ['status'],
+      where: { isDeleted: false },
+      _count: true,
+    }),
+    prisma.savingsAccount.count({ where: { status: 'COMPLETED', isDeleted: false } }),
+    prisma.savingsTransaction.aggregate({
+      where: { transactionType: 'MATURITY_PAYOUT' },
+      _sum: { amount: true },
+    }),
+    prisma.savingsAccount.findMany({
+      where: {
+        status: 'ACTIVE',
+        isDeleted: false,
+        maturityDate: { not: null, lte: in60Days, gte: today },
+      },
+      include: {
+        customer: { select: { firstName: true, lastName: true } },
+        product: { select: { name: true } },
+      },
+      orderBy: { maturityDate: 'asc' },
+      take: 10,
+    }),
+    prisma.savingsAccount.groupBy({
+      by: ['productId'],
+      where: { status: 'ACTIVE', isDeleted: false },
+      _count: true,
+      _sum: { currentBalance: true },
+    }),
+    ...monthWindows.map((w) =>
+      prisma.savingsTransaction.aggregate({
+        where: { transactionType: 'DEPOSIT', processedAt: { gte: w.from, lt: w.to } },
+        _sum: { amount: true },
+      })
+    ),
+  ]);
+
+  // Resolve product names for the breakdown
+  const productIds = productGroups.map((g) => g.productId);
+  const products = await prisma.savingsProduct.findMany({
+    where: { id: { in: productIds } },
+    select: { id: true, name: true },
+  });
+  const productName = (id: string) => products.find((p) => p.id === id)?.name ?? 'Unknown';
+
+  const productBreakdown = productGroups
+    .map((g) => ({
+      productId: g.productId,
+      name: productName(g.productId),
+      accountCount: g._count,
+      totalBalance: g._sum.currentBalance?.toNumber() ?? 0,
+    }))
+    .sort((a, b) => b.accountCount - a.accountCount);
+
+  const statusCounts: Record<string, number> = {};
+  for (const g of statusGroups) statusCounts[g.status] = g._count;
+
+  const now = today.getTime();
+  const upcomingMaturities = maturingAccounts.map((a) => {
+    const maturity = a.maturityDate as Date;
+    const projectedPayout =
+      (a.totalDeposits?.toNumber() ?? a.currentBalance.toNumber()) +
+      a.interestAccrued.toNumber();
+    return {
+      id: a.id,
+      accountNumber: a.accountNumber,
+      customerName: `${a.customer.firstName} ${a.customer.lastName}`,
+      productName: a.product.name,
+      maturityDate: maturity.toISOString(),
+      daysToMaturity: Math.max(0, Math.ceil((maturity.getTime() - now) / 86400000)),
+      projectedPayout,
+    };
+  });
+
+  const depositsByMonth = monthWindows.map((w, i) => ({
+    label: w.label,
+    amount: monthDeposits[i]?._sum.amount?.toNumber() ?? 0,
+  }));
+
+  return {
+    portfolio: {
+      activeAccounts: portfolioAgg._count,
+      totalPortfolio: portfolioAgg._sum.currentBalance?.toNumber() ?? 0,
+      totalPendingDeposits: pendingAgg._sum.pendingDeposits?.toNumber() ?? 0,
+      totalEligibleBalance: eligibleAgg._sum.eligibleBalance?.toNumber() ?? 0,
+    },
+    interest: {
+      totalAllocated: interestAllocatedAgg._sum.interestAmount?.toNumber() ?? 0,
+      outstandingLiability: outstandingLiabilityAgg._sum.interestAccrued?.toNumber() ?? 0,
+      thisMonth: interestThisMonthAgg._sum.interestAmount?.toNumber() ?? 0,
+    },
+    deposits: {
+      todayCount: todayDepositsAgg._count,
+      todayAmount: todayDepositsAgg._sum.amount?.toNumber() ?? 0,
+      monthCount: monthDepositsAgg._count,
+      monthAmount: monthDepositsAgg._sum.amount?.toNumber() ?? 0,
+    },
+    statusCounts,
+    completed: {
+      count: completedCount,
+      totalPaidOut: completedPayoutAgg._sum.amount?.toNumber() ?? 0,
+    },
+    upcomingMaturities,
+    productBreakdown,
+    mostPopularProduct: productBreakdown.length
+      ? { name: productBreakdown[0].name, accountCount: productBreakdown[0].accountCount }
+      : null,
+    depositsByMonth,
+  };
+}

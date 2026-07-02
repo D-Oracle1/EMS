@@ -21,6 +21,7 @@ import {
   Lock,
   RefreshCcw,
   Trash2,
+  Users,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -203,6 +204,24 @@ interface LoanData {
     paymentReference: string | null;
     collectedAt: Date | string;
     notes: string | null;
+  }>;
+  guarantors: Array<{
+    id: string;
+    title: string | null;
+    firstName: string;
+    lastName: string;
+    middleName: string | null;
+    relationship: string | null;
+    phone: string;
+    email: string | null;
+    address: string | null;
+    city: string | null;
+    state: string | null;
+    occupation: string | null;
+    employer: string | null;
+    monthlyIncome: number | null;
+    bvn: string | null;
+    nationalId: string | null;
   }>;
   verifications: Array<{
     id: string;
@@ -590,6 +609,47 @@ export function LoanDetailClient({ loan, user }: LoanDetailClientProps) {
           </Card>
         </div>
       </div>
+
+      {/* ----------------------------------------------------------------- */}
+      {/* GUARANTORS                                                        */}
+      {/* ----------------------------------------------------------------- */}
+      {loan.guarantors.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Guarantors
+            </CardTitle>
+            <CardDescription>
+              {loan.guarantors.length} guarantor{loan.guarantors.length !== 1 ? 's' : ''} on this loan
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {loan.guarantors.map((g, i) => (
+                <div key={g.id} className="rounded-lg border bg-muted/20 p-4 space-y-0 divide-y">
+                  <div className="pb-2 mb-1">
+                    <p className="font-medium">
+                      {[g.title, g.firstName, g.middleName, g.lastName].filter(Boolean).join(' ')}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Guarantor {i + 1}</p>
+                  </div>
+                  {g.relationship && renderInfoRow('Relationship', g.relationship)}
+                  {renderInfoRow('Phone', g.phone)}
+                  {g.email && renderInfoRow('Email', g.email)}
+                  {g.address && renderInfoRow('Address', [g.address, g.city, g.state].filter(Boolean).join(', '))}
+                  {g.occupation && renderInfoRow('Occupation', g.occupation)}
+                  {g.employer && renderInfoRow('Employer', g.employer)}
+                  {g.monthlyIncome != null && g.monthlyIncome > 0 &&
+                    renderInfoRow('Monthly Income', formatCurrency(g.monthlyIncome))}
+                  {g.bvn && renderInfoRow('BVN', g.bvn)}
+                  {g.nationalId && renderInfoRow('National ID', g.nationalId)}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ----------------------------------------------------------------- */}
       {/* REPAYMENT SCHEDULE                                                */}

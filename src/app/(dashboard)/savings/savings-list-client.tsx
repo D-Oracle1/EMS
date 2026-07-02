@@ -105,6 +105,9 @@ export function SavingsListClient({ user }: SavingsListClientProps) {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" asChild>
+            <Link href="/savings/dashboard">Dashboard</Link>
+          </Button>
           {user.permissions.includes('SAVINGS:APPROVE') && (
             <Button variant="outline" asChild>
               <Link href="/savings/withdrawals">Withdrawal Queue</Link>

@@ -115,6 +115,7 @@ export async function getLoan(id: string) {
       },
       schedule: { orderBy: { installmentNumber: 'asc' } },
       repayments: { orderBy: { collectedAt: 'desc' } },
+      guarantors: { orderBy: { createdAt: 'asc' } },
       restructurings: {
         include: {
           requestedBy: { select: { firstName: true, lastName: true } },
@@ -179,6 +180,10 @@ export async function getLoan(id: string) {
       principalPortion: r.principalPortion.toNumber(),
       interestPortion: r.interestPortion.toNumber(),
     })),
+    guarantors: loan.guarantors.map((g) => ({
+      ...g,
+      monthlyIncome: g.monthlyIncome?.toNumber() ?? null,
+    })),
     verifications: loan.verifications.map((v) => ({
       ...v,
       estimatedValue: v.estimatedValue?.toNumber() || 0,
@@ -236,8 +241,53 @@ export async function checkCustomerOutstandingLoans(customerId: string) {
  * Create loan application - LOAN_OFFICER only
  * State: → DRAFT
  */
+export interface NewCustomerInput {
+  customerType?: string;
+  title?: string;
+  firstName: string;
+  lastName: string;
+  middleName?: string;
+  phone: string;
+  email?: string;
+  address: string;
+  city?: string;
+  state?: string;
+  dateOfBirth?: string;
+  gender?: string;
+  occupation?: string;
+  employer?: string;
+  monthlyIncome?: number;
+  bvn?: string;
+  nationalId?: string;
+  nokName?: string;
+  nokRelationship?: string;
+  nokPhone?: string;
+  nokAddress?: string;
+  companyName?: string;
+  rcNumber?: string;
+}
+
+export interface GuarantorInput {
+  title?: string;
+  firstName: string;
+  lastName: string;
+  middleName?: string;
+  relationship?: string;
+  phone: string;
+  email?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  occupation?: string;
+  employer?: string;
+  monthlyIncome?: number;
+  bvn?: string;
+  nationalId?: string;
+}
+
 export async function createLoan(data: {
-  customerId: string;
+  customerId?: string;
+  newCustomer?: NewCustomerInput;
   productId: string;
   principalAmount: number;
   tenure: number;
@@ -245,6 +295,7 @@ export async function createLoan(data: {
   purpose?: string;
   collateralDetails?: string;
   guarantorDetails?: string;
+  guarantors?: GuarantorInput[];
   branchId?: string;
   owingBypass?: boolean;
   owingBypassReason?: string;
@@ -252,27 +303,55 @@ export async function createLoan(data: {
   try {
     const user = await requirePermission('LOANS:CREATE');
 
-    // Validate customer
-    const customer = await prisma.customer.findUnique({ where: { id: data.customerId } });
-    if (!customer || customer.status !== 'ACTIVE') {
-      return { success: false, error: 'Customer not found or not active' };
-    }
+    // Resolve the borrower: either an existing customer or a new one to auto-register.
+    // For a brand-new customer there can be no outstanding loans, so those checks are skipped.
+    let customerId = data.customerId?.trim() || '';
+    let customerName: string;
+    let outstandingLoanIds: string[] = [];
+    const registerNewCustomer = !customerId && !!data.newCustomer;
 
-    // Check for outstanding loans
-    const outstandingLoans = await prisma.loan.findMany({
-      where: {
-        customerId: data.customerId,
-        status: { in: ['ACTIVE', 'OVERDUE'] },
-        isDeleted: false,
-      },
-      select: { id: true },
-    });
+    if (registerNewCustomer) {
+      const nc = data.newCustomer!;
+      if (!nc.firstName?.trim() || !nc.lastName?.trim()) {
+        return { success: false, error: 'New customer requires first and last name' };
+      }
+      if (!nc.phone?.trim()) {
+        return { success: false, error: 'New customer requires a phone number' };
+      }
+      if (!nc.address?.trim()) {
+        return { success: false, error: 'New customer requires an address' };
+      }
+      customerName = `${nc.firstName.trim()} ${nc.lastName.trim()}`;
+    } else {
+      if (!customerId) {
+        return { success: false, error: 'Please select an existing customer or enter new customer details' };
+      }
 
-    if (outstandingLoans.length > 0 && !data.owingBypass) {
-      return {
-        success: false,
-        error: 'Customer has outstanding loans. Use the bypass option with justification.',
-      };
+      // Validate customer
+      const customer = await prisma.customer.findUnique({ where: { id: customerId } });
+      if (!customer || customer.status !== 'ACTIVE') {
+        return { success: false, error: 'Customer not found or not active' };
+      }
+      customerName = `${customer.firstName} ${customer.lastName}`;
+
+      // Check for outstanding loans
+      const outstandingLoans = await prisma.loan.findMany({
+        where: {
+          customerId,
+          status: { in: ['ACTIVE', 'OVERDUE'] },
+          isDeleted: false,
+        },
+        select: { id: true },
+      });
+
+      if (outstandingLoans.length > 0 && !data.owingBypass) {
+        return {
+          success: false,
+          error: 'Customer has outstanding loans. Use the bypass option with justification.',
+        };
+      }
+
+      outstandingLoanIds = outstandingLoans.map((l) => l.id);
     }
 
     if (data.owingBypass && (!data.owingBypassReason || data.owingBypassReason.trim().length < 10)) {
@@ -281,8 +360,6 @@ export async function createLoan(data: {
         error: 'Owing bypass requires a justification reason (at least 10 characters).',
       };
     }
-
-    const outstandingLoanIds = outstandingLoans.map((l) => l.id);
 
     // Validate product
     const product = await prisma.loanProduct.findUnique({ where: { id: data.productId } });
@@ -313,15 +390,57 @@ export async function createLoan(data: {
       : 0;
     const totalFees = processingFee + insuranceFee;
 
-    const loanNumber = await generateReference('LOAN');
+    const branchId = data.branchId || user.branchId;
+    if (registerNewCustomer && !branchId) {
+      return { success: false, error: 'No branch assigned. Cannot register a new customer.' };
+    }
 
-    const loan = await withTransaction(async (tx) => {
+    const loanNumber = await generateReference('LOAN');
+    const newCustomerNumber = registerNewCustomer ? await generateReference('CUSTOMER') : null;
+
+    const { loan, registeredCustomerNumber } = await withTransaction(async (tx) => {
+      // Auto-register the borrower as a customer when in "new customer" mode.
+      if (registerNewCustomer) {
+        const nc = data.newCustomer!;
+        const created = await tx.customer.create({
+          data: {
+            customerNumber: newCustomerNumber!,
+            customerType: (nc.customerType as any) || 'INDIVIDUAL',
+            title: nc.title,
+            firstName: nc.firstName.trim(),
+            lastName: nc.lastName.trim(),
+            middleName: nc.middleName,
+            phone: nc.phone.trim(),
+            email: nc.email || undefined,
+            address: nc.address.trim(),
+            city: nc.city,
+            state: nc.state,
+            dateOfBirth: nc.dateOfBirth ? new Date(nc.dateOfBirth) : undefined,
+            gender: nc.gender,
+            occupation: nc.occupation,
+            employer: nc.employer,
+            monthlyIncome: nc.monthlyIncome,
+            bvn: nc.bvn,
+            nationalId: nc.nationalId,
+            nokName: nc.nokName,
+            nokRelationship: nc.nokRelationship,
+            nokPhone: nc.nokPhone,
+            nokAddress: nc.nokAddress,
+            companyName: nc.companyName,
+            rcNumber: nc.rcNumber,
+            branchId,
+            createdBy: user.id,
+          },
+        });
+        customerId = created.id;
+      }
+
       const newLoan = await tx.loan.create({
         data: {
           loanNumber,
-          customerId: data.customerId,
+          customerId,
           productId: data.productId,
-          branchId: data.branchId || user.branchId,
+          branchId,
           principalAmount: data.principalAmount,
           interestRate: finalRate,
           tenure: data.tenure,
@@ -342,6 +461,33 @@ export async function createLoan(data: {
         },
       });
 
+      // Create guarantors
+      if (data.guarantors?.length) {
+        for (const g of data.guarantors) {
+          if (!g.firstName?.trim() || !g.lastName?.trim() || !g.phone?.trim()) continue;
+          await tx.guarantor.create({
+            data: {
+              loanId: newLoan.id,
+              title: g.title,
+              firstName: g.firstName.trim(),
+              lastName: g.lastName.trim(),
+              middleName: g.middleName,
+              relationship: g.relationship,
+              phone: g.phone.trim(),
+              email: g.email || undefined,
+              address: g.address,
+              city: g.city,
+              state: g.state,
+              occupation: g.occupation,
+              employer: g.employer,
+              monthlyIncome: g.monthlyIncome,
+              bvn: g.bvn,
+              nationalId: g.nationalId,
+            },
+          });
+        }
+      }
+
       // Create schedule
       for (const item of scheduleCalc.schedule) {
         await tx.loanSchedule.create({
@@ -358,13 +504,21 @@ export async function createLoan(data: {
         });
       }
 
-      return newLoan;
+      return { loan: newLoan, registeredCustomerNumber: newCustomerNumber };
     });
+
+    if (registerNewCustomer && registeredCustomerNumber) {
+      await auditLog({
+        userId: user.id, userEmail: user.email, userRole: user.roleCode,
+        action: 'CREATE', module: 'CUSTOMERS', entityType: 'CUSTOMER', entityId: customerId,
+        description: `Registered customer ${registeredCustomerNumber}: ${customerName} (from loan application ${loanNumber})`,
+      });
+    }
 
     await auditLog({
       userId: user.id, userEmail: user.email, userRole: user.roleCode,
       action: 'CREATE', module: 'LOANS', entityType: 'LOAN', entityId: loan.id,
-      description: `Created loan ${loanNumber} for ${customer.firstName} ${customer.lastName} - ${data.principalAmount}`,
+      description: `Created loan ${loanNumber} for ${customerName} - ${data.principalAmount}`,
     });
 
     await recordApprovalHistory({

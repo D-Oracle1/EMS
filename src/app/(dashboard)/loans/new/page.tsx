@@ -9,7 +9,11 @@ import {
   Calculator,
   Landmark,
   Loader2,
+  Plus,
   Search,
+  Trash2,
+  UserPlus,
+  Users,
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -72,6 +76,94 @@ interface ScheduleItem {
   totalDue: number;
   outstandingBalance: number;
 }
+
+interface NewCustomerForm {
+  customerType: string;
+  title: string;
+  firstName: string;
+  lastName: string;
+  middleName: string;
+  phone: string;
+  email: string;
+  address: string;
+  city: string;
+  state: string;
+  dateOfBirth: string;
+  gender: string;
+  occupation: string;
+  employer: string;
+  monthlyIncome: string;
+  bvn: string;
+  nationalId: string;
+  nokName: string;
+  nokRelationship: string;
+  nokPhone: string;
+  nokAddress: string;
+  companyName: string;
+  rcNumber: string;
+}
+
+const blankNewCustomer: NewCustomerForm = {
+  customerType: 'INDIVIDUAL',
+  title: '',
+  firstName: '',
+  lastName: '',
+  middleName: '',
+  phone: '',
+  email: '',
+  address: '',
+  city: '',
+  state: '',
+  dateOfBirth: '',
+  gender: '',
+  occupation: '',
+  employer: '',
+  monthlyIncome: '',
+  bvn: '',
+  nationalId: '',
+  nokName: '',
+  nokRelationship: '',
+  nokPhone: '',
+  nokAddress: '',
+  companyName: '',
+  rcNumber: '',
+};
+
+interface GuarantorForm {
+  title: string;
+  firstName: string;
+  lastName: string;
+  middleName: string;
+  relationship: string;
+  phone: string;
+  email: string;
+  address: string;
+  city: string;
+  state: string;
+  occupation: string;
+  employer: string;
+  monthlyIncome: string;
+  bvn: string;
+  nationalId: string;
+}
+
+const blankGuarantor: GuarantorForm = {
+  title: '',
+  firstName: '',
+  lastName: '',
+  middleName: '',
+  relationship: '',
+  phone: '',
+  email: '',
+  address: '',
+  city: '',
+  state: '',
+  occupation: '',
+  employer: '',
+  monthlyIncome: '',
+  bvn: '',
+  nationalId: '',
+};
 
 // Helper to handle Prisma Decimal or plain number
 function toNum(val: { toNumber?: () => number } | number | null | undefined): number {
@@ -184,7 +276,22 @@ export default function NewLoanPage() {
   const [interestRate, setInterestRate] = useState('');
   const [purpose, setPurpose] = useState('');
   const [collateralDetails, setCollateralDetails] = useState('');
-  const [guarantorDetails, setGuarantorDetails] = useState('');
+
+  // Borrower mode: pick an existing customer or register a brand-new one
+  const [customerMode, setCustomerMode] = useState<'existing' | 'new'>('existing');
+  const [newCustomer, setNewCustomer] = useState<NewCustomerForm>(blankNewCustomer);
+
+  // Multiple guarantors
+  const [guarantors, setGuarantors] = useState<GuarantorForm[]>([]);
+
+  const updateNewCustomer = (field: keyof NewCustomerForm, value: string) =>
+    setNewCustomer((prev) => ({ ...prev, [field]: value }));
+
+  const addGuarantor = () => setGuarantors((prev) => [...prev, { ...blankGuarantor }]);
+  const removeGuarantor = (index: number) =>
+    setGuarantors((prev) => prev.filter((_, i) => i !== index));
+  const updateGuarantor = (index: number, field: keyof GuarantorForm, value: string) =>
+    setGuarantors((prev) => prev.map((g, i) => (i === index ? { ...g, [field]: value } : g)));
 
   // Outstanding loans bypass state
   const [outstandingLoans, setOutstandingLoans] = useState<Array<{ id: string; loanNumber: string; principalAmount: number; status: string }>>([]);
@@ -336,12 +443,40 @@ export default function NewLoanPage() {
     calculatePreview();
   }, [calculatePreview]);
 
+  // A guarantor "counts" once it has a name and phone
+  const validGuarantors = guarantors.filter(
+    (g) => g.firstName.trim() && g.lastName.trim() && g.phone.trim()
+  );
+
   // Validation
   function validate(): string | null {
     if (!productId) return 'Please select a loan product';
-    if (!customerId) return 'Please search and select a customer';
+
+    if (customerMode === 'existing') {
+      if (!customerId) return 'Please search and select a customer';
+    } else {
+      if (!newCustomer.firstName.trim() || !newCustomer.lastName.trim()) {
+        return 'New customer requires first and last name';
+      }
+      if (!newCustomer.phone.trim()) return 'New customer requires a phone number';
+      if (!newCustomer.address.trim()) return 'New customer requires an address';
+      if (newCustomer.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newCustomer.email)) {
+        return 'New customer email address is invalid';
+      }
+    }
+
     if (!amount || parseFloat(amount) <= 0) return 'Please enter a valid amount';
     if (!tenure || parseInt(tenure, 10) <= 0) return 'Please enter a valid tenure';
+
+    // Any guarantor that was started must have the minimum identifying fields
+    const partial = guarantors.some(
+      (g) =>
+        (g.firstName.trim() || g.lastName.trim() || g.phone.trim()) &&
+        !(g.firstName.trim() && g.lastName.trim() && g.phone.trim())
+    );
+    if (partial) {
+      return 'Each guarantor needs at least a first name, last name, and phone number';
+    }
 
     if (selectedProduct) {
       const amt = parseFloat(amount);
@@ -358,8 +493,8 @@ export default function NewLoanPage() {
       if (selectedProduct.requiresCollateral && !collateralDetails.trim()) {
         return 'This product requires collateral details';
       }
-      if (selectedProduct.requiresGuarantor && !guarantorDetails.trim()) {
-        return 'This product requires guarantor details';
+      if (selectedProduct.requiresGuarantor && validGuarantors.length === 0) {
+        return 'This product requires at least one guarantor';
       }
     }
 
@@ -384,14 +519,60 @@ export default function NewLoanPage() {
 
     startTransition(async () => {
       const result = await createLoan({
-        customerId: customerId.trim(),
+        customerId: customerMode === 'existing' ? customerId.trim() : undefined,
+        newCustomer:
+          customerMode === 'new'
+            ? {
+                customerType: newCustomer.customerType,
+                title: newCustomer.title || undefined,
+                firstName: newCustomer.firstName.trim(),
+                lastName: newCustomer.lastName.trim(),
+                middleName: newCustomer.middleName.trim() || undefined,
+                phone: newCustomer.phone.trim(),
+                email: newCustomer.email.trim() || undefined,
+                address: newCustomer.address.trim(),
+                city: newCustomer.city.trim() || undefined,
+                state: newCustomer.state.trim() || undefined,
+                dateOfBirth: newCustomer.dateOfBirth || undefined,
+                gender: newCustomer.gender || undefined,
+                occupation: newCustomer.occupation.trim() || undefined,
+                employer: newCustomer.employer.trim() || undefined,
+                monthlyIncome: newCustomer.monthlyIncome
+                  ? parseFloat(newCustomer.monthlyIncome)
+                  : undefined,
+                bvn: newCustomer.bvn.trim() || undefined,
+                nationalId: newCustomer.nationalId.trim() || undefined,
+                nokName: newCustomer.nokName.trim() || undefined,
+                nokRelationship: newCustomer.nokRelationship || undefined,
+                nokPhone: newCustomer.nokPhone.trim() || undefined,
+                nokAddress: newCustomer.nokAddress.trim() || undefined,
+                companyName: newCustomer.companyName.trim() || undefined,
+                rcNumber: newCustomer.rcNumber.trim() || undefined,
+              }
+            : undefined,
         productId,
         principalAmount: parseFloat(amount),
         tenure: parseInt(tenure, 10),
         interestRate: parseFloat(interestRate),
         purpose: purpose.trim() || undefined,
         collateralDetails: collateralDetails.trim() || undefined,
-        guarantorDetails: guarantorDetails.trim() || undefined,
+        guarantors: validGuarantors.map((g) => ({
+          title: g.title || undefined,
+          firstName: g.firstName.trim(),
+          lastName: g.lastName.trim(),
+          middleName: g.middleName.trim() || undefined,
+          relationship: g.relationship || undefined,
+          phone: g.phone.trim(),
+          email: g.email.trim() || undefined,
+          address: g.address.trim() || undefined,
+          city: g.city.trim() || undefined,
+          state: g.state.trim() || undefined,
+          occupation: g.occupation.trim() || undefined,
+          employer: g.employer.trim() || undefined,
+          monthlyIncome: g.monthlyIncome ? parseFloat(g.monthlyIncome) : undefined,
+          bvn: g.bvn.trim() || undefined,
+          nationalId: g.nationalId.trim() || undefined,
+        })),
         owingBypass: owingBypass || undefined,
         owingBypassReason: owingBypass ? owingBypassReason.trim() : undefined,
       });
@@ -513,8 +694,48 @@ export default function NewLoanPage() {
                 <CardTitle className="text-lg">Loan Details</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-2" ref={customerSearchRef}>
+                {/* Borrower: choose an existing customer or register a new one */}
+                <div className="space-y-2">
                   <Label>Customer</Label>
+                  <div className="inline-flex rounded-md border p-0.5 text-sm bg-muted/30">
+                    <button
+                      type="button"
+                      onClick={() => setCustomerMode('existing')}
+                      className={`flex items-center gap-1.5 rounded px-3 py-1.5 transition-colors ${
+                        customerMode === 'existing'
+                          ? 'bg-background shadow-sm font-medium'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      <Search className="h-3.5 w-3.5" />
+                      Existing customer
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCustomerMode('new');
+                        // Clear any existing-customer selection so its checks don't linger
+                        setSelectedCustomer(null);
+                        setCustomerId('');
+                        setCustomerQuery('');
+                      }}
+                      className={`flex items-center gap-1.5 rounded px-3 py-1.5 transition-colors ${
+                        customerMode === 'new'
+                          ? 'bg-background shadow-sm font-medium'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      <UserPlus className="h-3.5 w-3.5" />
+                      New customer
+                    </button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    New customer details are automatically registered as a customer record.
+                  </p>
+                </div>
+
+                {customerMode === 'existing' && (
+                <div className="space-y-2" ref={customerSearchRef}>
                   {selectedCustomer ? (
                     <div className="flex items-center gap-2 rounded-md border border-input bg-muted/50 px-3 py-2">
                       <div className="flex-1 text-sm">
@@ -595,6 +816,278 @@ export default function NewLoanPage() {
                     Search by customer name, number, or phone
                   </p>
                 </div>
+                )}
+
+                {customerMode === 'new' && (
+                  <div className="space-y-4 rounded-lg border border-dashed border-primary/40 bg-primary/5 p-4">
+                    <div className="flex items-center gap-2 text-sm font-medium text-primary">
+                      <UserPlus className="h-4 w-4" />
+                      New Customer Registration
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label>Customer Type</Label>
+                        <Select
+                          value={newCustomer.customerType}
+                          onValueChange={(v) => updateNewCustomer('customerType', v)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="INDIVIDUAL">Individual</SelectItem>
+                            <SelectItem value="CORPORATE">Corporate</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Title</Label>
+                        <Select
+                          value={newCustomer.title}
+                          onValueChange={(v) => updateNewCustomer('title', v)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Mr">Mr</SelectItem>
+                            <SelectItem value="Mrs">Mrs</SelectItem>
+                            <SelectItem value="Ms">Ms</SelectItem>
+                            <SelectItem value="Dr">Dr</SelectItem>
+                            <SelectItem value="Chief">Chief</SelectItem>
+                            <SelectItem value="Alhaji">Alhaji</SelectItem>
+                            <SelectItem value="Alhaja">Alhaja</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    {newCustomer.customerType === 'CORPORATE' && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <Label>Company Name</Label>
+                          <Input
+                            value={newCustomer.companyName}
+                            onChange={(e) => updateNewCustomer('companyName', e.target.value)}
+                            placeholder="Company name"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label>RC Number</Label>
+                          <Input
+                            value={newCustomer.rcNumber}
+                            onChange={(e) => updateNewCustomer('rcNumber', e.target.value)}
+                            placeholder="RC number"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="space-y-1.5">
+                        <Label>First Name <span className="text-destructive">*</span></Label>
+                        <Input
+                          value={newCustomer.firstName}
+                          onChange={(e) => updateNewCustomer('firstName', e.target.value)}
+                          placeholder="First name"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Middle Name</Label>
+                        <Input
+                          value={newCustomer.middleName}
+                          onChange={(e) => updateNewCustomer('middleName', e.target.value)}
+                          placeholder="Middle name"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Last Name <span className="text-destructive">*</span></Label>
+                        <Input
+                          value={newCustomer.lastName}
+                          onChange={(e) => updateNewCustomer('lastName', e.target.value)}
+                          placeholder="Last name"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label>Phone <span className="text-destructive">*</span></Label>
+                        <Input
+                          type="tel"
+                          value={newCustomer.phone}
+                          onChange={(e) => updateNewCustomer('phone', e.target.value)}
+                          placeholder="e.g. 08012345678"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Email</Label>
+                        <Input
+                          type="email"
+                          value={newCustomer.email}
+                          onChange={(e) => updateNewCustomer('email', e.target.value)}
+                          placeholder="customer@example.com"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label>Street Address <span className="text-destructive">*</span></Label>
+                      <Input
+                        value={newCustomer.address}
+                        onChange={(e) => updateNewCustomer('address', e.target.value)}
+                        placeholder="Full street address"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label>City</Label>
+                        <Input
+                          value={newCustomer.city}
+                          onChange={(e) => updateNewCustomer('city', e.target.value)}
+                          placeholder="City"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>State</Label>
+                        <Input
+                          value={newCustomer.state}
+                          onChange={(e) => updateNewCustomer('state', e.target.value)}
+                          placeholder="State"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label>Date of Birth</Label>
+                        <Input
+                          type="date"
+                          value={newCustomer.dateOfBirth}
+                          onChange={(e) => updateNewCustomer('dateOfBirth', e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Gender</Label>
+                        <Select
+                          value={newCustomer.gender}
+                          onValueChange={(v) => updateNewCustomer('gender', v)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select gender" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="MALE">Male</SelectItem>
+                            <SelectItem value="FEMALE">Female</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="space-y-1.5">
+                        <Label>Occupation</Label>
+                        <Input
+                          value={newCustomer.occupation}
+                          onChange={(e) => updateNewCustomer('occupation', e.target.value)}
+                          placeholder="Occupation"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Employer</Label>
+                        <Input
+                          value={newCustomer.employer}
+                          onChange={(e) => updateNewCustomer('employer', e.target.value)}
+                          placeholder="Employer"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Monthly Income (NGN)</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={newCustomer.monthlyIncome}
+                          onChange={(e) => updateNewCustomer('monthlyIncome', e.target.value)}
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label>BVN</Label>
+                        <Input
+                          value={newCustomer.bvn}
+                          onChange={(e) => updateNewCustomer('bvn', e.target.value)}
+                          placeholder="11-digit BVN"
+                          maxLength={11}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>National ID (NIN)</Label>
+                        <Input
+                          value={newCustomer.nationalId}
+                          onChange={(e) => updateNewCustomer('nationalId', e.target.value)}
+                          placeholder="National ID number"
+                        />
+                      </div>
+                    </div>
+
+                    <Separator />
+                    <p className="text-xs font-medium text-muted-foreground">Next of Kin</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label>Full Name</Label>
+                        <Input
+                          value={newCustomer.nokName}
+                          onChange={(e) => updateNewCustomer('nokName', e.target.value)}
+                          placeholder="Next of kin name"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Relationship</Label>
+                        <Select
+                          value={newCustomer.nokRelationship}
+                          onValueChange={(v) => updateNewCustomer('nokRelationship', v)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select relationship" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Spouse">Spouse</SelectItem>
+                            <SelectItem value="Parent">Parent</SelectItem>
+                            <SelectItem value="Child">Child</SelectItem>
+                            <SelectItem value="Sibling">Sibling</SelectItem>
+                            <SelectItem value="Relative">Relative</SelectItem>
+                            <SelectItem value="Friend">Friend</SelectItem>
+                            <SelectItem value="Colleague">Colleague</SelectItem>
+                            <SelectItem value="Other">Other</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Phone Number</Label>
+                        <Input
+                          type="tel"
+                          value={newCustomer.nokPhone}
+                          onChange={(e) => updateNewCustomer('nokPhone', e.target.value)}
+                          placeholder="Phone number"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Address</Label>
+                        <Input
+                          value={newCustomer.nokAddress}
+                          onChange={(e) => updateNewCustomer('nokAddress', e.target.value)}
+                          placeholder="Address"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Outstanding Loans Warning */}
                 {checkingOutstanding && selectedCustomer && (
@@ -727,21 +1220,226 @@ export default function NewLoanPage() {
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label>
-                    Guarantor Details
-                    {selectedProduct?.requiresGuarantor && (
-                      <span className="text-destructive ml-1">*</span>
-                    )}
-                  </Label>
-                  <textarea
-                    value={guarantorDetails}
-                    onChange={(e) => setGuarantorDetails(e.target.value)}
-                    className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                    placeholder="Guarantor name, relationship, contact, occupation"
-                    required={selectedProduct?.requiresGuarantor}
-                  />
-                </div>
+              </CardContent>
+            </Card>
+
+            {/* Guarantors */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  Guarantors
+                  {selectedProduct?.requiresGuarantor && (
+                    <span className="text-destructive">*</span>
+                  )}
+                </CardTitle>
+                <CardDescription>
+                  Add one or more guarantors for this loan
+                  {selectedProduct?.requiresGuarantor
+                    ? ' (this product requires at least one).'
+                    : '.'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {guarantors.length === 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    No guarantors added yet.
+                  </p>
+                )}
+
+                {guarantors.map((g, index) => (
+                  <div
+                    key={index}
+                    className="space-y-3 rounded-lg border bg-muted/20 p-4"
+                  >
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium">Guarantor {index + 1}</p>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeGuarantor(index)}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4 mr-1" />
+                        Remove
+                      </Button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                      <div className="space-y-1.5">
+                        <Label>Title</Label>
+                        <Select
+                          value={g.title}
+                          onValueChange={(v) => updateGuarantor(index, 'title', v)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Mr">Mr</SelectItem>
+                            <SelectItem value="Mrs">Mrs</SelectItem>
+                            <SelectItem value="Ms">Ms</SelectItem>
+                            <SelectItem value="Dr">Dr</SelectItem>
+                            <SelectItem value="Chief">Chief</SelectItem>
+                            <SelectItem value="Alhaji">Alhaji</SelectItem>
+                            <SelectItem value="Alhaja">Alhaja</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>First Name <span className="text-destructive">*</span></Label>
+                        <Input
+                          value={g.firstName}
+                          onChange={(e) => updateGuarantor(index, 'firstName', e.target.value)}
+                          placeholder="First name"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Middle Name</Label>
+                        <Input
+                          value={g.middleName}
+                          onChange={(e) => updateGuarantor(index, 'middleName', e.target.value)}
+                          placeholder="Middle name"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Last Name <span className="text-destructive">*</span></Label>
+                        <Input
+                          value={g.lastName}
+                          onChange={(e) => updateGuarantor(index, 'lastName', e.target.value)}
+                          placeholder="Last name"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="space-y-1.5">
+                        <Label>Relationship</Label>
+                        <Select
+                          value={g.relationship}
+                          onValueChange={(v) => updateGuarantor(index, 'relationship', v)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Spouse">Spouse</SelectItem>
+                            <SelectItem value="Parent">Parent</SelectItem>
+                            <SelectItem value="Child">Child</SelectItem>
+                            <SelectItem value="Sibling">Sibling</SelectItem>
+                            <SelectItem value="Relative">Relative</SelectItem>
+                            <SelectItem value="Friend">Friend</SelectItem>
+                            <SelectItem value="Colleague">Colleague</SelectItem>
+                            <SelectItem value="Business Partner">Business Partner</SelectItem>
+                            <SelectItem value="Other">Other</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Phone <span className="text-destructive">*</span></Label>
+                        <Input
+                          type="tel"
+                          value={g.phone}
+                          onChange={(e) => updateGuarantor(index, 'phone', e.target.value)}
+                          placeholder="e.g. 08012345678"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Email</Label>
+                        <Input
+                          type="email"
+                          value={g.email}
+                          onChange={(e) => updateGuarantor(index, 'email', e.target.value)}
+                          placeholder="guarantor@example.com"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label>Address</Label>
+                      <Input
+                        value={g.address}
+                        onChange={(e) => updateGuarantor(index, 'address', e.target.value)}
+                        placeholder="Street address"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label>City</Label>
+                        <Input
+                          value={g.city}
+                          onChange={(e) => updateGuarantor(index, 'city', e.target.value)}
+                          placeholder="City"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>State</Label>
+                        <Input
+                          value={g.state}
+                          onChange={(e) => updateGuarantor(index, 'state', e.target.value)}
+                          placeholder="State"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="space-y-1.5">
+                        <Label>Occupation</Label>
+                        <Input
+                          value={g.occupation}
+                          onChange={(e) => updateGuarantor(index, 'occupation', e.target.value)}
+                          placeholder="Occupation"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Employer</Label>
+                        <Input
+                          value={g.employer}
+                          onChange={(e) => updateGuarantor(index, 'employer', e.target.value)}
+                          placeholder="Employer"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Monthly Income (NGN)</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={g.monthlyIncome}
+                          onChange={(e) => updateGuarantor(index, 'monthlyIncome', e.target.value)}
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label>BVN</Label>
+                        <Input
+                          value={g.bvn}
+                          onChange={(e) => updateGuarantor(index, 'bvn', e.target.value)}
+                          placeholder="11-digit BVN"
+                          maxLength={11}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>National ID (NIN)</Label>
+                        <Input
+                          value={g.nationalId}
+                          onChange={(e) => updateGuarantor(index, 'nationalId', e.target.value)}
+                          placeholder="National ID number"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                <Button type="button" variant="outline" onClick={addGuarantor}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Guarantor
+                </Button>
               </CardContent>
             </Card>
 

@@ -6,6 +6,13 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -45,10 +52,18 @@ const emptyForm = {
   totalInterestRate: '',
   minimumDeposit: '',
   maximumDeposit: '',
+  interestCalculationMethod: 'MATURITY_ONLY',
   interestEligibilityDelayMonths: '0',
   allowEarlyTermination: false,
   defaultTerminationPenaltyRate: '',
 };
+
+const INTEREST_METHODS = [
+  { value: 'MATURITY_ONLY', label: 'Maturity Only', hint: 'Accrue monthly, pay lump sum at maturity' },
+  { value: 'MONTHLY_ALLOCATION', label: 'Monthly Allocation', hint: 'Credit interest to the balance each month' },
+  { value: 'FLAT', label: 'Flat (provisional)', hint: 'Reserved — currently accrues like Maturity Only' },
+  { value: 'COMPOUND', label: 'Compound', hint: 'Interest compounds into the eligible balance' },
+] as const;
 
 export function SavingsProductsClient({ user }: SavingsProductsClientProps) {
   const [products, setProducts] = useState<any[]>([]);
@@ -96,6 +111,7 @@ export function SavingsProductsClient({ user }: SavingsProductsClientProps) {
       totalInterestRate: String(product.totalInterestRate ?? ''),
       minimumDeposit: String(product.minDeposit ?? ''),
       maximumDeposit: String(product.maxBalance ?? ''),
+      interestCalculationMethod: product.interestCalculationMethod ?? 'MATURITY_ONLY',
       interestEligibilityDelayMonths: String(product.interestEligibilityDelayMonths ?? 0),
       allowEarlyTermination: product.allowEarlyTermination ?? false,
       defaultTerminationPenaltyRate: String(product.defaultTerminationPenaltyRate ?? ''),
@@ -119,6 +135,7 @@ export function SavingsProductsClient({ user }: SavingsProductsClientProps) {
         totalInterestRate: parseFloat(form.totalInterestRate),
         minimumDeposit: parseFloat(form.minimumDeposit),
         maximumDeposit: form.maximumDeposit ? parseFloat(form.maximumDeposit) : undefined,
+        interestCalculationMethod: form.interestCalculationMethod as 'MATURITY_ONLY' | 'MONTHLY_ALLOCATION' | 'FLAT' | 'COMPOUND',
         interestEligibilityDelayMonths: parseInt(form.interestEligibilityDelayMonths) || 0,
         allowEarlyTermination: form.allowEarlyTermination,
         defaultTerminationPenaltyRate: form.defaultTerminationPenaltyRate ? parseFloat(form.defaultTerminationPenaltyRate) : undefined,
@@ -405,6 +422,28 @@ export function SavingsProductsClient({ user }: SavingsProductsClientProps) {
                 <span className="text-muted-foreground ml-2">(= {form.totalInterestRate}% ÷ {form.durationMonths} months)</span>
               </div>
             )}
+
+            <div className="space-y-1.5">
+              <Label>Interest Calculation Method</Label>
+              <Select
+                value={form.interestCalculationMethod}
+                onValueChange={(v) => setForm((f) => ({ ...f, interestCalculationMethod: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select method" />
+                </SelectTrigger>
+                <SelectContent>
+                  {INTEREST_METHODS.map((m) => (
+                    <SelectItem key={m.value} value={m.value}>
+                      {m.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {INTEREST_METHODS.find((m) => m.value === form.interestCalculationMethod)?.hint}
+              </p>
+            </div>
 
             <div className="space-y-1.5">
               <Label>Interest Eligibility Delay (months)</Label>

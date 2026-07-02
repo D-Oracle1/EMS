@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   CheckCircle,
   XCircle,
+  FileText,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -117,6 +118,12 @@ export function SavingsDetailClient({ user, account }: SavingsDetailClientProps)
           </Badge>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" asChild>
+            <Link href={`/savings/${account.id}/statement`}>
+              <FileText className="mr-2 h-4 w-4" />
+              Statement
+            </Link>
+          </Button>
           {canDeposit && account.status === 'ACTIVE' && (
             <Dialog open={depositOpen} onOpenChange={setDepositOpen}>
               <DialogTrigger asChild>

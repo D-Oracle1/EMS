@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import Decimal from 'decimal.js';
+import { flagDormantAccounts } from '@/lib/savings-maintenance';
+import { refreshMaturityProgress } from '@/lib/savings-interest-engine';
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
 
@@ -86,6 +88,14 @@ export async function GET(request: Request) {
       });
     }
     results.absentees = `${absentStaff.length} staff marked absent`;
+
+    // 4. Flag dormant (non-fixed) savings accounts
+    const dormant = await flagDormantAccounts({ asOf: new Date() });
+    results.dormantSavings = `${dormant.flagged} savings accounts marked dormant`;
+
+    // 5. Refresh fixed-term maturity progress (months completed / remaining)
+    const refreshed = await refreshMaturityProgress(new Date());
+    results.maturityProgress = `${refreshed} fixed-term accounts refreshed`;
 
     return NextResponse.json({ success: true, results, timestamp: new Date().toISOString() });
   } catch (error: any) {

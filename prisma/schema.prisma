@@ -439,6 +439,7 @@ model Customer {
   documents         Document[]
   ledgerAccounts    LedgerAccount[]
   verificationTasks VerificationTask[]
+  guarantorFor      Guarantor[]
 
   @@index([customerNumber])
   @@index([phone])
@@ -540,7 +541,7 @@ model Loan {
   // Purpose & Details
   purpose           String?
   collateralDetails String?
-  guarantorDetails  String?
+  guarantorDetails  String?  // legacy single free-text guarantor (kept for backward compatibility)
 
   // Owing Bypass — set when loan officer creates loan for customer with outstanding debt
   owingBypass          Boolean  @default(false)
@@ -586,6 +587,7 @@ model Loan {
   documents         Document[]
   verificationTasks VerificationTask[]
   restructurings    LoanRestructuring[]
+  guarantors        Guarantor[]
 
   @@index([loanNumber])
   @@index([customerId])
@@ -610,6 +612,46 @@ enum LoanStatus {
   DEFAULTED
   CLOSED
   WRITTEN_OFF
+}
+
+// Loan Guarantors — a loan can have multiple guarantors, each optionally linked
+// to a registered Customer record.
+model Guarantor {
+  id            String   @id @default(uuid())
+  loanId        String
+  customerId    String?  // optional link to a registered customer
+
+  // Identity
+  title         String?
+  firstName     String
+  lastName      String
+  middleName    String?
+  relationship  String?  // relationship to the borrower
+
+  // Contact
+  phone         String
+  email         String?
+  address       String?
+  city          String?
+  state         String?
+
+  // Employment & Financial
+  occupation    String?
+  employer      String?
+  monthlyIncome Decimal? @db.Decimal(18, 2)
+
+  // Identification
+  bvn           String?
+  nationalId    String?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  loan          Loan      @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  customer      Customer? @relation(fields: [customerId], references: [id])
+
+  @@index([loanId])
+  @@index([customerId])
 }
 
 // Loan Verification Reports
@@ -932,6 +974,7 @@ model SavingsProduct {
   durationMonths                Int?
   totalInterestRate             Decimal?  @db.Decimal(5, 2)   // Total rate for full term
   monthlyInterestRate           Decimal?  @db.Decimal(5, 2)   // Auto: totalInterestRate / durationMonths
+  interestCalculationMethod     InterestCalculationMethod @default(MATURITY_ONLY)
   interestEligibilityDelayMonths Int      @default(0)          // Months before deposits earn interest
   allowEarlyTermination         Boolean   @default(false)
   defaultTerminationPenaltyRate Decimal?  @db.Decimal(5, 2)   // % penalty on approved interest
@@ -965,6 +1008,14 @@ enum InterestFrequency {
   ANNUALLY
 }
 
+// How a fixed-term product's interest is calculated & applied
+enum InterestCalculationMethod {
+  MATURITY_ONLY       // Accrue monthly, pay lump sum at maturity (default)
+  MONTHLY_ALLOCATION  // Credit interest to the account balance each month
+  FLAT                // Flat rate (provisional — treated as maturity accrual for now)
+  COMPOUND            // Interest compounds into the eligible balance monthly
+}
+
 // Savings Accounts
 model SavingsAccount {
   id              String   @id @default(uuid())
@@ -991,6 +1042,8 @@ model SavingsAccount {
   totalDeposits    Decimal  @db.Decimal(18, 2) @default(0)   // Cumulative deposits ever made
   startDate        DateTime?
   maturityDate     DateTime?
+  monthsCompleted  Int      @default(0)   // Months elapsed of the fixed term
+  monthsRemaining  Int?                   // Months left until maturity
   createdById      String?
 
   status          AccountStatus @default(ACTIVE)
@@ -1015,11 +1068,47 @@ model SavingsAccount {
   withdrawalRequests  WithdrawalRequest[]
   terminations        SavingsTermination[]
   journalEntries      JournalEntry[]
+  interestPostings    SavingsInterest[]
 
   @@index([accountNumber])
   @@index([customerId])
   @@index([status])
   @@index([maturityDate])
+}
+
+// Immutable per-account monthly interest ledger.
+// The unique (accountId, year, month) constraint guarantees interest is
+// never posted twice for the same account in the same period.
+model SavingsInterest {
+  id                String   @id @default(uuid())
+  accountId         String
+  year              Int
+  month             Int      // 1-12
+
+  eligibleBalance   Decimal  @db.Decimal(18, 2)   // Base the interest was computed on
+  interestRate      Decimal  @db.Decimal(5, 2)    // Monthly rate applied
+  interestAmount    Decimal  @db.Decimal(18, 2)
+
+  calculationMethod InterestCalculationMethod @default(MATURITY_ONLY)
+  status            InterestPostingStatus     @default(ACCRUED)
+
+  transactionId     String?  // Linked SavingsTransaction, if any
+  generatedById     String?
+  generatedAt       DateTime @default(now())
+  createdAt         DateTime @default(now())
+
+  account           SavingsAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, year, month])
+  @@index([accountId])
+  @@index([year, month])
+  @@index([status])
+}
+
+enum InterestPostingStatus {
+  ACCRUED    // Booked to interestAccrued, payable at maturity
+  CREDITED   // Credited to the account balance
+  REVERSED
 }
 
 enum AccountStatus {

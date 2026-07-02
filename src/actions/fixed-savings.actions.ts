@@ -12,6 +12,10 @@ import { auditLog } from '@/lib/audit';
 import { createNotification } from '@/lib/notifications';
 import { generateReference } from '@/lib/utils';
 import { createJournalEntry, getAccountByCode } from '@/lib/accounting-engine';
+import {
+  runMonthlySavingsInterest as engineRunMonthlyInterest,
+  processMaturedAccounts as engineProcessMatured,
+} from '@/lib/savings-interest-engine';
 import type { ActionResult } from '@/types';
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
@@ -63,6 +67,7 @@ export async function createFixedSavingsProduct(data: {
   totalInterestRate: number;
   minimumDeposit: number;
   maximumDeposit?: number;
+  interestCalculationMethod?: 'MATURITY_ONLY' | 'MONTHLY_ALLOCATION' | 'FLAT' | 'COMPOUND';
   interestEligibilityDelayMonths?: number;
   allowEarlyTermination?: boolean;
   defaultTerminationPenaltyRate?: number;
@@ -99,6 +104,7 @@ export async function createFixedSavingsProduct(data: {
         durationMonths: data.durationMonths,
         totalInterestRate: data.totalInterestRate,
         monthlyInterestRate,
+        interestCalculationMethod: data.interestCalculationMethod ?? 'MATURITY_ONLY',
         interestEligibilityDelayMonths: data.interestEligibilityDelayMonths ?? 0,
         allowEarlyTermination: data.allowEarlyTermination ?? false,
         defaultTerminationPenaltyRate: data.defaultTerminationPenaltyRate,
@@ -136,6 +142,7 @@ export async function updateFixedSavingsProduct(
     totalInterestRate?: number;
     minimumDeposit?: number;
     maximumDeposit?: number;
+    interestCalculationMethod?: 'MATURITY_ONLY' | 'MONTHLY_ALLOCATION' | 'FLAT' | 'COMPOUND';
     interestEligibilityDelayMonths?: number;
     allowEarlyTermination?: boolean;
     defaultTerminationPenaltyRate?: number;
@@ -156,6 +163,7 @@ export async function updateFixedSavingsProduct(
     const updates: Record<string, unknown> = {};
     if (data.name !== undefined) updates.name = data.name;
     if (data.description !== undefined) updates.description = data.description;
+    if (data.interestCalculationMethod !== undefined) updates.interestCalculationMethod = data.interestCalculationMethod;
     if (data.interestEligibilityDelayMonths !== undefined) updates.interestEligibilityDelayMonths = data.interestEligibilityDelayMonths;
     if (data.allowEarlyTermination !== undefined) updates.allowEarlyTermination = data.allowEarlyTermination;
     if (data.defaultTerminationPenaltyRate !== undefined) updates.defaultTerminationPenaltyRate = data.defaultTerminationPenaltyRate;
@@ -257,6 +265,8 @@ export async function createFixedSavingsAccount(data: {
           eligibleBalance: 0,
           startDate,
           maturityDate,
+          monthsCompleted: 0,
+          monthsRemaining: product.durationMonths,
           status: 'ACTIVE',
           createdById: user.id,
         },
@@ -559,90 +569,12 @@ export async function getFixedSavingsAccount(id: string) {
  */
 export async function runMonthlySavingsInterest(): Promise<ActionResult<{ processed: number; totalInterest: number }>> {
   try {
-    const systemUserId = await getSystemUserId();
-
-    const activeAccounts: any[] = await prisma.savingsAccount.findMany({
-      where: { maturityDate: { not: null }, status: 'ACTIVE', isDeleted: false },
-      include: { product: true },
-    });
-
-    let processed = 0;
-    let totalInterestAccrued = new Decimal(0);
-
-    const interestExpAcc = await getAccountByCode(GL.INTEREST_EXPENSE);
-    const interestPayAcc = await getAccountByCode(GL.INTEREST_PAYABLE);
-
-    for (const account of activeAccounts) {
-      const monthlyRate = account.product.monthlyInterestRate?.toNumber();
-      if (!monthlyRate) continue;
-
-      const eligibleBal = new Decimal(account.eligibleBalance?.toString() ?? '0');
-      const pendingDep = new Decimal(account.pendingDeposits?.toString() ?? '0');
-
-      const interest = eligibleBal.times(monthlyRate).div(100).toDecimalPlaces(2);
-      const newEligibleBalance = eligibleBal.plus(pendingDep).toDecimalPlaces(2);
-      const newAccruedInterest = new Decimal(account.interestAccrued.toString()).plus(interest).toDecimalPlaces(2);
-      const transactionRef = await generateReference('SAVINGS_TXN');
-
-      if (interest.gt(0)) {
-        await prisma.$transaction([
-          prisma.savingsTransaction.create({
-            data: {
-              accountId: account.id,
-              transactionRef,
-              transactionType: 'INTEREST_ACCRUAL',
-              amount: interest.toNumber(),
-              balanceBefore: account.currentBalance.toNumber(),
-              balanceAfter: account.currentBalance.toNumber(),
-              paymentMode: 'BANK_TRANSFER',
-              narration: `Monthly interest accrual @ ${monthlyRate}% on eligible balance ${eligibleBal}`,
-              processedById: systemUserId,
-            },
-          }),
-          prisma.savingsAccount.update({
-            where: { id: account.id },
-            data: {
-              interestAccrued: newAccruedInterest.toNumber(),
-              eligibleBalance: newEligibleBalance.toNumber(),
-              pendingDeposits: 0,
-              lastInterestDate: new Date(),
-            },
-          }),
-        ]);
-
-        if (interestExpAcc && interestPayAcc) {
-          await createJournalEntry({
-            entryDate: new Date(),
-            entryType: 'ACCRUAL',
-            description: `Monthly savings interest: ${account.accountNumber}`,
-            sourceModule: 'SAVINGS',
-            sourceType: 'INTEREST_ACCRUAL',
-            sourceId: account.id,
-            savingsAccountId: account.id,
-            lines: [
-              { accountId: interestExpAcc.id, debitAmount: interest.toNumber(), description: `Interest expense - ${account.accountNumber}` },
-              { accountId: interestPayAcc.id, creditAmount: interest.toNumber(), description: `Interest payable - ${account.accountNumber}`, customerId: account.customerId },
-            ],
-            createdById: systemUserId,
-            autoPost: true,
-          });
-        }
-        totalInterestAccrued = totalInterestAccrued.plus(interest);
-      } else if (pendingDep.gt(0)) {
-        // Still roll pending deposits even if zero interest (first month)
-        await prisma.savingsAccount.update({
-          where: { id: account.id },
-          data: { eligibleBalance: newEligibleBalance.toNumber(), pendingDeposits: 0, lastInterestDate: new Date() },
-        });
-      }
-
-      processed++;
-    }
-
+    await requireAnyPermission(['SAVINGS:MANAGE', 'SETTINGS:MANAGE']);
+    const result = await engineRunMonthlyInterest();
     return {
       success: true,
-      message: `Monthly interest processed for ${processed} accounts. Total accrued: ₦${totalInterestAccrued.toNumber().toLocaleString()}`,
-      data: { processed, totalInterest: totalInterestAccrued.toNumber() },
+      message: `Monthly interest processed for ${result.processed} account(s) (${result.skipped} skipped). Total: ₦${result.totalInterest.toLocaleString()}`,
+      data: { processed: result.processed, totalInterest: result.totalInterest },
     };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -656,71 +588,13 @@ export async function runMonthlySavingsInterest(): Promise<ActionResult<{ proces
  */
 export async function processMaturedAccounts(): Promise<ActionResult<{ matured: number }>> {
   try {
-    const systemUserId = await getSystemUserId();
-    const today = new Date();
-
-    const maturedAccounts: any[] = await prisma.savingsAccount.findMany({
-      where: { maturityDate: { not: null, lte: today }, status: 'ACTIVE', isDeleted: false },
-      include: { product: true, customer: true },
-    });
-
-    let maturedCount = 0;
-    const cashAcc = await getAccountByCode(GL.CASH);
-    const savingsLiab = await getAccountByCode(GL.SAVINGS_LIABILITY);
-    const interestPayAcc = await getAccountByCode(GL.INTEREST_PAYABLE);
-
-    for (const account of maturedAccounts) {
-      const principal = new Decimal(account.totalDeposits?.toString() ?? account.currentBalance.toString());
-      const interest = new Decimal(account.interestAccrued.toString());
-      const payout = principal.plus(interest).toDecimalPlaces(2);
-      const transactionRef = await generateReference('SAVINGS_TXN');
-
-      await prisma.$transaction([
-        prisma.savingsTransaction.create({
-          data: {
-            accountId: account.id,
-            transactionRef,
-            transactionType: 'MATURITY_PAYOUT',
-            amount: payout.toNumber(),
-            balanceBefore: account.currentBalance.toNumber(),
-            balanceAfter: 0,
-            paymentMode: 'BANK_TRANSFER',
-            narration: `Maturity payout: Principal ₦${principal} + Interest ₦${interest}`,
-            processedById: systemUserId,
-          },
-        }),
-        prisma.savingsAccount.update({
-          where: { id: account.id },
-          data: { status: 'COMPLETED', currentBalance: 0, availableBalance: 0, closedAt: new Date() },
-        }),
-      ]);
-
-      if (cashAcc && savingsLiab) {
-        const lines: any[] = [
-          { accountId: savingsLiab.id, debitAmount: principal.toNumber(), description: `Maturity principal - ${account.accountNumber}`, customerId: account.customerId },
-        ];
-        if (interestPayAcc && interest.gt(0)) {
-          lines.push({ accountId: interestPayAcc.id, debitAmount: interest.toNumber(), description: `Maturity interest - ${account.accountNumber}`, customerId: account.customerId });
-        }
-        lines.push({ accountId: cashAcc.id, creditAmount: payout.toNumber(), description: `Maturity payout - ${account.accountNumber}` });
-
-        await createJournalEntry({
-          entryDate: new Date(),
-          description: `Savings maturity payout: ${account.accountNumber}`,
-          sourceModule: 'SAVINGS',
-          sourceType: 'MATURITY_PAYOUT',
-          sourceId: account.id,
-          savingsAccountId: account.id,
-          lines,
-          createdById: systemUserId,
-          autoPost: true,
-        });
-      }
-
-      maturedCount++;
-    }
-
-    return { success: true, message: `${maturedCount} accounts maturity-processed`, data: { matured: maturedCount } };
+    await requireAnyPermission(['SAVINGS:MANAGE', 'SETTINGS:MANAGE']);
+    const result = await engineProcessMatured();
+    return {
+      success: true,
+      message: `${result.matured} account(s) maturity-processed`,
+      data: { matured: result.matured },
+    };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
@@ -1068,11 +942,3 @@ export async function seedFixedSavingsProducts(): Promise<ActionResult> {
 // HELPER
 // ============================================================================
 
-async function getSystemUserId(): Promise<string> {
-  const sysAdmin = await prisma.staff.findFirst({
-    where: { role: { code: 'SUPER_ADMIN' }, status: 'ACTIVE' },
-    select: { id: true },
-  });
-  if (!sysAdmin) throw new Error('No system admin found for automated processing');
-  return sysAdmin.id;
-}
