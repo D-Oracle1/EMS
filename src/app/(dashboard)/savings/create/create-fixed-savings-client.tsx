@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { PiggyBank, Loader2, Search, CalendarIcon, ArrowLeft } from 'lucide-react';
+import { PiggyBank, Loader2, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,13 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { getFixedSavingsProducts, createFixedSavingsAccount } from '@/actions/fixed-savings.actions';
-import { searchCustomers } from '@/actions/customer.actions';
+import {
+  CustomerPicker,
+  emptyCustomerSelection,
+  validateCustomerSelection,
+  toActionCustomer,
+  type CustomerSelection,
+} from '@/components/customer-picker';
 import type { SessionUser } from '@/types';
 
 interface Props { user: SessionUser; }
@@ -19,13 +25,10 @@ interface Props { user: SessionUser; }
 export function CreateFixedSavingsClient({ user }: Props) {
   const router = useRouter();
   const [products, setProducts] = useState<any[]>([]);
-  const [customerQuery, setCustomerQuery] = useState('');
-  const [customerResults, setCustomerResults] = useState<any[]>([]);
-  const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
+  const [customerSel, setCustomerSel] = useState<CustomerSelection>(emptyCustomerSelection);
   const [selectedProductId, setSelectedProductId] = useState('');
   const [initialDeposit, setInitialDeposit] = useState('');
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
-  const [isPending, startTransition] = useTransition();
   const [submitting, setSubmitting] = useState(false);
 
   const selectedProduct = products.find((p) => p.id === selectedProductId) ?? null;
@@ -48,21 +51,9 @@ export function CreateFixedSavingsClient({ user }: Props) {
       .catch(() => toast.error('Failed to load savings plans'));
   }, []);
 
-  function handleCustomerSearch() {
-    if (!customerQuery.trim()) return;
-    startTransition(async () => {
-      try {
-        const results = await searchCustomers(customerQuery);
-        setCustomerResults(results);
-        if (results.length === 0) toast.info('No customers found');
-      } catch (e: any) {
-        toast.error(e.message || 'Customer search failed');
-      }
-    });
-  }
-
   async function handleSubmit() {
-    if (!selectedCustomer) return toast.error('Select a customer');
+    const customerErr = validateCustomerSelection(customerSel);
+    if (customerErr) return toast.error(customerErr);
     if (!selectedProductId) return toast.error('Select a savings plan');
     if (!initialDeposit || parseFloat(initialDeposit) <= 0) return toast.error('Enter initial deposit amount');
     if (selectedProduct && parseFloat(initialDeposit) < selectedProduct.minDeposit) {
@@ -72,7 +63,7 @@ export function CreateFixedSavingsClient({ user }: Props) {
     setSubmitting(true);
     try {
       const result = await createFixedSavingsAccount({
-        customerId: selectedCustomer.id,
+        ...toActionCustomer(customerSel),
         productId: selectedProductId,
         initialDeposit: parseFloat(initialDeposit),
         startDate,
@@ -110,52 +101,8 @@ export function CreateFixedSavingsClient({ user }: Props) {
         <CardHeader>
           <CardTitle className="text-base">Step 1 — Select Customer</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {!selectedCustomer ? (
-            <>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    className="pl-9"
-                    placeholder="Search by name, phone, or customer number..."
-                    value={customerQuery}
-                    onChange={(e) => setCustomerQuery(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleCustomerSearch()}
-                  />
-                </div>
-                <Button variant="outline" onClick={handleCustomerSearch} disabled={isPending}>
-                  {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Search'}
-                </Button>
-              </div>
-
-              {customerResults.length > 0 && (
-                <div className="border rounded-md divide-y max-h-48 overflow-y-auto">
-                  {customerResults.map((c) => (
-                    <button
-                      key={c.id}
-                      className="w-full text-left px-4 py-2.5 hover:bg-muted text-sm transition-colors"
-                      onClick={() => { setSelectedCustomer(c); setCustomerResults([]); }}
-                    >
-                      <span className="font-medium">{c.firstName} {c.lastName}</span>
-                      <span className="text-muted-foreground ml-2">{c.customerNumber}</span>
-                      <span className="text-muted-foreground ml-2">· {c.phone}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="bg-muted rounded-md p-3 flex items-center justify-between">
-              <div>
-                <p className="font-semibold">{selectedCustomer.firstName} {selectedCustomer.lastName}</p>
-                <p className="text-sm text-muted-foreground">{selectedCustomer.customerNumber} · {selectedCustomer.phone}</p>
-              </div>
-              <Button variant="ghost" size="sm" onClick={() => { setSelectedCustomer(null); setCustomerQuery(''); }}>
-                Change
-              </Button>
-            </div>
-          )}
+        <CardContent>
+          <CustomerPicker value={customerSel} onChange={setCustomerSel} />
         </CardContent>
       </Card>
 
@@ -263,7 +210,7 @@ export function CreateFixedSavingsClient({ user }: Props) {
         <Button variant="outline" onClick={() => router.back()} disabled={submitting}>Cancel</Button>
         <Button
           onClick={handleSubmit}
-          disabled={submitting || !selectedCustomer || !selectedProductId || !initialDeposit}
+          disabled={submitting || !selectedProductId || !initialDeposit}
         >
           {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Open Account

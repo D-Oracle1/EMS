@@ -16,6 +16,7 @@ import {
   runMonthlySavingsInterest as engineRunMonthlyInterest,
   processMaturedAccounts as engineProcessMatured,
 } from '@/lib/savings-interest-engine';
+import { createCustomerInTx, validateNewCustomer, type NewCustomerInput } from '@/lib/customer-registration';
 import type { ActionResult } from '@/types';
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
@@ -220,7 +221,8 @@ export async function deactivateFixedSavingsProduct(id: string): Promise<ActionR
 // ============================================================================
 
 export async function createFixedSavingsAccount(data: {
-  customerId: string;
+  customerId?: string;
+  newCustomer?: NewCustomerInput;
   productId: string;
   initialDeposit: number;
   branchId?: string;
@@ -229,9 +231,24 @@ export async function createFixedSavingsAccount(data: {
   try {
     const user = await requirePermission('SAVINGS:CREATE');
 
-    const customer = await prisma.customer.findUnique({ where: { id: data.customerId } });
-    if (!customer || customer.status !== 'ACTIVE') {
-      return { success: false, error: 'Customer not found or not active' };
+    // Resolve borrower: existing customer, or auto-register a new one.
+    const registerNew = !data.customerId && !!data.newCustomer;
+    let customerId = data.customerId?.trim() || '';
+    let customerName: string;
+    const branchId = data.branchId || user.branchId;
+
+    if (registerNew) {
+      const err = validateNewCustomer(data.newCustomer!);
+      if (err) return { success: false, error: err };
+      if (!branchId) return { success: false, error: 'No branch assigned. Cannot register a new customer.' };
+      customerName = `${data.newCustomer!.firstName.trim()} ${data.newCustomer!.lastName.trim()}`;
+    } else {
+      if (!customerId) return { success: false, error: 'Please select an existing customer or enter new customer details' };
+      const customer = await prisma.customer.findUnique({ where: { id: customerId } });
+      if (!customer || customer.status !== 'ACTIVE') {
+        return { success: false, error: 'Customer not found or not active' };
+      }
+      customerName = `${customer.firstName} ${customer.lastName}`;
     }
 
     const product: any = await prisma.savingsProduct.findUnique({ where: { id: data.productId } });
@@ -250,14 +267,24 @@ export async function createFixedSavingsAccount(data: {
 
     const accountNumber = await generateReference('SAVINGS_ACCOUNT');
     const transactionRef = await generateReference('SAVINGS_TXN');
+    const newCustomerNumber = registerNew ? await generateReference('CUSTOMER') : null;
 
     const account = await withTransaction(async (tx: any) => {
+      if (registerNew) {
+        const createdCustomer = await createCustomerInTx(tx, data.newCustomer!, {
+          customerNumber: newCustomerNumber!,
+          branchId: branchId as string,
+          createdBy: user.id,
+        });
+        customerId = createdCustomer.id;
+      }
+
       const acc = await tx.savingsAccount.create({
         data: {
           accountNumber,
-          customerId: data.customerId,
+          customerId,
           productId: data.productId,
-          branchId: data.branchId || user.branchId,
+          branchId: branchId || undefined,
           currentBalance: data.initialDeposit,
           availableBalance: data.initialDeposit,
           pendingDeposits: data.initialDeposit,  // Opening balance rule
@@ -301,16 +328,23 @@ export async function createFixedSavingsAccount(data: {
         savingsAccountId: account.id,
         lines: [
           { accountId: cashAcc.id, debitAmount: data.initialDeposit, description: `Opening deposit - ${accountNumber}` },
-          { accountId: savingsLiab.id, creditAmount: data.initialDeposit, description: `Fixed savings liability - ${accountNumber}`, customerId: data.customerId },
+          { accountId: savingsLiab.id, creditAmount: data.initialDeposit, description: `Fixed savings liability - ${accountNumber}`, customerId },
         ],
         createdById: user.id,
         autoPost: true,
       });
     }
 
+    if (registerNew && newCustomerNumber) {
+      await auditLog({
+        userId: user.id, action: 'CREATE', module: 'CUSTOMERS', entityType: 'CUSTOMER', entityId: customerId,
+        description: `Registered customer ${newCustomerNumber}: ${customerName} (from fixed savings account ${accountNumber})`,
+      });
+    }
+
     await auditLog({
       userId: user.id, action: 'CREATE', module: 'SAVINGS', entityType: 'SAVINGS_ACCOUNT', entityId: account.id,
-      description: `Created fixed savings account ${accountNumber} for ${customer.firstName} ${customer.lastName}, matures ${maturityDate.toDateString()}`,
+      description: `Created fixed savings account ${accountNumber} for ${customerName}, matures ${maturityDate.toDateString()}`,
     });
 
     return {

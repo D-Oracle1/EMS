@@ -17,6 +17,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { createSavingsAccount, getSavingsProducts } from '@/actions/savings.actions';
+import {
+  CustomerPicker,
+  emptyCustomerSelection,
+  validateCustomerSelection,
+  toActionCustomer,
+  type CustomerSelection,
+} from '@/components/customer-picker';
 import type { SessionUser } from '@/types';
 
 interface SavingsNewClientProps {
@@ -28,7 +35,7 @@ export function SavingsNewClient({ user }: SavingsNewClientProps) {
   const [isPending, startTransition] = useTransition();
   const [products, setProducts] = useState<any[]>([]);
 
-  const [customerId, setCustomerId] = useState('');
+  const [customerSel, setCustomerSel] = useState<CustomerSelection>(emptyCustomerSelection);
   const [productId, setProductId] = useState('');
   const [targetAmount, setTargetAmount] = useState('');
   const [targetDate, setTargetDate] = useState('');
@@ -50,7 +57,8 @@ export function SavingsNewClient({ user }: SavingsNewClientProps) {
 
   const validate = () => {
     const errs: Record<string, string> = {};
-    if (!customerId.trim()) errs.customerId = 'Customer ID is required';
+    const customerErr = validateCustomerSelection(customerSel);
+    if (customerErr) errs.customerId = customerErr;
     if (!productId) errs.productId = 'Select a savings product';
     if (isTargetProduct && !targetAmount) errs.targetAmount = 'Target amount is required for target savings';
     if (isTargetProduct && !targetDate) errs.targetDate = 'Target date is required for target savings';
@@ -64,7 +72,7 @@ export function SavingsNewClient({ user }: SavingsNewClientProps) {
 
     startTransition(async () => {
       const result = await createSavingsAccount({
-        customerId: customerId.trim(),
+        ...toActionCustomer(customerSel),
         productId,
         targetAmount: targetAmount ? parseFloat(targetAmount) : undefined,
         targetDate: targetDate || undefined,
@@ -102,16 +110,8 @@ export function SavingsNewClient({ user }: SavingsNewClientProps) {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="customerId">Customer ID</Label>
-                  <Input
-                    id="customerId"
-                    placeholder="Enter customer ID"
-                    value={customerId}
-                    onChange={(e) => { setCustomerId(e.target.value); setErrors((p) => ({ ...p, customerId: '' })); }}
-                  />
-                  {errors.customerId && <p className="text-sm text-destructive">{errors.customerId}</p>}
-                </div>
+                <CustomerPicker value={customerSel} onChange={setCustomerSel} />
+                {errors.customerId && <p className="text-sm text-destructive">{errors.customerId}</p>}
 
                 <div className="space-y-2">
                   <Label htmlFor="productId">Savings Product</Label>

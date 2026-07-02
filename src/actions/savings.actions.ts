@@ -7,6 +7,7 @@ import { auditLog } from '@/lib/audit';
 import { createNotification } from '@/lib/notifications';
 import { generateReference } from '@/lib/utils';
 import { createJournalEntry, getAccountByCode } from '@/lib/accounting-engine';
+import { createCustomerInTx, validateNewCustomer, type NewCustomerInput } from '@/lib/customer-registration';
 import type { ActionResult } from '@/types';
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
@@ -134,7 +135,8 @@ export async function getSavingsAccount(id: string) {
 }
 
 export async function createSavingsAccount(data: {
-  customerId: string;
+  customerId?: string;
+  newCustomer?: NewCustomerInput;
   productId: string;
   targetAmount?: number;
   targetDate?: string;
@@ -143,9 +145,24 @@ export async function createSavingsAccount(data: {
   try {
     const user = await requirePermission('SAVINGS:CREATE');
 
-    const customer = await prisma.customer.findUnique({ where: { id: data.customerId } });
-    if (!customer || customer.status !== 'ACTIVE') {
-      return { success: false, error: 'Customer not found or not active' };
+    // Resolve customer: existing, or auto-register a new one.
+    const registerNew = !data.customerId && !!data.newCustomer;
+    let customerId = data.customerId?.trim() || '';
+    let customerName: string;
+    const branchId = data.branchId || user.branchId;
+
+    if (registerNew) {
+      const err = validateNewCustomer(data.newCustomer!);
+      if (err) return { success: false, error: err };
+      if (!branchId) return { success: false, error: 'No branch assigned. Cannot register a new customer.' };
+      customerName = `${data.newCustomer!.firstName.trim()} ${data.newCustomer!.lastName.trim()}`;
+    } else {
+      if (!customerId) return { success: false, error: 'Please select an existing customer or enter new customer details' };
+      const customer = await prisma.customer.findUnique({ where: { id: customerId } });
+      if (!customer || customer.status !== 'ACTIVE') {
+        return { success: false, error: 'Customer not found or not active' };
+      }
+      customerName = `${customer.firstName} ${customer.lastName}`;
     }
 
     const product = await prisma.savingsProduct.findUnique({ where: { id: data.productId } });
@@ -154,21 +171,39 @@ export async function createSavingsAccount(data: {
     }
 
     const accountNumber = await generateReference('SAVINGS_ACCOUNT');
+    const newCustomerNumber = registerNew ? await generateReference('CUSTOMER') : null;
 
-    const account = await prisma.savingsAccount.create({
-      data: {
-        accountNumber,
-        customerId: data.customerId,
-        productId: data.productId,
-        branchId: data.branchId || user.branchId,
-        targetAmount: data.targetAmount,
-        targetDate: data.targetDate ? new Date(data.targetDate) : undefined,
-      },
+    const account = await withTransaction(async (tx) => {
+      if (registerNew) {
+        const created = await createCustomerInTx(tx, data.newCustomer!, {
+          customerNumber: newCustomerNumber!,
+          branchId: branchId as string,
+          createdBy: user.id,
+        });
+        customerId = created.id;
+      }
+      return tx.savingsAccount.create({
+        data: {
+          accountNumber,
+          customerId,
+          productId: data.productId,
+          branchId: branchId || undefined,
+          targetAmount: data.targetAmount,
+          targetDate: data.targetDate ? new Date(data.targetDate) : undefined,
+        },
+      });
     });
+
+    if (registerNew && newCustomerNumber) {
+      await auditLog({
+        userId: user.id, action: 'CREATE', module: 'CUSTOMERS', entityType: 'CUSTOMER', entityId: customerId,
+        description: `Registered customer ${newCustomerNumber}: ${customerName} (from savings account ${accountNumber})`,
+      });
+    }
 
     await auditLog({
       userId: user.id, action: 'CREATE', module: 'SAVINGS', entityType: 'SAVINGS_ACCOUNT', entityId: account.id,
-      description: `Created savings account ${accountNumber} for ${customer.firstName} ${customer.lastName}`,
+      description: `Created savings account ${accountNumber} for ${customerName}`,
     });
 
     return { success: true, message: `Account ${accountNumber} created`, data: { id: account.id, accountNumber } };
