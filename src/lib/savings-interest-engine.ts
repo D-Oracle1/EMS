@@ -121,7 +121,10 @@ export async function runMonthlySavingsInterest(opts?: {
 
     const method: InterestCalculationMethod =
       account.product.interestCalculationMethod ?? 'MATURITY_ONLY';
-    const creditsToBalance = method === 'MONTHLY_ALLOCATION';
+    // MONTHLY_ALLOCATION and COMPOUND both post interest to the visible balance
+    // each month (closing balance includes it). COMPOUND additionally folds that
+    // interest back into the eligible base so it earns interest next month.
+    const creditsToBalance = method === 'MONTHLY_ALLOCATION' || method === 'COMPOUND';
     const compounds = method === 'COMPOUND';
 
     const eligibleBal = new Decimal(account.eligibleBalance?.toString() ?? '0');

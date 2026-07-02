@@ -104,7 +104,7 @@ export async function createFixedSavingsProduct(data: {
         durationMonths: data.durationMonths,
         totalInterestRate: data.totalInterestRate,
         monthlyInterestRate,
-        interestCalculationMethod: data.interestCalculationMethod ?? 'MATURITY_ONLY',
+        interestCalculationMethod: data.interestCalculationMethod ?? 'COMPOUND',
         interestEligibilityDelayMonths: data.interestEligibilityDelayMonths ?? 0,
         allowEarlyTermination: data.allowEarlyTermination ?? false,
         defaultTerminationPenaltyRate: data.defaultTerminationPenaltyRate,

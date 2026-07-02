@@ -180,12 +180,11 @@ async function main() {
       code: 'SAVINGS_OFFICER',
       level: 40,
       perms: [
-        // Savings transactions, FD operations, loan repayments
+        // Savings-only scope — no loan access
         'CUSTOMERS:READ',
         'SAVINGS:READ', 'SAVINGS:CREATE', 'SAVINGS:TRANSACT',
         'SAVINGS:DEPOSIT', 'SAVINGS:WITHDRAW',
         'FIXED_DEPOSITS:READ', 'FIXED_DEPOSITS:CREATE', 'FIXED_DEPOSITS:LIQUIDATE',
-        'LOANS:READ', 'LOANS:REPAYMENT', 'LOANS:COLLECT',
         'DOCUMENTS:READ',
       ],
     },

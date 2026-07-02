@@ -52,7 +52,7 @@ const emptyForm = {
   totalInterestRate: '',
   minimumDeposit: '',
   maximumDeposit: '',
-  interestCalculationMethod: 'MATURITY_ONLY',
+  interestCalculationMethod: 'COMPOUND',
   interestEligibilityDelayMonths: '0',
   allowEarlyTermination: false,
   defaultTerminationPenaltyRate: '',
