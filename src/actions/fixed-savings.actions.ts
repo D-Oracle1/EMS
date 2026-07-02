@@ -18,6 +18,7 @@ import {
 } from '@/lib/savings-interest-engine';
 import { createCustomerInTx, validateNewCustomer, type NewCustomerInput } from '@/lib/customer-registration';
 import { notifyCustomerByEmail } from '@/lib/email';
+import { provisionCustomerLogin } from '@/lib/customer-auth';
 import type { ActionResult } from '@/types';
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
@@ -341,6 +342,7 @@ export async function createFixedSavingsAccount(data: {
         userId: user.id, action: 'CREATE', module: 'CUSTOMERS', entityType: 'CUSTOMER', entityId: customerId,
         description: `Registered customer ${newCustomerNumber}: ${customerName} (from fixed savings account ${accountNumber})`,
       });
+      await provisionCustomerLogin(customerId);
     }
 
     await auditLog({

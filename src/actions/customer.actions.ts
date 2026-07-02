@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { requirePermission, getSession } from '@/lib/auth-utils';
 import { auditLog } from '@/lib/audit';
 import { generateReference } from '@/lib/utils';
+import { provisionCustomerLogin } from '@/lib/customer-auth';
 import type { ActionResult } from '@/types';
 
 export async function getCustomers(filters?: {
@@ -208,6 +209,8 @@ export async function createCustomer(data: {
       description: `Created customer ${customer.customerNumber}: ${data.firstName} ${data.lastName}`,
     });
 
+    await provisionCustomerLogin(customer.id);
+
     return {
       success: true,
       message: `Customer ${customerNumber} created successfully`,
@@ -255,6 +258,8 @@ export async function quickCreateCustomer(data: {
       entityId: customer.id,
       description: `Quick-created customer ${customerNumber}: ${data.firstName} ${data.lastName} (from loan form)`,
     });
+
+    await provisionCustomerLogin(customer.id);
 
     return {
       success: true,

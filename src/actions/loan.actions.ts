@@ -14,6 +14,7 @@ import { createJournalEntry, getAccountByCode } from '@/lib/accounting-engine';
 import { createNotification, createNotificationForUsers, getUsersWithPermission, getUsersWithAnyPermission } from '@/lib/notifications';
 import { recordApprovalHistory } from '@/lib/approval-history';
 import { notifyCustomerByEmail } from '@/lib/email';
+import { provisionCustomerLogin } from '@/lib/customer-auth';
 import type { ActionResult } from '@/types';
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
@@ -514,6 +515,7 @@ export async function createLoan(data: {
         action: 'CREATE', module: 'CUSTOMERS', entityType: 'CUSTOMER', entityId: customerId,
         description: `Registered customer ${registeredCustomerNumber}: ${customerName} (from loan application ${loanNumber})`,
       });
+      await provisionCustomerLogin(customerId);
     }
 
     await auditLog({

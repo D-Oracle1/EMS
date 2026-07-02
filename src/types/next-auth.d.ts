@@ -19,6 +19,7 @@ declare module 'next-auth' {
       branchName: string | null;
       permissions: string[];
       mustChangePassword: boolean;
+      userType?: 'staff' | 'customer';
     };
   }
 
@@ -38,6 +39,7 @@ declare module 'next-auth' {
     branchName: string | null;
     permissions: string[];
     mustChangePassword: boolean;
+    userType?: 'staff' | 'customer';
   }
 }
 
@@ -58,5 +60,6 @@ declare module 'next-auth/jwt' {
     branchName: string | null;
     permissions: string[];
     mustChangePassword: boolean;
+    userType?: 'staff' | 'customer';
   }
 }

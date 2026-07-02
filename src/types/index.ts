@@ -14,6 +14,7 @@ export interface SessionUser {
   branchName: string | null;
   permissions: string[];
   mustChangePassword: boolean;
+  userType?: 'staff' | 'customer';
 }
 
 export interface JournalLineInput {

@@ -23,9 +23,12 @@ export const authConfig = {
 
       if (isApiAuth) return true;
 
+      const userType = (auth?.user as any)?.userType ?? 'staff';
+      const home = userType === 'customer' ? '/portal' : '/dashboard';
+
       if (isAuthPage) {
         if (isLoggedIn) {
-          return Response.redirect(new URL('/dashboard', nextUrl));
+          return Response.redirect(new URL(home, nextUrl));
         }
         return true;
       }
@@ -36,6 +39,16 @@ export const authConfig = {
       const mustChange = (auth?.user as any)?.mustChangePassword;
       if (mustChange && !isChangePasswordPage) {
         return Response.redirect(new URL('/change-password', nextUrl));
+      }
+
+      // Role separation: customers live under /portal, staff everywhere else.
+      const isPortal = nextUrl.pathname.startsWith('/portal');
+      if (userType === 'customer') {
+        if (!isPortal && !isChangePasswordPage) {
+          return Response.redirect(new URL('/portal', nextUrl));
+        }
+      } else if (isPortal) {
+        return Response.redirect(new URL('/dashboard', nextUrl));
       }
 
       return true;
@@ -57,6 +70,7 @@ export const authConfig = {
         token.branchName = user.branchName;
         token.permissions = user.permissions;
         token.mustChangePassword = user.mustChangePassword;
+        token.userType = user.userType ?? 'staff';
       }
       return token;
     },
@@ -78,6 +92,7 @@ export const authConfig = {
         branchName: token.branchName,
         permissions: token.permissions,
         mustChangePassword: token.mustChangePassword,
+        userType: token.userType ?? 'staff',
       };
       return session;
     },

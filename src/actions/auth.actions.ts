@@ -13,6 +13,47 @@ export async function changePassword(
   try {
     const { user } = await getSession();
 
+    const complexityError = (pw: string): string | null => {
+      if (pw.length < 8) return 'Password must be at least 8 characters';
+      if (!/[A-Z]/.test(pw)) return 'Password must contain an uppercase letter';
+      if (!/[a-z]/.test(pw)) return 'Password must contain a lowercase letter';
+      if (!/[0-9]/.test(pw)) return 'Password must contain a number';
+      if (!/[!@#$%^&*(),.?":{}|<>]/.test(pw)) return 'Password must contain a special character';
+      return null;
+    };
+
+    // Customer portal password change
+    if (user.userType === 'customer') {
+      const cust = await prisma.customer.findUnique({
+        where: { id: user.id },
+        select: { passwordHash: true },
+      });
+      if (!cust?.passwordHash) return { success: false, error: 'User not found' };
+      const okC = await bcrypt.compare(currentPassword, cust.passwordHash);
+      if (!okC) return { success: false, error: 'Current password is incorrect' };
+      const cErr = complexityError(newPassword);
+      if (cErr) return { success: false, error: cErr };
+      if (currentPassword === newPassword) {
+        return { success: false, error: 'New password must be different from current password' };
+      }
+      const hashC = await bcrypt.hash(newPassword, 12);
+      await prisma.customer.update({
+        where: { id: user.id },
+        data: { passwordHash: hashC, mustResetPassword: false },
+      });
+      await auditLog({
+        userId: user.id,
+        userEmail: user.email,
+        userRole: 'CUSTOMER',
+        action: 'PASSWORD_CHANGE',
+        module: 'AUTH',
+        entityType: 'CUSTOMER',
+        entityId: user.id,
+        description: `Customer ${user.firstName} ${user.lastName} changed password`,
+      });
+      return { success: true, message: 'Password changed successfully' };
+    }
+
     const staff = await prisma.staff.findUnique({
       where: { id: user.id },
       select: { passwordHash: true },

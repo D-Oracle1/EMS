@@ -422,6 +422,14 @@ model Customer {
   kycVerifiedAt     DateTime?
   kycVerifiedBy     String?
 
+  // Customer portal login
+  passwordHash          String?
+  portalEnabled         Boolean  @default(false)
+  mustResetPassword     Boolean  @default(true)
+  portalLastLoginAt     DateTime?
+  portalFailedAttempts  Int      @default(0)
+  portalLockedUntil     DateTime?
+
   // Soft delete
   isDeleted         Boolean  @default(false)
   deletedAt         DateTime?

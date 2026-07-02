@@ -39,7 +39,56 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         });
 
         if (!staff) {
-          return null;
+          // Not a staff member — try customer portal login (additive; staff
+          // authentication above is unchanged).
+          const customer = await prisma.customer.findFirst({
+            where: { email, portalEnabled: true, isDeleted: false },
+          });
+          if (!customer || !customer.passwordHash) return null;
+
+          if (customer.portalLockedUntil && new Date() < customer.portalLockedUntil) {
+            throw new Error('Account is locked. Try again later.');
+          }
+          if (customer.status !== 'ACTIVE') {
+            throw new Error('Account is not active. Contact support.');
+          }
+
+          const customerOk = await bcrypt.compare(password, customer.passwordHash);
+          if (!customerOk) {
+            const attempts = customer.portalFailedAttempts + 1;
+            const upd: Record<string, unknown> = { portalFailedAttempts: attempts };
+            if (attempts >= 5) {
+              const lock = new Date();
+              lock.setMinutes(lock.getMinutes() + 30);
+              upd.portalLockedUntil = lock;
+            }
+            await prisma.customer.update({ where: { id: customer.id }, data: upd });
+            return null;
+          }
+
+          await prisma.customer.update({
+            where: { id: customer.id },
+            data: { portalFailedAttempts: 0, portalLockedUntil: null, portalLastLoginAt: new Date() },
+          });
+
+          return {
+            id: customer.id,
+            email: customer.email as string,
+            employeeId: customer.customerNumber,
+            firstName: customer.firstName,
+            lastName: customer.lastName,
+            role: 'Customer',
+            roleCode: 'CUSTOMER',
+            roleLevel: 0,
+            approvalLimit: 0,
+            department: 'Customer Portal',
+            departmentCode: 'PORTAL',
+            branchId: customer.branchId,
+            branchName: null,
+            permissions: [],
+            mustChangePassword: customer.mustResetPassword,
+            userType: 'customer',
+          };
         }
 
         // Check if account is locked
@@ -137,6 +186,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           branchName: staff.branch?.name ?? null,
           permissions,
           mustChangePassword: staff.mustChangePassword,
+          userType: 'staff',
         };
       },
     }),
