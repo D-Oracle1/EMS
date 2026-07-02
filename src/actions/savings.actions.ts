@@ -8,6 +8,7 @@ import { createNotification } from '@/lib/notifications';
 import { generateReference } from '@/lib/utils';
 import { createJournalEntry, getAccountByCode } from '@/lib/accounting-engine';
 import { createCustomerInTx, validateNewCustomer, type NewCustomerInput } from '@/lib/customer-registration';
+import { notifyCustomerByEmail } from '@/lib/email';
 import type { ActionResult } from '@/types';
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
@@ -205,6 +206,12 @@ export async function createSavingsAccount(data: {
       userId: user.id, action: 'CREATE', module: 'SAVINGS', entityType: 'SAVINGS_ACCOUNT', entityId: account.id,
       description: `Created savings account ${accountNumber} for ${customerName}`,
     });
+
+    await notifyCustomerByEmail(
+      customerId,
+      `Savings account ${accountNumber} opened`,
+      `Your savings account ${accountNumber} has been successfully opened. Thank you for banking with Hylink Finance.`
+    );
 
     return { success: true, message: `Account ${accountNumber} created`, data: { id: account.id, accountNumber } };
   } catch (error: any) {

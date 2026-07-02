@@ -8,7 +8,6 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { getFixedSavingsProducts, createFixedSavingsAccount } from '@/actions/fixed-savings.actions';
 import {
@@ -99,21 +98,21 @@ export function CreateFixedSavingsClient({ user }: Props) {
       </div>
 
       {/* Step 1: Customer */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Step 1 — Select Customer</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <CustomerPicker value={customerSel} onChange={setCustomerSel} />
-        </CardContent>
-      </Card>
+      <div className="premium-card p-5 space-y-4">
+        <div className="flex items-center gap-2">
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-white text-xs font-semibold">1</span>
+          <h2 className="font-semibold">Select Customer</h2>
+        </div>
+        <CustomerPicker value={customerSel} onChange={setCustomerSel} />
+      </div>
 
       {/* Step 2: Plan */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Step 2 — Select Savings Plan</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <div className="premium-card p-5 space-y-4">
+        <div className="flex items-center gap-2">
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-white text-xs font-semibold">2</span>
+          <h2 className="font-semibold">Select Savings Plan</h2>
+        </div>
+        <div>
           {products.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">
               No active fixed savings plans.{' '}
@@ -144,15 +143,16 @@ export function CreateFixedSavingsClient({ user }: Props) {
               ))}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Step 3: Amount */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Step 3 — Deposit & Start Date</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <div className="premium-card p-5 space-y-4">
+        <div className="flex items-center gap-2">
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-white text-xs font-semibold">3</span>
+          <h2 className="font-semibold">Deposit &amp; Start Date</h2>
+        </div>
+        <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Initial Deposit (₦) <span className="text-destructive">*</span></Label>
@@ -205,12 +205,13 @@ export function CreateFixedSavingsClient({ user }: Props) {
               </p>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       <div className="flex gap-3">
-        <Button variant="outline" onClick={() => router.back()} disabled={submitting}>Cancel</Button>
+        <Button variant="outline" className="rounded-full" onClick={() => router.back()} disabled={submitting}>Cancel</Button>
         <Button
+          className="rounded-full"
           onClick={handleSubmit}
           disabled={submitting || !selectedProductId || !initialDeposit}
         >

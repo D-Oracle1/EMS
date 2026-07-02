@@ -1,7 +1,8 @@
 import { Resend } from 'resend';
+import { prisma } from '@/lib/prisma';
 
 const apiKey = process.env.RESEND_API_KEY;
-const FROM = process.env.EMAIL_FROM || 'Hylink Finance <onboarding@resend.dev>';
+const FROM = process.env.EMAIL_FROM || 'Hylink Finance <info@hylinkfinance.com>';
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://hylink-ems.vercel.app';
 
 const resend = apiKey ? new Resend(apiKey) : null;
@@ -38,6 +39,37 @@ export async function sendEmail(params: SendEmailParams): Promise<{ ok: boolean;
   } catch (e) {
     console.error('[email] send failed:', e);
     return { ok: false, error: (e as Error).message };
+  }
+}
+
+/**
+ * Look up a customer's email and send them a branded alert. Best-effort.
+ */
+export async function notifyCustomerByEmail(
+  customerId: string,
+  subject: string,
+  message: string,
+  actionUrl?: string
+): Promise<void> {
+  try {
+    const c = await prisma.customer.findUnique({
+      where: { id: customerId },
+      select: { email: true, firstName: true },
+    });
+    if (!c?.email) return;
+    await sendEmail({
+      to: c.email,
+      subject,
+      html: renderAlertEmail({
+        title: subject,
+        message,
+        recipientName: c.firstName ?? undefined,
+        actionUrl,
+      }),
+      text: message,
+    });
+  } catch (error) {
+    console.error('[email] notifyCustomerByEmail failed:', error);
   }
 }
 

@@ -17,6 +17,7 @@ import {
   processMaturedAccounts as engineProcessMatured,
 } from '@/lib/savings-interest-engine';
 import { createCustomerInTx, validateNewCustomer, type NewCustomerInput } from '@/lib/customer-registration';
+import { notifyCustomerByEmail } from '@/lib/email';
 import type { ActionResult } from '@/types';
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
@@ -346,6 +347,12 @@ export async function createFixedSavingsAccount(data: {
       userId: user.id, action: 'CREATE', module: 'SAVINGS', entityType: 'SAVINGS_ACCOUNT', entityId: account.id,
       description: `Created fixed savings account ${accountNumber} for ${customerName}, matures ${maturityDate.toDateString()}`,
     });
+
+    await notifyCustomerByEmail(
+      customerId,
+      `Fixed savings account ${accountNumber} opened`,
+      `Your fixed savings account ${accountNumber} has been opened with an initial deposit of ${Number(data.initialDeposit).toLocaleString('en-NG', { style: 'currency', currency: 'NGN' })}. It matures on ${maturityDate.toLocaleDateString('en-NG', { year: 'numeric', month: 'long', day: 'numeric' })}.`
+    );
 
     return {
       success: true,

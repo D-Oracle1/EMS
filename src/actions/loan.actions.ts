@@ -13,6 +13,7 @@ import {
 import { createJournalEntry, getAccountByCode } from '@/lib/accounting-engine';
 import { createNotification, createNotificationForUsers, getUsersWithPermission, getUsersWithAnyPermission } from '@/lib/notifications';
 import { recordApprovalHistory } from '@/lib/approval-history';
+import { notifyCustomerByEmail } from '@/lib/email';
 import type { ActionResult } from '@/types';
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
@@ -526,6 +527,12 @@ export async function createLoan(data: {
       action: 'SUBMITTED', actorId: user.id, actorRole: user.roleCode,
       previousStatus: '', newStatus: 'DRAFT',
     });
+
+    await notifyCustomerByEmail(
+      customerId,
+      `Loan application ${loanNumber} received`,
+      `Your loan application for ${Number(data.principalAmount).toLocaleString('en-NG', { style: 'currency', currency: 'NGN' })} over ${data.tenure} months has been received and is being processed. We will notify you as it progresses.`
+    );
 
     return { success: true, message: `Loan ${loanNumber} created`, data: { id: loan.id, loanNumber } };
   } catch (error: any) {
