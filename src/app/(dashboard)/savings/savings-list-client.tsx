@@ -96,28 +96,35 @@ export function SavingsListClient({ user }: SavingsListClientProps) {
   const hasActiveFilters = status || productId || dateFrom || dateTo;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Savings Accounts</h1>
-          <p className="text-muted-foreground">
-            Manage customer savings accounts
-          </p>
+    <div className="space-y-5 animate-rise">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="icon-tile icon-tile-emerald">
+            <PiggyBank className="h-5 w-5" />
+          </div>
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Savings Accounts</h1>
+            <p className="text-sm text-muted-foreground">Manage customer savings accounts</p>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" asChild>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button variant="outline" size="sm" asChild className="rounded-full">
             <Link href="/savings/dashboard">Dashboard</Link>
           </Button>
           {user.permissions.includes('SAVINGS:APPROVE') && (
-            <Button variant="outline" asChild>
-              <Link href="/savings/withdrawals">Withdrawal Queue</Link>
+            <Button variant="outline" size="sm" asChild className="rounded-full">
+              <Link href="/savings/withdrawals">
+                <span className="sm:hidden">Queue</span>
+                <span className="hidden sm:inline">Withdrawal Queue</span>
+              </Link>
             </Button>
           )}
           {user.permissions.includes('SAVINGS:CREATE') && (
-            <Button asChild>
+            <Button size="sm" asChild className="rounded-full">
               <Link href="/savings/new">
-                <Plus className="mr-2 h-4 w-4" />
-                New Account
+                <Plus className="h-4 w-4 sm:mr-1.5" />
+                <span className="hidden sm:inline">New Account</span>
+                <span className="sm:hidden">New</span>
               </Link>
             </Button>
           )}

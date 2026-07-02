@@ -88,14 +88,14 @@ export function SavingsNewClient({ user }: SavingsNewClientProps) {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" asChild>
+    <div className="space-y-5 animate-rise">
+      <div className="flex items-center gap-3">
+        <Button variant="ghost" size="icon" asChild className="rounded-full shrink-0">
           <Link href="/savings"><ArrowLeft className="h-4 w-4" /></Link>
         </Button>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">New Savings Account</h1>
-          <p className="text-muted-foreground">Create a new savings account for a customer</p>
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight truncate">New Savings Account</h1>
+          <p className="text-sm text-muted-foreground">Create a new savings account for a customer</p>
         </div>
       </div>
 

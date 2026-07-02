@@ -82,17 +82,19 @@ export function CreateFixedSavingsClient({ user }: Props) {
   }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="max-w-3xl mx-auto space-y-5 animate-rise">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" asChild>
+        <Button variant="ghost" size="icon" asChild className="rounded-full shrink-0">
           <Link href="/savings/accounts"><ArrowLeft className="h-4 w-4" /></Link>
         </Button>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <PiggyBank className="h-6 w-6" />
-            Open Fixed Savings Account
-          </h1>
-          <p className="text-muted-foreground">Create a new fixed-term savings account for a customer</p>
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="icon-tile icon-tile-emerald hidden sm:flex">
+            <PiggyBank className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight truncate">Open Fixed Savings Account</h1>
+            <p className="text-sm text-muted-foreground">Create a new fixed-term savings account</p>
+          </div>
         </div>
       </div>
 
