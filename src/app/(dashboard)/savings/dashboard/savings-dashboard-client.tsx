@@ -11,23 +11,15 @@ import {
   CheckCircle2,
   Coins,
   Clock,
-  ArrowUpRight,
-  List,
+  Plus,
   RefreshCw,
   Loader2,
+  ArrowUpRight,
+  ChevronRight,
+  type LucideIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import { formatCurrency } from '@/lib/utils';
 import { getSavingsDashboard, type SavingsDashboard } from '@/actions/savings-dashboard.actions';
 import type { SessionUser } from '@/types';
@@ -36,52 +28,47 @@ interface Props {
   user: SessionUser;
 }
 
-const statusVariant: Record<string, 'success' | 'warning' | 'error' | 'secondary' | 'default'> = {
-  ACTIVE: 'success',
-  DORMANT: 'warning',
-  FROZEN: 'error',
-  CLOSED: 'secondary',
-  MATURED: 'default',
-  COMPLETED: 'secondary',
-  TERMINATED: 'error',
-  TERMINATION_REQUESTED: 'warning',
-};
-
 // Savings-scoped sub-navigation. This dashboard handles savings and nothing else.
 const savingsNav = [
-  { label: 'Dashboard', href: '/savings/dashboard' },
+  { label: 'Overview', href: '/savings/dashboard' },
   { label: 'Accounts', href: '/savings' },
   { label: 'Withdrawals', href: '/savings/withdrawals' },
   { label: 'Terminations', href: '/savings/terminations' },
   { label: 'Reports', href: '/savings/reports' },
 ];
 
-function Kpi({
+const SEGMENT_COLORS = ['#1d4ed8', '#f97316', '#059669', '#7c3aed', '#0891b2', '#d97706', '#e11d48', '#0284c7'];
+const TILE_TINTS = ['blue', 'orange', 'emerald', 'violet', 'cyan', 'amber', 'rose', 'sky'] as const;
+
+function compact(n: number): string {
+  if (Math.abs(n) >= 1_000_000) return `₦${(n / 1_000_000).toFixed(1)}M`;
+  if (Math.abs(n) >= 1_000) return `₦${(n / 1_000).toFixed(0)}k`;
+  return formatCurrency(n);
+}
+
+/** Small elevated stat tile with a rounded icon. */
+function StatTile({
   icon: Icon,
+  tint,
   label,
   value,
   sub,
-  tint,
 }: {
-  icon: typeof PiggyBank;
+  icon: LucideIcon;
+  tint: string;
   label: string;
   value: string;
   sub?: string;
-  tint: string;
 }) {
   return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between">
-          <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${tint}`}>
-            <Icon className="h-5 w-5" />
-          </div>
-        </div>
-        <p className="mt-3 text-2xl font-bold tracking-tight">{value}</p>
-        <p className="text-sm text-muted-foreground">{label}</p>
-        {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
-      </CardContent>
-    </Card>
+    <div className="premium-card premium-card-hover p-4">
+      <div className={`icon-tile icon-tile-sm icon-tile-${tint}`}>
+        <Icon style={{ height: 18, width: 18 }} />
+      </div>
+      <p className="mt-3 text-xl font-bold tracking-tight leading-tight">{value}</p>
+      <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
+      {sub && <p className="text-[11px] text-muted-foreground/80 mt-0.5">{sub}</p>}
+    </div>
   );
 }
 
@@ -104,48 +91,68 @@ export function SavingsDashboardClient({ user: _user }: Props) {
 
   const maxMonth = data ? Math.max(1, ...data.depositsByMonth.map((m) => m.amount)) : 1;
 
+  // Donut segments from product balances
+  const segments = (data?.productBreakdown ?? []).filter((p) => p.totalBalance > 0);
+  const segTotal = segments.reduce((s, p) => s + p.totalBalance, 0) || 1;
+  let acc = 0;
+  const gradientStops = segments
+    .map((p, i) => {
+      const start = (acc / segTotal) * 100;
+      acc += p.totalBalance;
+      const end = (acc / segTotal) * 100;
+      return `${SEGMENT_COLORS[i % SEGMENT_COLORS.length]} ${start}% ${end}%`;
+    })
+    .join(', ');
+  const donutBg = segments.length
+    ? `conic-gradient(${gradientStops})`
+    : 'conic-gradient(#e2e8f0 0% 100%)';
+
+  const maxProduct = Math.max(1, ...segments.map((p) => p.totalBalance));
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 animate-rise">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-lg bg-emerald-50 flex items-center justify-center">
-            <PiggyBank className="h-5 w-5 text-emerald-600" />
+          <div className="icon-tile icon-tile-blue">
+            <PiggyBank className="h-5 w-5" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Savings Dashboard</h1>
-            <p className="text-sm text-muted-foreground">Savings portfolio overview</p>
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Savings</h1>
+            <p className="text-sm text-muted-foreground">Portfolio overview</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={load} disabled={loading}>
-            <RefreshCw className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
+          <Button variant="outline" size="sm" onClick={load} disabled={loading} className="rounded-full">
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </Button>
-          <Button size="sm" asChild>
+          <Button size="sm" asChild className="rounded-full">
             <Link href="/savings/create">
-              <ArrowUpRight className="h-4 w-4 mr-1" />
-              New Fixed Savings
+              <Plus className="h-4 w-4 mr-1" />
+              New
             </Link>
           </Button>
         </div>
       </div>
 
-      {/* Savings-scoped sub-nav */}
-      <div className="flex flex-wrap gap-1 border-b">
-        {savingsNav.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={`px-3 py-2 text-sm border-b-2 -mb-px transition-colors ${
-              item.href === '/savings/dashboard'
-                ? 'border-emerald-600 text-emerald-700 font-medium'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {item.label}
-          </Link>
-        ))}
+      {/* Sub-nav pills */}
+      <div className="flex gap-1.5 overflow-x-auto -mx-1 px-1 pb-1 no-scrollbar">
+        {savingsNav.map((item) => {
+          const active = item.href === '/savings/dashboard';
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm transition-colors ${
+                active
+                  ? 'bg-blue-600 text-white font-medium shadow-sm shadow-blue-500/30'
+                  : 'bg-muted text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {item.label}
+            </Link>
+          );
+        })}
       </div>
 
       {loading && !data ? (
@@ -155,206 +162,228 @@ export function SavingsDashboardClient({ user: _user }: Props) {
         </div>
       ) : data ? (
         <>
-          {/* KPI grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Kpi
-              icon={Wallet}
-              label="Total Savings Portfolio"
-              value={formatCurrency(data.portfolio.totalPortfolio)}
-              sub={`${data.portfolio.activeAccounts} active accounts`}
-              tint="bg-emerald-50 text-emerald-600"
-            />
-            <Kpi
+          {/* Hero */}
+          <div className="hero-card p-5 sm:p-6">
+            <div className="relative z-10">
+              <p className="text-sm text-blue-100/80">Total Savings Portfolio</p>
+              <div className="mt-1 flex items-end gap-3 flex-wrap">
+                <span className="text-3xl sm:text-4xl font-bold tracking-tight">
+                  {formatCurrency(data.portfolio.totalPortfolio)}
+                </span>
+                <span className="trend-up mb-1.5">
+                  <TrendingUp className="h-3 w-3" />
+                  {formatCurrency(data.interest.thisMonth)} interest
+                </span>
+              </div>
+              <p className="mt-1 text-sm text-blue-100/70">
+                Across {data.portfolio.activeAccounts} active account
+                {data.portfolio.activeAccounts !== 1 ? 's' : ''}
+              </p>
+
+              {/* Inline quick figures */}
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                <div className="rounded-2xl bg-white/10 backdrop-blur-sm p-3">
+                  <div className="flex items-center gap-1.5 text-blue-100/80 text-xs">
+                    <ArrowUpRight className="h-3.5 w-3.5" /> Deposits this month
+                  </div>
+                  <p className="mt-1 text-lg font-semibold">{formatCurrency(data.deposits.monthAmount)}</p>
+                </div>
+                <div className="rounded-2xl bg-white/10 backdrop-blur-sm p-3">
+                  <div className="flex items-center gap-1.5 text-blue-100/80 text-xs">
+                    <Clock className="h-3.5 w-3.5" /> Interest liability
+                  </div>
+                  <p className="mt-1 text-lg font-semibold">
+                    {formatCurrency(data.interest.outstandingLiability)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick stat tiles */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <StatTile
               icon={TrendingUp}
+              tint="blue"
               label="Today's Deposits"
-              value={formatCurrency(data.deposits.todayAmount)}
-              sub={`${data.deposits.todayCount} transaction${data.deposits.todayCount !== 1 ? 's' : ''}`}
-              tint="bg-blue-50 text-blue-600"
+              value={compact(data.deposits.todayAmount)}
+              sub={`${data.deposits.todayCount} txn`}
             />
-            <Kpi
-              icon={Coins}
-              label="Deposits This Month"
-              value={formatCurrency(data.deposits.monthAmount)}
-              sub={`${data.deposits.monthCount} transaction${data.deposits.monthCount !== 1 ? 's' : ''}`}
-              tint="bg-indigo-50 text-indigo-600"
-            />
-            <Kpi
+            <StatTile
               icon={Percent}
-              label="Interest Allocated (all time)"
-              value={formatCurrency(data.interest.totalAllocated)}
-              sub={`${formatCurrency(data.interest.thisMonth)} this month`}
-              tint="bg-amber-50 text-amber-600"
+              tint="orange"
+              label="Interest (all time)"
+              value={compact(data.interest.totalAllocated)}
             />
-            <Kpi
-              icon={Clock}
-              label="Outstanding Interest Liability"
-              value={formatCurrency(data.interest.outstandingLiability)}
-              sub="Accrued, payable at maturity"
-              tint="bg-rose-50 text-rose-600"
-            />
-            <Kpi
-              icon={PiggyBank}
-              label="Pending Deposits"
-              value={formatCurrency(data.portfolio.totalPendingDeposits)}
-              sub="Awaiting next interest roll"
-              tint="bg-cyan-50 text-cyan-600"
-            />
-            <Kpi
-              icon={TrendingUp}
+            <StatTile
+              icon={Coins}
+              tint="emerald"
               label="Eligible Balance"
-              value={formatCurrency(data.portfolio.totalEligibleBalance)}
-              sub="Currently earning interest"
-              tint="bg-teal-50 text-teal-600"
+              value={compact(data.portfolio.totalEligibleBalance)}
+              sub="Earning interest"
             />
-            <Kpi
+            <StatTile
               icon={CheckCircle2}
-              label="Completed Savings"
+              tint="violet"
+              label="Completed"
               value={String(data.completed.count)}
-              sub={`${formatCurrency(data.completed.totalPaidOut)} paid out`}
-              tint="bg-slate-100 text-slate-600"
+              sub={compact(data.completed.totalPaidOut)}
             />
           </div>
 
-          {/* Status breakdown */}
-          {Object.keys(data.statusCounts).length > 0 && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Accounts by Status</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-wrap gap-2">
-                {Object.entries(data.statusCounts).map(([status, count]) => (
-                  <Badge key={status} variant={statusVariant[status] ?? 'secondary'}>
-                    {status.replace(/_/g, ' ')}: {count}
-                  </Badge>
-                ))}
-              </CardContent>
-            </Card>
-          )}
+          {/* Composition donut + breakdown */}
+          <div className="premium-card p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold">Portfolio Composition</h2>
+              {data.mostPopularProduct && (
+                <span className="text-xs text-muted-foreground">
+                  Top: {data.mostPopularProduct.name}
+                </span>
+              )}
+            </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Upcoming maturities */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <CalendarClock className="h-5 w-5" />
-                  Upcoming Maturities
-                </CardTitle>
-                <CardDescription>Active accounts maturing within 60 days</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {data.upcomingMaturities.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-6 text-center">
-                    No accounts maturing in the next 60 days.
+            <div className="flex flex-col sm:flex-row items-center gap-6">
+              {/* Donut */}
+              <div className="relative shrink-0" style={{ width: 160, height: 160 }}>
+                <div className="h-40 w-40 rounded-full" style={{ background: donutBg }} />
+                <div className="absolute inset-0 m-auto h-[104px] w-[104px] rounded-full bg-card flex flex-col items-center justify-center shadow-inner">
+                  <span className="text-lg font-bold leading-none">
+                    {compact(data.portfolio.totalPortfolio)}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground mt-0.5">Total</span>
+                </div>
+              </div>
+
+              {/* Breakdown list */}
+              <div className="flex-1 w-full space-y-3">
+                {segments.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-6">
+                    No active balances yet.
                   </p>
                 ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Account</TableHead>
-                        <TableHead>Matures</TableHead>
-                        <TableHead className="text-right">Projected Payout</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {data.upcomingMaturities.map((m) => (
-                        <TableRow key={m.id}>
-                          <TableCell>
-                            <Link href={`/savings/${m.id}`} className="font-medium hover:underline">
-                              {m.customerName}
-                            </Link>
-                            <div className="text-xs text-muted-foreground">
-                              {m.accountNumber} · {m.productName}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {new Date(m.maturityDate).toLocaleDateString('en-NG', {
-                              day: 'numeric',
-                              month: 'short',
-                              year: 'numeric',
-                            })}
-                            <div className="text-xs text-muted-foreground">
-                              in {m.daysToMaturity} day{m.daysToMaturity !== 1 ? 's' : ''}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right font-medium">
-                            {formatCurrency(m.projectedPayout)}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Deposits by month */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5" />
-                  Deposits — Last 6 Months
-                </CardTitle>
-                <CardDescription>Total savings deposits per month</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {data.depositsByMonth.map((m) => (
-                    <div key={m.label} className="flex items-center gap-3">
-                      <span className="w-12 text-xs text-muted-foreground shrink-0">{m.label}</span>
-                      <div className="flex-1 h-6 rounded bg-muted overflow-hidden">
-                        <div
-                          className="h-full bg-emerald-500 rounded transition-all"
-                          style={{ width: `${(m.amount / maxMonth) * 100}%` }}
-                        />
+                  segments.slice(0, 5).map((p, i) => {
+                    const color = SEGMENT_COLORS[i % SEGMENT_COLORS.length];
+                    const pct = Math.round((p.totalBalance / segTotal) * 100);
+                    return (
+                      <div key={p.productId}>
+                        <div className="flex items-center justify-between text-sm">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span
+                              className="h-2.5 w-2.5 rounded-full shrink-0"
+                              style={{ background: color }}
+                            />
+                            <span className="font-medium truncate">{p.name}</span>
+                            <span className="text-xs text-muted-foreground shrink-0">
+                              {p.accountCount} acct
+                            </span>
+                          </div>
+                          <span className="font-semibold shrink-0 ml-2">
+                            {compact(p.totalBalance)}
+                          </span>
+                        </div>
+                        <div className="progress-track mt-1.5">
+                          <div
+                            className="progress-fill"
+                            style={{ width: `${(p.totalBalance / maxProduct) * 100}%`, background: color }}
+                          />
+                        </div>
+                        <div className="text-right text-[11px] text-muted-foreground mt-0.5">{pct}%</div>
                       </div>
-                      <span className="w-28 text-right text-xs font-medium shrink-0">
-                        {formatCurrency(m.amount)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                    );
+                  })
+                )}
+              </div>
+            </div>
           </div>
 
-          {/* Product breakdown */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <List className="h-5 w-5" />
-                Customers per Product
-              </CardTitle>
-              <CardDescription>
-                {data.mostPopularProduct
-                  ? `Most popular: ${data.mostPopularProduct.name} (${data.mostPopularProduct.accountCount} accounts)`
-                  : 'Active accounts grouped by savings product'}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {data.productBreakdown.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-6 text-center">No active accounts yet.</p>
+          {/* Maturities + deposits */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Upcoming maturities */}
+            <div className="premium-card p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="icon-tile icon-tile-sm icon-tile-amber">
+                  <CalendarClock className="h-4 w-4" />
+                </div>
+                <div>
+                  <h2 className="font-semibold leading-tight">Upcoming Maturities</h2>
+                  <p className="text-xs text-muted-foreground">Within 60 days</p>
+                </div>
+              </div>
+              {data.upcomingMaturities.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-8 text-center">
+                  Nothing maturing soon.
+                </p>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Product</TableHead>
-                      <TableHead className="text-right">Accounts</TableHead>
-                      <TableHead className="text-right">Total Balance</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {data.productBreakdown.map((p) => (
-                      <TableRow key={p.productId}>
-                        <TableCell className="font-medium">{p.name}</TableCell>
-                        <TableCell className="text-right">{p.accountCount}</TableCell>
-                        <TableCell className="text-right">{formatCurrency(p.totalBalance)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                <div className="space-y-1">
+                  {data.upcomingMaturities.slice(0, 6).map((m, i) => (
+                    <Link
+                      key={m.id}
+                      href={`/savings/${m.id}`}
+                      className="flex items-center gap-3 rounded-xl px-2 py-2 -mx-2 hover:bg-muted/60 transition-colors"
+                    >
+                      <div className={`icon-tile icon-tile-sm icon-tile-${TILE_TINTS[i % TILE_TINTS.length]}`}>
+                        <Wallet className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium truncate">{m.customerName}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {m.productName} · in {m.daysToMaturity}d
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-sm font-semibold">{compact(m.projectedPayout)}</p>
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                    </Link>
+                  ))}
+                </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+
+            {/* Deposits by month */}
+            <div className="premium-card p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="icon-tile icon-tile-sm icon-tile-blue">
+                  <TrendingUp className="h-4 w-4" />
+                </div>
+                <div>
+                  <h2 className="font-semibold leading-tight">Deposits Trend</h2>
+                  <p className="text-xs text-muted-foreground">Last 6 months</p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                {data.depositsByMonth.map((m) => (
+                  <div key={m.label} className="flex items-center gap-3">
+                    <span className="w-9 text-xs text-muted-foreground shrink-0">{m.label}</span>
+                    <div className="flex-1 h-6 rounded-lg bg-muted overflow-hidden">
+                      <div
+                        className="h-full rounded-lg bg-gradient-to-r from-blue-600 to-blue-400"
+                        style={{ width: `${(m.amount / maxMonth) * 100}%` }}
+                      />
+                    </div>
+                    <span className="w-20 text-right text-xs font-medium shrink-0">{compact(m.amount)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Status chips */}
+          {Object.keys(data.statusCounts).length > 0 && (
+            <div className="premium-card p-4">
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(data.statusCounts).map(([status, count]) => (
+                  <span
+                    key={status}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs font-medium"
+                  >
+                    {status.replace(/_/g, ' ')}
+                    <span className="text-foreground/60">{count}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       ) : null}
     </div>

@@ -20,6 +20,7 @@ import {
   FileText,
   ShieldCheck,
   ArrowRight,
+  ArrowUpRight,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -84,42 +85,37 @@ interface StatCardProps {
 }
 
 function StatCard({ title, value, icon: Icon, description, variant = 'default', href }: StatCardProps) {
-  const colors = {
-    default: 'text-slate-600 bg-slate-50',
-    success: 'text-green-600 bg-green-50',
-    warning: 'text-yellow-600 bg-yellow-50',
-    danger: 'text-red-600 bg-red-50',
-    info: 'text-blue-600 bg-blue-50',
+  const tints: Record<NonNullable<StatCardProps['variant']>, string> = {
+    default: 'slate',
+    success: 'emerald',
+    warning: 'amber',
+    danger: 'rose',
+    info: 'blue',
   };
 
   const content = (
-    <CardContent className="p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-muted-foreground">{title}</p>
-          <p className="text-2xl font-bold mt-1">{value}</p>
-          {description && (
-            <p className="text-xs text-muted-foreground mt-1">{description}</p>
-          )}
+    <div className="p-5">
+      <div className="flex items-start justify-between">
+        <div className={`icon-tile icon-tile-${tints[variant]}`}>
+          <Icon className="h-5 w-5" />
         </div>
-        <div className={`h-12 w-12 rounded-lg flex items-center justify-center ${colors[variant]}`}>
-          <Icon className="h-6 w-6" />
-        </div>
+        {href && <ArrowUpRight className="h-4 w-4 text-muted-foreground" />}
       </div>
-    </CardContent>
+      <p className="mt-3 text-2xl font-bold tracking-tight leading-tight">{value}</p>
+      <p className="text-sm text-muted-foreground mt-0.5">{title}</p>
+      {description && <p className="text-xs text-muted-foreground/80 mt-0.5">{description}</p>}
+    </div>
   );
 
   if (href) {
     return (
-      <Link href={href} className="block">
-        <Card className="transition-all hover:shadow-md hover:border-primary/30 cursor-pointer hover:-translate-y-0.5">
-          {content}
-        </Card>
+      <Link href={href} className="block premium-card premium-card-hover">
+        {content}
       </Link>
     );
   }
 
-  return <Card>{content}</Card>;
+  return <div className="premium-card">{content}</div>;
 }
 
 interface DashboardClientProps {
@@ -135,29 +131,49 @@ export function DashboardClient({ user, data }: DashboardClientProps) {
   const loansByCategory = data.loansByCategory || [];
   const loansByOfficer = data.loansByOfficer || [];
 
+  const aum = data.executive
+    ? data.executive.totalLoansOutstanding +
+      data.executive.totalSavingsDeposits +
+      data.executive.totalFixedDeposits
+    : null;
+
   return (
-    <div className="space-y-6">
-      {/* Welcome Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            Welcome, {user.firstName}
-          </h1>
-          <p className="text-muted-foreground">
-            {user.role} &middot; {user.department}
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          {data.attendance?.isClockedIn && user.roleCode !== 'SUPER_ADMIN' && (
-            <Badge variant="success">Clocked In</Badge>
-          )}
-          {data.unreadNotifications > 0 && (
-            <Badge variant="destructive" className="flex items-center gap-1">
-              <Bell className="h-3 w-3" />
-              {data.unreadNotifications} unread
-            </Badge>
-          )}
-          <Badge variant="outline">{user.roleCode}</Badge>
+    <div className="space-y-5 animate-rise">
+      {/* Hero welcome */}
+      <div className="hero-card p-5 sm:p-6">
+        <div className="relative z-10 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-sm text-blue-100/80">Welcome back</p>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{user.firstName}</h1>
+            <p className="text-sm text-blue-100/70 mt-0.5">
+              {user.role} &middot; {user.department}
+            </p>
+            {aum !== null && (
+              <div className="mt-4">
+                <p className="text-xs text-blue-100/70">Assets under management</p>
+                <p className="text-3xl font-bold tracking-tight">{formatCurrency(aum)}</p>
+              </div>
+            )}
+          </div>
+          <div className="flex flex-col items-end gap-2">
+            {data.attendance?.isClockedIn && user.roleCode !== 'SUPER_ADMIN' && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-400/20 text-emerald-200 text-xs font-medium px-2.5 py-1">
+                <CheckCircle className="h-3 w-3" /> Clocked In
+              </span>
+            )}
+            {data.unreadNotifications > 0 && (
+              <Link
+                href="/notifications"
+                className="inline-flex items-center gap-1 rounded-full bg-orange-400/25 text-orange-100 text-xs font-medium px-2.5 py-1"
+              >
+                <Bell className="h-3 w-3" />
+                {data.unreadNotifications} unread
+              </Link>
+            )}
+            <span className="inline-flex items-center rounded-full bg-white/15 text-white/90 text-xs font-medium px-2.5 py-1">
+              {user.roleCode}
+            </span>
+          </div>
         </div>
       </div>
 

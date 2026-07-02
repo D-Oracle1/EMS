@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { Sidebar } from './sidebar';
 import { Header } from './header';
+import { MobileTabBar } from './mobile-tab-bar';
 import type { SessionUser } from '@/types';
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
@@ -30,8 +31,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       <Sidebar mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
       <div className="flex-1 lg:ml-64 transition-all duration-300 min-w-0">
         <Header onMenuToggle={() => setMobileOpen((v) => !v)} />
-        <main className="p-4 lg:p-6">{children}</main>
+        <main className="p-4 lg:p-6 pb-28 lg:pb-6">{children}</main>
       </div>
+      <MobileTabBar onMore={() => setMobileOpen(true)} />
     </div>
   );
 }

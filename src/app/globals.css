@@ -10,20 +10,25 @@
     --card-foreground: 224 71% 4%;
     --popover: 0 0% 100%;
     --popover-foreground: 224 71% 4%;
-    --primary: 239 84% 67%;
+    --primary: 224 76% 48%;
     --primary-foreground: 0 0% 100%;
     --secondary: 220 14% 96%;
     --secondary-foreground: 220 9% 46%;
     --muted: 220 14% 96%;
     --muted-foreground: 220 9% 46%;
-    --accent: 240 5% 96%;
-    --accent-foreground: 240 6% 10%;
+    --accent: 24 95% 53%;
+    --accent-foreground: 0 0% 100%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
     --border: 220 13% 91%;
     --input: 220 13% 91%;
-    --ring: 239 84% 67%;
-    --radius: 0.625rem;
+    --ring: 224 76% 48%;
+    --radius: 0.75rem;
+
+    /* Brand palette */
+    --brand-blue: 224 76% 48%;      /* deep blue */
+    --brand-blue-deep: 226 71% 33%; /* darker blue for hero gradients */
+    --brand-orange: 24 95% 53%;     /* vibrant orange accent */
   }
 }
 
@@ -37,8 +42,8 @@
   body {
     @apply bg-background text-foreground;
     background-image:
-      radial-gradient(ellipse at 0% 0%, hsla(239, 84%, 67%, 0.06) 0%, transparent 50%),
-      radial-gradient(ellipse at 100% 100%, hsla(280, 80%, 65%, 0.06) 0%, transparent 50%);
+      radial-gradient(ellipse at 0% 0%, hsla(224, 76%, 48%, 0.07) 0%, transparent 50%),
+      radial-gradient(ellipse at 100% 100%, hsla(24, 95%, 53%, 0.06) 0%, transparent 55%);
     background-attachment: fixed;
   }
 
@@ -51,11 +56,11 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: linear-gradient(to bottom, #6366f1, #8b5cf6);
+    background: linear-gradient(to bottom, #1d4ed8, #f97316);
     border-radius: 10px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(to bottom, #4f46e5, #7c3aed);
+    background: linear-gradient(to bottom, #1e40af, #ea580c);
   }
 }
 
@@ -92,7 +97,7 @@
   .page-header { @apply mb-6; }
   .page-title {
     @apply text-2xl font-bold tracking-tight;
-    background: linear-gradient(135deg, #1e293b 0%, #4338ca 100%);
+    background: linear-gradient(135deg, #1e293b 0%, #1d4ed8 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -140,6 +145,92 @@
   .avatar-glow {
     animation: pulse-ring 2.5s ease-in-out infinite;
   }
+
+  /* ─── Premium fintech primitives ──────────────────────────────── */
+
+  /* Dark brand hero card for the headline metric */
+  .hero-card {
+    @apply relative overflow-hidden rounded-3xl text-white;
+    background:
+      radial-gradient(120% 120% at 100% 0%, hsla(24, 95%, 53%, 0.30) 0%, transparent 45%),
+      linear-gradient(135deg, hsl(226 71% 22%) 0%, hsl(224 76% 38%) 55%, hsl(221 83% 45%) 100%);
+    box-shadow: 0 24px 48px -20px hsla(224, 76%, 40%, 0.55);
+  }
+  .hero-card::after {
+    content: '';
+    position: absolute;
+    left: -20%;
+    bottom: -60%;
+    width: 60%;
+    height: 120%;
+    background: radial-gradient(circle, hsla(199, 89%, 60%, 0.25), transparent 60%);
+    pointer-events: none;
+  }
+
+  /* Elevated white card */
+  .premium-card {
+    @apply bg-card rounded-2xl border border-border/60;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 12px 28px -14px rgba(16, 24, 40, 0.14);
+  }
+  .premium-card-hover {
+    @apply transition-all duration-300;
+  }
+  .premium-card-hover:hover {
+    @apply -translate-y-0.5;
+    box-shadow: 0 2px 4px rgba(16, 24, 40, 0.05), 0 18px 36px -16px rgba(29, 78, 216, 0.28);
+  }
+
+  /* Rounded gradient icon tiles */
+  .icon-tile {
+    @apply flex items-center justify-center rounded-2xl shrink-0;
+    height: 2.75rem;
+    width: 2.75rem;
+  }
+  .icon-tile-sm { height: 2.25rem; width: 2.25rem; border-radius: 0.85rem; }
+  .icon-tile-blue   { background: linear-gradient(135deg, #dbeafe, #bfdbfe); color: #1d4ed8; }
+  .icon-tile-orange { background: linear-gradient(135deg, #ffedd5, #fed7aa); color: #ea580c; }
+  .icon-tile-emerald{ background: linear-gradient(135deg, #d1fae5, #a7f3d0); color: #059669; }
+  .icon-tile-violet { background: linear-gradient(135deg, #ede9fe, #ddd6fe); color: #7c3aed; }
+  .icon-tile-cyan   { background: linear-gradient(135deg, #cffafe, #a5f3fc); color: #0891b2; }
+  .icon-tile-amber  { background: linear-gradient(135deg, #fef3c7, #fde68a); color: #d97706; }
+  .icon-tile-rose   { background: linear-gradient(135deg, #ffe4e6, #fecdd3); color: #e11d48; }
+  .icon-tile-sky    { background: linear-gradient(135deg, #e0f2fe, #bae6fd); color: #0284c7; }
+  .icon-tile-indigo { background: linear-gradient(135deg, #e0e7ff, #c7d2fe); color: #4f46e5; }
+  .icon-tile-slate  { background: linear-gradient(135deg, #f1f5f9, #e2e8f0); color: #475569; }
+
+  /* Thin colored progress track */
+  .progress-track { @apply h-1.5 w-full rounded-full bg-muted overflow-hidden; }
+  .progress-fill  { @apply h-full rounded-full transition-all duration-500; }
+
+  /* Trend badges */
+  .trend-up   { @apply inline-flex items-center gap-1 rounded-full bg-emerald-500/15 text-emerald-300 text-xs font-medium px-2 py-0.5; }
+  .trend-down { @apply inline-flex items-center gap-1 rounded-full bg-rose-500/15 text-rose-300 text-xs font-medium px-2 py-0.5; }
+
+  /* Floating mobile tab bar */
+  .mobile-tabbar {
+    @apply fixed inset-x-0 bottom-0 z-40 lg:hidden;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .mobile-tabbar-inner {
+    @apply mx-3 mb-3 flex items-center justify-around rounded-[1.5rem] border border-white/60 bg-white/85 backdrop-blur-xl px-1.5 py-1.5;
+    box-shadow: 0 10px 30px -8px rgba(16, 24, 40, 0.25);
+  }
+
+  /* Safe-area helpers for fullscreen PWA */
+  .pt-safe { padding-top: env(safe-area-inset-top); }
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+
+  /* Entrance animation */
+  .animate-rise { animation: rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+  /* Hide scrollbars on horizontal pill scrollers */
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+}
+
+@keyframes rise {
+  from { transform: translateY(10px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
 }
 
 /* Print styles */
