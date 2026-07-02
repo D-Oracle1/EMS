@@ -16,7 +16,6 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -130,15 +129,15 @@ export function LoansClient({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 animate-rise">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-lg bg-blue-50 flex items-center justify-center">
-            <Landmark className="h-5 w-5 text-blue-600" />
+          <div className="icon-tile icon-tile-orange">
+            <Landmark className="h-5 w-5" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Loans</h1>
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Loans</h1>
             <p className="text-sm text-muted-foreground">
               {pagination.total} total loan{pagination.total !== 1 ? 's' : ''}
             </p>
@@ -148,6 +147,7 @@ export function LoansClient({
           {(hasPermission('LOANS:APPROVE_L1') || hasPermission('LOANS:APPROVE_L2')) && (
             <Button
               variant="outline"
+              className="rounded-full"
               onClick={() => {
                 startTransition(async () => {
                   const result = await markOverdueLoans();
@@ -161,15 +161,15 @@ export function LoansClient({
               }}
               disabled={isPending}
             >
-              <AlertTriangle className="h-4 w-4 mr-2" />
-              Mark Overdue
+              <AlertTriangle className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Mark Overdue</span>
             </Button>
           )}
           {hasPermission('LOANS:CREATE') && (
             <Link href="/loans/new">
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                New Loan
+              <Button className="rounded-full">
+                <Plus className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">New Loan</span>
               </Button>
             </Link>
           )}
@@ -177,15 +177,15 @@ export function LoansClient({
       </div>
 
       {/* Status Filter Tabs */}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex gap-1.5 overflow-x-auto no-scrollbar -mx-1 px-1 pb-1">
         {STATUS_TABS.map((tab) => (
           <button
             key={tab.value}
             onClick={() => navigate({ status: tab.value, page: 1 })}
-            className={`px-3 py-1.5 text-sm font-medium rounded-full border transition-colors ${
+            className={`whitespace-nowrap px-3.5 py-1.5 text-sm font-medium rounded-full transition-colors ${
               currentStatus === tab.value
-                ? 'bg-primary text-primary-foreground border-primary'
-                : 'bg-background text-muted-foreground border-input hover:bg-accent hover:text-accent-foreground'
+                ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30'
+                : 'bg-muted text-muted-foreground hover:text-foreground'
             }`}
           >
             {tab.label}
@@ -198,134 +198,163 @@ export function LoansClient({
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search by loan number or customer name..."
+            placeholder="Search loan number or customer…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
+            className="pl-9 rounded-full"
           />
         </div>
-        <Button type="submit" variant="secondary" disabled={isPending}>
+        <Button type="submit" variant="secondary" className="rounded-full" disabled={isPending}>
           Search
         </Button>
       </form>
 
-      {/* Loans Table */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">Loan Applications</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loans.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <Landmark className="h-12 w-12 mx-auto mb-3 opacity-30" />
-              <p className="font-medium">No loans found</p>
-              <p className="text-sm mt-1">
-                {currentSearch || currentStatus
-                  ? 'Try adjusting your filters'
-                  : 'Create a new loan application to get started'}
-              </p>
-            </div>
-          ) : (
-            <>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Loan #</TableHead>
-                    <TableHead>Customer</TableHead>
-                    <TableHead>Product</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                    <TableHead className="text-right">Rate</TableHead>
-                    <TableHead className="text-center">Tenure</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loans.map((loan) => {
-                    const statusConf = STATUS_CONFIG[loan.status as LoanStatus] || {
-                      label: loan.status,
-                      variant: 'outline' as const,
-                    };
-                    return (
-                      <TableRow key={loan.id}>
-                        <TableCell className="font-mono text-sm font-medium">
-                          {loan.loanNumber}
-                        </TableCell>
-                        <TableCell>
-                          <div>
-                            <p className="font-medium">
-                              {loan.customer.firstName} {loan.customer.lastName}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {loan.customer.customerNumber}
-                            </p>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-sm">{loan.product.name}</span>
-                        </TableCell>
-                        <TableCell className="text-right font-medium">
-                          {formatCurrency(loan.principalAmount)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {loan.interestRate}%
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {loan.tenure}m
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={statusConf.variant}>{statusConf.label}</Badge>
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {formatDate(loan.createdAt)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Link href={`/loans/${loan.id}`}>
-                            <Button variant="ghost" size="sm">
-                              <Eye className="h-4 w-4 mr-1" />
-                              View
-                            </Button>
-                          </Link>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-
-              {/* Pagination */}
-              {pagination.totalPages > 1 && (
-                <div className="flex items-center justify-between mt-4 pt-4 border-t">
-                  <p className="text-sm text-muted-foreground">
-                    Page {pagination.page} of {pagination.totalPages} ({pagination.total} results)
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={pagination.page <= 1 || isPending}
-                      onClick={() => navigate({ page: pagination.page - 1 })}
-                    >
-                      <ChevronLeft className="h-4 w-4 mr-1" />
-                      Previous
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={pagination.page >= pagination.totalPages || isPending}
-                      onClick={() => navigate({ page: pagination.page + 1 })}
-                    >
-                      Next
-                      <ChevronRight className="h-4 w-4 ml-1" />
-                    </Button>
+      {/* Loans */}
+      {loans.length === 0 ? (
+        <div className="premium-card text-center py-14 text-muted-foreground">
+          <Landmark className="h-12 w-12 mx-auto mb-3 opacity-30" />
+          <p className="font-medium">No loans found</p>
+          <p className="text-sm mt-1">
+            {currentSearch || currentStatus
+              ? 'Try adjusting your filters'
+              : 'Create a new loan application to get started'}
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* Mobile card list */}
+          <div className="md:hidden space-y-2.5">
+            {loans.map((loan) => {
+              const statusConf = STATUS_CONFIG[loan.status as LoanStatus] || {
+                label: loan.status,
+                variant: 'outline' as const,
+              };
+              return (
+                <Link
+                  key={loan.id}
+                  href={`/loans/${loan.id}`}
+                  className="premium-card premium-card-hover flex items-center gap-3 p-3.5"
+                >
+                  <div className="icon-tile icon-tile-sm icon-tile-orange">
+                    <Landmark className="h-4 w-4" />
                   </div>
-                </div>
-              )}
-            </>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium truncate">
+                      {loan.customer.firstName} {loan.customer.lastName}
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {loan.loanNumber} · {loan.product.name}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="font-semibold text-sm">{formatCurrency(loan.principalAmount)}</p>
+                    <Badge variant={statusConf.variant} className="mt-1">
+                      {statusConf.label}
+                    </Badge>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+
+          {/* Desktop table */}
+          <div className="premium-card hidden md:block overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Loan #</TableHead>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Product</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead className="text-right">Rate</TableHead>
+                  <TableHead className="text-center">Tenure</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loans.map((loan) => {
+                  const statusConf = STATUS_CONFIG[loan.status as LoanStatus] || {
+                    label: loan.status,
+                    variant: 'outline' as const,
+                  };
+                  return (
+                    <TableRow key={loan.id}>
+                      <TableCell className="font-mono text-sm font-medium">
+                        {loan.loanNumber}
+                      </TableCell>
+                      <TableCell>
+                        <div>
+                          <p className="font-medium">
+                            {loan.customer.firstName} {loan.customer.lastName}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {loan.customer.customerNumber}
+                          </p>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm">{loan.product.name}</span>
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        {formatCurrency(loan.principalAmount)}
+                      </TableCell>
+                      <TableCell className="text-right">{loan.interestRate}%</TableCell>
+                      <TableCell className="text-center">{loan.tenure}m</TableCell>
+                      <TableCell>
+                        <Badge variant={statusConf.variant}>{statusConf.label}</Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {formatDate(loan.createdAt)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Link href={`/loans/${loan.id}`}>
+                          <Button variant="ghost" size="sm">
+                            <Eye className="h-4 w-4 mr-1" />
+                            View
+                          </Button>
+                        </Link>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+
+          {/* Pagination */}
+          {pagination.totalPages > 1 && (
+            <div className="flex items-center justify-between pt-1">
+              <p className="text-sm text-muted-foreground">
+                Page {pagination.page} of {pagination.totalPages}
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full"
+                  disabled={pagination.page <= 1 || isPending}
+                  onClick={() => navigate({ page: pagination.page - 1 })}
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full"
+                  disabled={pagination.page >= pagination.totalPages || isPending}
+                  onClick={() => navigate({ page: pagination.page + 1 })}
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
+            </div>
           )}
-        </CardContent>
-      </Card>
+        </>
+      )}
     </div>
   );
 }

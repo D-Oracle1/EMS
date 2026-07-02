@@ -17,7 +17,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -173,92 +172,128 @@ export function CustomersClient({
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 animate-rise">
       {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Users className="h-6 w-6" />
-            Customers
-          </h1>
-          <p className="text-muted-foreground">
-            Manage customer accounts, KYC, and profiles
-          </p>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="icon-tile icon-tile-cyan">
+            <Users className="h-5 w-5" />
+          </div>
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Customers</h1>
+            <p className="text-sm text-muted-foreground">
+              {pagination.total} customer{pagination.total !== 1 ? 's' : ''} · KYC &amp; profiles
+            </p>
+          </div>
         </div>
         <PermissionGate permission="CUSTOMERS:CREATE">
-          <Button asChild>
+          <Button asChild className="rounded-full">
             <Link href="/customers/new">
-              <Plus className="h-4 w-4 mr-2" />
-              New Customer
+              <Plus className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">New Customer</span>
             </Link>
           </Button>
         </PermissionGate>
       </div>
 
       {/* Filters */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <form onSubmit={handleSearch} className="flex-1 flex gap-2">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search by name, customer #, phone, or email..."
-                  value={searchValue}
-                  onChange={(e) => setSearchValue(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-              <Button type="submit" variant="secondary" disabled={isPending}>
-                Search
-              </Button>
-            </form>
+      <div className="premium-card p-4">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <form onSubmit={handleSearch} className="flex-1 flex gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search name, customer #, phone, email…"
+                value={searchValue}
+                onChange={(e) => setSearchValue(e.target.value)}
+                className="pl-9 rounded-full"
+              />
+            </div>
+            <Button type="submit" variant="secondary" className="rounded-full" disabled={isPending}>
+              Search
+            </Button>
+          </form>
 
-            <Select
-              value={filters.status || 'all'}
-              onValueChange={(value) =>
-                updateFilters({ status: value === 'all' ? '' : value })
-              }
-            >
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="ACTIVE">Active</SelectItem>
-                <SelectItem value="INACTIVE">Inactive</SelectItem>
-                <SelectItem value="SUSPENDED">Suspended</SelectItem>
-                <SelectItem value="BLACKLISTED">Blacklisted</SelectItem>
-              </SelectContent>
-            </Select>
+          <Select
+            value={filters.status || 'all'}
+            onValueChange={(value) =>
+              updateFilters({ status: value === 'all' ? '' : value })
+            }
+          >
+            <SelectTrigger className="w-full sm:w-[150px]">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="ACTIVE">Active</SelectItem>
+              <SelectItem value="INACTIVE">Inactive</SelectItem>
+              <SelectItem value="SUSPENDED">Suspended</SelectItem>
+              <SelectItem value="BLACKLISTED">Blacklisted</SelectItem>
+            </SelectContent>
+          </Select>
 
-            <Select
-              value={filters.type || 'all'}
-              onValueChange={(value) =>
-                updateFilters({ type: value === 'all' ? '' : value })
-              }
-            >
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="INDIVIDUAL">Individual</SelectItem>
-                <SelectItem value="CORPORATE">Corporate</SelectItem>
-              </SelectContent>
-            </Select>
+          <Select
+            value={filters.type || 'all'}
+            onValueChange={(value) =>
+              updateFilters({ type: value === 'all' ? '' : value })
+            }
+          >
+            <SelectTrigger className="w-full sm:w-[160px]">
+              <SelectValue placeholder="Type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Types</SelectItem>
+              <SelectItem value="INDIVIDUAL">Individual</SelectItem>
+              <SelectItem value="CORPORATE">Corporate</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Mobile card list */}
+      <div className="md:hidden space-y-2.5">
+        {customers.length === 0 ? (
+          <div className="premium-card text-center py-14 text-muted-foreground">
+            <Users className="h-12 w-12 mx-auto mb-3 opacity-30" />
+            <p className="font-medium">No customers found</p>
+            {filters.search && <p className="text-sm mt-1">Try adjusting your search or filters</p>}
           </div>
-        </CardContent>
-      </Card>
+        ) : (
+          customers.map((customer) => (
+            <Link
+              key={customer.id}
+              href={`/customers/${customer.id}`}
+              className="premium-card premium-card-hover flex items-center gap-3 p-3.5"
+            >
+              <div className="icon-tile icon-tile-sm icon-tile-cyan font-semibold text-sm">
+                {(customer.firstName?.[0] ?? '') + (customer.lastName?.[0] ?? '')}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-medium truncate">
+                  {customer.title ? `${customer.title} ` : ''}
+                  {customer.firstName} {customer.lastName}
+                </p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {customer.customerNumber} · {customer.phone}
+                </p>
+              </div>
+              <div className="flex flex-col items-end gap-1 shrink-0">
+                {getKycBadge(customer.kycVerified)}
+                {getRiskBadge(customer.riskRating)}
+              </div>
+            </Link>
+          ))
+        )}
+      </div>
 
-      {/* Table */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">
+      {/* Desktop table */}
+      <div className="premium-card hidden md:block overflow-hidden">
+        <div className="p-4 pb-3">
+          <p className="font-semibold">
             {pagination.total} Customer{pagination.total !== 1 ? 's' : ''} found
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
+          </p>
+        </div>
+        <div className="p-0">
           <Table>
             <TableHeader>
               <TableRow>
@@ -352,7 +387,7 @@ export function CustomersClient({
               )}
             </TableBody>
           </Table>
-        </CardContent>
+        </div>
 
         {/* Pagination */}
         {pagination.totalPages > 1 && (
@@ -389,7 +424,7 @@ export function CustomersClient({
             </div>
           </div>
         )}
-      </Card>
+      </div>
     </div>
   );
 }
