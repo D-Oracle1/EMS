@@ -13,7 +13,11 @@ import {
   Eye,
   Pencil,
   ShieldCheck,
+  KeyRound,
+  Loader2,
 } from 'lucide-react';
+import { toast } from 'sonner';
+import { backfillCustomerLogins } from '@/actions/customer.actions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -134,6 +138,19 @@ export function CustomersClient({
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const [searchValue, setSearchValue] = useState(filters.search);
+  const [backfilling, setBackfilling] = useState(false);
+
+  const handleBackfill = async () => {
+    if (!window.confirm('Provision portal logins for existing customers with an email? Each will be emailed a temporary password.')) return;
+    setBackfilling(true);
+    try {
+      const r = await backfillCustomerLogins();
+      if (r.success) toast.success(r.message || 'Done');
+      else toast.error(r.error || 'Backfill failed');
+    } finally {
+      setBackfilling(false);
+    }
+  };
 
   const updateFilters = useCallback(
     (updates: Record<string, string>) => {
@@ -186,14 +203,29 @@ export function CustomersClient({
             </p>
           </div>
         </div>
-        <PermissionGate permission="CUSTOMERS:CREATE">
-          <Button asChild className="rounded-full">
-            <Link href="/customers/new">
-              <Plus className="h-4 w-4 sm:mr-2" />
-              <span className="hidden sm:inline">New Customer</span>
-            </Link>
-          </Button>
-        </PermissionGate>
+        <div className="flex items-center gap-2">
+          <PermissionGate permission="SYSTEM:USER_MANAGE">
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-full"
+              onClick={handleBackfill}
+              disabled={backfilling}
+              title="Provision portal logins for existing customers"
+            >
+              {backfilling ? <Loader2 className="h-4 w-4 sm:mr-1.5 animate-spin" /> : <KeyRound className="h-4 w-4 sm:mr-1.5" />}
+              <span className="hidden sm:inline">Provision Logins</span>
+            </Button>
+          </PermissionGate>
+          <PermissionGate permission="CUSTOMERS:CREATE">
+            <Button asChild className="rounded-full">
+              <Link href="/customers/new">
+                <Plus className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">New Customer</span>
+              </Link>
+            </Button>
+          </PermissionGate>
+        </div>
       </div>
 
       {/* Filters */}

@@ -7,6 +7,59 @@ import { generateReference } from '@/lib/utils';
 import { provisionCustomerLogin } from '@/lib/customer-auth';
 import type { ActionResult } from '@/types';
 
+/**
+ * Provision portal logins for existing customers that have an email but no
+ * login yet. Idempotent, admin-only, throttled to respect Resend's rate limit.
+ * Processes up to 150 per run and reports how many remain (run again if needed).
+ */
+export async function backfillCustomerLogins(): Promise<
+  ActionResult<{ provisioned: number; remaining: number }>
+> {
+  try {
+    const user = await requirePermission('SYSTEM:USER_MANAGE');
+
+    const eligibleWhere = {
+      isDeleted: false,
+      portalEnabled: false,
+      email: { not: null, notIn: [''] },
+    };
+
+    const batch = await prisma.customer.findMany({
+      where: eligibleWhere,
+      select: { id: true },
+      take: 150,
+    });
+
+    let provisioned = 0;
+    for (const c of batch) {
+      await provisionCustomerLogin(c.id); // sets creds + emails (best-effort)
+      provisioned++;
+      // Stay under Resend's ~2 req/sec limit
+      await new Promise((r) => setTimeout(r, 550));
+    }
+
+    const remaining = await prisma.customer.count({ where: eligibleWhere });
+
+    await auditLog({
+      userId: user.id,
+      userEmail: user.email,
+      userRole: user.roleCode,
+      action: 'UPDATE',
+      module: 'CUSTOMERS',
+      entityType: 'CUSTOMER',
+      description: `Backfilled ${provisioned} customer portal login(s); ${remaining} remaining`,
+    });
+
+    return {
+      success: true,
+      message: `Provisioned ${provisioned} login(s).${remaining > 0 ? ` ${remaining} still remaining — run again.` : ' All eligible customers done.'}`,
+      data: { provisioned, remaining },
+    };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Backfill failed' };
+  }
+}
+
 export async function getCustomers(filters?: {
   search?: string;
   status?: string;
