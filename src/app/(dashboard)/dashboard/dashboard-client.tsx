@@ -21,6 +21,8 @@ import {
   ShieldCheck,
   ArrowRight,
   ArrowUpRight,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -75,47 +77,137 @@ const STATUS_BADGE_VARIANT: Record<string, 'default' | 'secondary' | 'destructiv
   DISBURSED: 'success',
 };
 
+/** Palette names mirror the sidebar so a module's card matches its nav entry. */
+type StatColor =
+  | 'blue' | 'cyan' | 'orange' | 'emerald' | 'purple' | 'yellow' | 'sky'
+  | 'pink' | 'violet' | 'indigo' | 'teal' | 'amber' | 'rose' | 'fuchsia' | 'slate';
+
 interface StatCardProps {
   title: string;
   value: string | number;
   icon: React.ComponentType<{ className?: string }>;
   description?: string;
+  /** Sidebar palette colour. Falls back to the legacy `variant` when omitted. */
+  color?: StatColor;
+  /** Retained so existing call sites keep working; `color` wins when both are set. */
   variant?: 'default' | 'success' | 'warning' | 'danger' | 'info';
+  /** A secondary figure shown after the main value, as in "200 - 42". */
+  secondaryValue?: string | number;
+  /** 0-100. Renders the donut ring when supplied. */
+  progress?: number;
+  /** Percentage change. Renders the delta pill; sign picks the colour. */
+  delta?: number;
   href?: string;
 }
 
-function StatCard({ title, value, icon: Icon, description, variant = 'default', href }: StatCardProps) {
-  const tints: Record<NonNullable<StatCardProps['variant']>, string> = {
-    default: 'slate',
-    success: 'emerald',
-    warning: 'amber',
-    danger: 'rose',
-    info: 'blue',
-  };
+/**
+ * Full class names spelled out, so Tailwind's scanner finds each one in the
+ * source and keeps its rule. Composing the name (`sc-` + tone) would let
+ * Tailwind purge every colour rule out of @layer components — the same reason
+ * the sidebar writes its palette longhand.
+ */
+const COLOR_CLASS: Record<StatColor, string> = {
+  blue: 'sc-blue',
+  cyan: 'sc-cyan',
+  orange: 'sc-orange',
+  emerald: 'sc-emerald',
+  purple: 'sc-purple',
+  yellow: 'sc-yellow',
+  sky: 'sc-sky',
+  pink: 'sc-pink',
+  violet: 'sc-violet',
+  indigo: 'sc-indigo',
+  teal: 'sc-teal',
+  amber: 'sc-amber',
+  rose: 'sc-rose',
+  fuchsia: 'sc-fuchsia',
+  slate: 'sc-slate',
+};
+
+const VARIANT_COLOR: Record<NonNullable<StatCardProps['variant']>, StatColor> = {
+  default: 'slate',
+  success: 'emerald',
+  warning: 'amber',
+  danger: 'rose',
+  info: 'blue',
+};
+
+function StatCard({
+  title,
+  value,
+  icon: Icon,
+  description,
+  color,
+  variant = 'default',
+  secondaryValue,
+  progress,
+  delta,
+  href,
+}: StatCardProps) {
+  const tone = color ?? VARIANT_COLOR[variant];
+  const showRing = typeof progress === 'number';
+  const showDelta = typeof delta === 'number';
+
+  const deltaClass =
+    !showDelta || delta === 0
+      ? 'stat-delta-flat'
+      : delta > 0
+        ? 'stat-delta-up'
+        : 'stat-delta-down';
 
   const content = (
-    <div className="p-5">
-      <div className="flex items-start justify-between">
-        <div className={`icon-tile icon-tile-${tints[variant]}`}>
+    <div className="p-5 pr-7">
+      <div className="flex items-start justify-between gap-3">
+        <div className="stat-icon">
           <Icon className="h-5 w-5" />
         </div>
-        {href && <ArrowUpRight className="h-4 w-4 text-muted-foreground" />}
+
+        <div className="flex flex-col items-end gap-1.5">
+          {showDelta && (
+            <span className={`stat-delta ${deltaClass}`}>
+              {delta > 0 ? <ArrowUp className="h-3 w-3" /> : delta < 0 ? <ArrowDown className="h-3 w-3" /> : null}
+              {Math.abs(delta)}%
+            </span>
+          )}
+          {showRing ? (
+            <div
+              className="stat-ring"
+              style={{ ['--sc-progress' as string]: Math.max(0, Math.min(100, progress)) }}
+              role="img"
+              aria-label={`${Math.round(progress)}%`}
+            >
+              <span>{Math.round(progress)}%</span>
+            </div>
+          ) : (
+            href && <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
+          )}
+        </div>
       </div>
-      <p className="mt-3 text-2xl font-bold tracking-tight leading-tight">{value}</p>
-      <p className="text-sm text-muted-foreground mt-0.5">{title}</p>
-      {description && <p className="text-xs text-muted-foreground/80 mt-0.5">{description}</p>}
+
+      <p className="mt-4 text-sm text-muted-foreground">{title}</p>
+
+      <p className="mt-0.5 flex items-baseline gap-1.5 text-[1.75rem] font-bold leading-tight tracking-tight">
+        {value}
+        {secondaryValue !== undefined && (
+          <span className="text-base font-semibold text-muted-foreground">- {secondaryValue}</span>
+        )}
+      </p>
+
+      {description && (
+        <p className="mt-1 text-xs text-muted-foreground/80">{description}</p>
+      )}
     </div>
   );
 
   if (href) {
     return (
-      <Link href={href} className="block premium-card premium-card-hover">
+      <Link href={href} className={`stat-card ${COLOR_CLASS[tone]} block`}>
         {content}
       </Link>
     );
   }
 
-  return <div className="premium-card">{content}</div>;
+  return <div className={`stat-card ${COLOR_CLASS[tone]} stat-card-hover`}>{content}</div>;
 }
 
 interface DashboardClientProps {
@@ -222,6 +314,7 @@ export function DashboardClient({ user, data }: DashboardClientProps) {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <StatCard
             title="Total Loans Outstanding"
+            color="orange"
             value={formatCurrency(data.executive.totalLoansOutstanding)}
             icon={TrendingUp}
             variant="info"
@@ -229,6 +322,7 @@ export function DashboardClient({ user, data }: DashboardClientProps) {
           />
           <StatCard
             title="Total Savings Deposits"
+            color="emerald"
             value={formatCurrency(data.executive.totalSavingsDeposits)}
             icon={PiggyBank}
             variant="success"
@@ -236,6 +330,7 @@ export function DashboardClient({ user, data }: DashboardClientProps) {
           />
           <StatCard
             title="Total Fixed Deposits"
+            color="purple"
             value={formatCurrency(data.executive.totalFixedDeposits)}
             icon={Wallet}
             variant="info"
@@ -525,6 +620,7 @@ export function DashboardClient({ user, data }: DashboardClientProps) {
           <>
             <StatCard
               title="Active Loans"
+              color="orange"
               value={data.loans.active}
               icon={Landmark}
               variant="success"
@@ -532,6 +628,7 @@ export function DashboardClient({ user, data }: DashboardClientProps) {
             />
             <StatCard
               title="Pending Approval"
+              color="amber"
               value={data.loans.pendingApproval}
               icon={ClipboardCheck}
               variant="warning"
@@ -540,6 +637,7 @@ export function DashboardClient({ user, data }: DashboardClientProps) {
             />
             <StatCard
               title="Overdue Loans"
+              color="rose"
               value={data.loans.overdue}
               icon={AlertTriangle}
               variant="danger"
@@ -552,6 +650,7 @@ export function DashboardClient({ user, data }: DashboardClientProps) {
         {data.savings && (
           <StatCard
             title="Savings Accounts"
+            color="emerald"
             value={data.savings.activeAccounts}
             icon={PiggyBank}
             description={formatCurrency(data.savings.totalBalance) + ' total'}
@@ -562,6 +661,7 @@ export function DashboardClient({ user, data }: DashboardClientProps) {
         {data.savings && data.savings.todayDeposits > 0 && (
           <StatCard
             title="Today's Deposits"
+            color="teal"
             value={data.savings.todayDeposits}
             icon={TrendingUp}
             description={formatCurrency(data.savings.todayDepositsAmount)}
@@ -572,6 +672,7 @@ export function DashboardClient({ user, data }: DashboardClientProps) {
         {data.savings && data.savings.pendingWithdrawals > 0 && (
           <StatCard
             title="Pending Withdrawals"
+            color="amber"
             value={data.savings.pendingWithdrawals}
             icon={AlertTriangle}
             description="Awaiting approval"
@@ -584,6 +685,7 @@ export function DashboardClient({ user, data }: DashboardClientProps) {
         {data.fixedDeposits && (
           <StatCard
             title="Fixed Deposits"
+            color="purple"
             value={data.fixedDeposits.activeCount}
             icon={Wallet}
             description={formatCurrency(data.fixedDeposits.totalPrincipal) + ' invested'}
@@ -596,6 +698,7 @@ export function DashboardClient({ user, data }: DashboardClientProps) {
         {data.customers && (
           <StatCard
             title="Active Customers"
+            color="cyan"
             value={data.customers.activeCount}
             icon={Users}
             variant="default"
@@ -608,6 +711,7 @@ export function DashboardClient({ user, data }: DashboardClientProps) {
           <>
             <StatCard
               title="Active Staff"
+              color="indigo"
               value={data.hr.activeStaff}
               icon={UserCog}
               variant="default"
@@ -615,14 +719,23 @@ export function DashboardClient({ user, data }: DashboardClientProps) {
             />
             <StatCard
               title="Present Today"
+              color="teal"
               value={data.hr.presentToday}
               icon={CheckCircle}
               description={`${data.hr.absentToday} absent`}
               variant="success"
               href="/hr/attendance"
+              // A genuine ratio — attendance against headcount — so the ring
+              // reads as real information rather than decoration.
+              progress={
+                data.hr.activeStaff > 0
+                  ? (data.hr.presentToday / data.hr.activeStaff) * 100
+                  : 0
+              }
             />
             <StatCard
               title="Pending Leave"
+              color="amber"
               value={data.hr.pendingLeave}
               icon={CalendarOff}
               variant="warning"
@@ -635,6 +748,7 @@ export function DashboardClient({ user, data }: DashboardClientProps) {
         {data.verification && !data.myActiveVerificationTasks?.length && (
           <StatCard
             title="My Verification Tasks"
+            color="yellow"
             value={data.verification.myTasks}
             icon={ClipboardCheck}
             description={`${data.verification.allPending} total pending`}
@@ -647,6 +761,7 @@ export function DashboardClient({ user, data }: DashboardClientProps) {
         {data.accounting && !data.recentJournals?.length && (
           <StatCard
             title="Pending Journals"
+            color="sky"
             value={data.accounting.pendingJournals}
             icon={BookOpen}
             variant="warning"
@@ -658,6 +773,7 @@ export function DashboardClient({ user, data }: DashboardClientProps) {
         {data.audit && (
           <StatCard
             title="Today's Audit Logs"
+            color="slate"
             value={data.audit.todayLogs}
             icon={Shield}
             variant="default"

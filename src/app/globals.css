@@ -198,6 +198,102 @@
   .icon-tile-indigo { background: linear-gradient(135deg, #e0e7ff, #c7d2fe); color: #4f46e5; }
   .icon-tile-slate  { background: linear-gradient(135deg, #f1f5f9, #e2e8f0); color: #475569; }
 
+
+  /* ==========================================================================
+     Stat cards
+     --------------------------------------------------------------------------
+     One colour token per card drives the icon tile, the progress ring and the
+     accent bar on the right edge, so a card is themed by a single class and
+     the three elements can never drift apart.
+
+     The palette names match the sidebar (src/components/layout/sidebar.tsx),
+     so a module's card carries the same colour as its nav entry.
+     ========================================================================== */
+  .stat-card {
+    @apply relative overflow-hidden bg-card rounded-[1.75rem] border border-border/60;
+    box-shadow:
+      0 1px 2px rgba(16, 24, 40, 0.04),
+      0 14px 32px -16px rgba(16, 24, 40, 0.16);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+  }
+
+  /* The accent bar: a full-height strip down the right edge. */
+  .stat-card::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 0.4rem;
+    background: linear-gradient(180deg, var(--sc-from), var(--sc-to));
+  }
+
+  a.stat-card:hover,
+  .stat-card-hover:hover {
+    transform: translateY(-3px);
+    box-shadow:
+      0 2px 6px rgba(16, 24, 40, 0.05),
+      0 22px 44px -18px var(--sc-glow, rgba(29, 78, 216, 0.32));
+  }
+
+  /* Icon tile, tinted from the same token as the accent. */
+  .stat-card .stat-icon {
+    @apply flex items-center justify-center rounded-2xl shrink-0;
+    height: 2.75rem;
+    width: 2.75rem;
+    background: var(--sc-tint);
+    color: var(--sc-ink);
+  }
+
+  /* Donut ring. --sc-progress is a 0-100 number set inline per card. */
+  .stat-ring {
+    @apply relative grid shrink-0 place-items-center rounded-full;
+    height: 2.9rem;
+    width: 2.9rem;
+    background: conic-gradient(
+      var(--sc-from) 0,
+      var(--sc-to) calc(var(--sc-progress, 0) * 1%),
+      hsl(var(--muted)) calc(var(--sc-progress, 0) * 1%)
+    );
+  }
+  .stat-ring::before {
+    content: '';
+    position: absolute;
+    height: 2.2rem;
+    width: 2.2rem;
+    border-radius: 9999px;
+    background: hsl(var(--card));
+  }
+  .stat-ring > span {
+    @apply relative text-[0.65rem] font-bold tabular-nums;
+    color: var(--sc-ink);
+  }
+
+  /* Delta pill that sits above the ring, as in the reference layout. */
+  .stat-delta {
+    @apply inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[0.65rem] font-semibold tabular-nums;
+  }
+  .stat-delta-up   { @apply bg-emerald-100 text-emerald-700; }
+  .stat-delta-down { @apply bg-rose-100 text-rose-700; }
+  .stat-delta-flat { @apply bg-slate-100 text-slate-600; }
+
+  /* ── Colour tokens — names mirror the sidebar palette ────────────────── */
+  .sc-blue    { --sc-from: #3b82f6; --sc-to: #1d4ed8; --sc-ink: #1d4ed8; --sc-tint: linear-gradient(135deg, #dbeafe, #bfdbfe); --sc-glow: rgba(37, 99, 235, 0.32); }
+  .sc-cyan    { --sc-from: #22d3ee; --sc-to: #0891b2; --sc-ink: #0e7490; --sc-tint: linear-gradient(135deg, #cffafe, #a5f3fc); --sc-glow: rgba(8, 145, 178, 0.32); }
+  .sc-orange  { --sc-from: #fb923c; --sc-to: #ea580c; --sc-ink: #c2410c; --sc-tint: linear-gradient(135deg, #ffedd5, #fed7aa); --sc-glow: rgba(234, 88, 12, 0.32); }
+  .sc-emerald { --sc-from: #34d399; --sc-to: #059669; --sc-ink: #047857; --sc-tint: linear-gradient(135deg, #d1fae5, #a7f3d0); --sc-glow: rgba(5, 150, 105, 0.32); }
+  .sc-purple  { --sc-from: #c084fc; --sc-to: #9333ea; --sc-ink: #7e22ce; --sc-tint: linear-gradient(135deg, #f3e8ff, #e9d5ff); --sc-glow: rgba(147, 51, 234, 0.32); }
+  .sc-yellow  { --sc-from: #facc15; --sc-to: #ca8a04; --sc-ink: #a16207; --sc-tint: linear-gradient(135deg, #fef9c3, #fef08a); --sc-glow: rgba(202, 138, 4, 0.32); }
+  .sc-sky     { --sc-from: #38bdf8; --sc-to: #0284c7; --sc-ink: #0369a1; --sc-tint: linear-gradient(135deg, #e0f2fe, #bae6fd); --sc-glow: rgba(2, 132, 199, 0.32); }
+  .sc-pink    { --sc-from: #f472b6; --sc-to: #db2777; --sc-ink: #be185d; --sc-tint: linear-gradient(135deg, #fce7f3, #fbcfe8); --sc-glow: rgba(219, 39, 119, 0.32); }
+  .sc-violet  { --sc-from: #a78bfa; --sc-to: #7c3aed; --sc-ink: #6d28d9; --sc-tint: linear-gradient(135deg, #ede9fe, #ddd6fe); --sc-glow: rgba(124, 58, 237, 0.32); }
+  .sc-indigo  { --sc-from: #818cf8; --sc-to: #4f46e5; --sc-ink: #4338ca; --sc-tint: linear-gradient(135deg, #e0e7ff, #c7d2fe); --sc-glow: rgba(79, 70, 229, 0.32); }
+  .sc-teal    { --sc-from: #2dd4bf; --sc-to: #0d9488; --sc-ink: #0f766e; --sc-tint: linear-gradient(135deg, #ccfbf1, #99f6e4); --sc-glow: rgba(13, 148, 136, 0.32); }
+  .sc-amber   { --sc-from: #fbbf24; --sc-to: #d97706; --sc-ink: #b45309; --sc-tint: linear-gradient(135deg, #fef3c7, #fde68a); --sc-glow: rgba(217, 119, 6, 0.32); }
+  .sc-rose    { --sc-from: #fb7185; --sc-to: #e11d48; --sc-ink: #be123c; --sc-tint: linear-gradient(135deg, #ffe4e6, #fecdd3); --sc-glow: rgba(225, 29, 72, 0.32); }
+  .sc-fuchsia { --sc-from: #e879f9; --sc-to: #c026d3; --sc-ink: #a21caf; --sc-tint: linear-gradient(135deg, #fae8ff, #f5d0fe); --sc-glow: rgba(192, 38, 211, 0.32); }
+  .sc-slate   { --sc-from: #94a3b8; --sc-to: #475569; --sc-ink: #334155; --sc-tint: linear-gradient(135deg, #f1f5f9, #e2e8f0); --sc-glow: rgba(71, 85, 105, 0.28); }
+
   /* Thin colored progress track */
   .progress-track { @apply h-1.5 w-full rounded-full bg-muted overflow-hidden; }
   .progress-fill  { @apply h-full rounded-full transition-all duration-500; }
