@@ -63,6 +63,8 @@ async function main() {
     'HR:ANNOUNCE', 'HR:CONFIG_MANAGE', 'HR:ANALYTICS_VIEW',
     // Verification field operations
     'VERIFICATION:READ', 'VERIFICATION:PROCESS',
+    // CMS — the public marketing site, owned by IT
+    'CMS:READ', 'CMS:CONTENT_MANAGE', 'CMS:POST_MANAGE', 'CMS:PUBLISH',
     // Audit & compliance
     'AUDIT:READ',
     // System administration
@@ -111,6 +113,7 @@ async function main() {
         'HR:STAFF_READ', 'HR:ATTENDANCE_MANAGE', 'HR:LEAVE_MANAGE', 'HR:PERFORMANCE_MANAGE',
         'HR:PAYROLL_READ', 'HR:PAYROLL_APPROVE', 'HR:ANALYTICS_VIEW',
         'HR:RECRUITMENT_MANAGE', 'HR:ANNOUNCE',
+        'CMS:READ',
         'VERIFICATION:READ',
         'AUDIT:READ',
       ],
@@ -130,6 +133,20 @@ async function main() {
         'DOCUMENTS:READ', 'DOCUMENTS:CREATE',
         'AUDIT:READ',
         'SYSTEM:USER_MANAGE',
+      ],
+    },
+    {
+      name: 'IT Administrator',
+      code: 'IT_ADMIN',
+      level: 55,
+      perms: [
+        // Owns the public website: content, posts and publishing.
+        'CMS:READ', 'CMS:CONTENT_MANAGE', 'CMS:POST_MANAGE', 'CMS:PUBLISH',
+        // IT also needs to see the audit trail and system configuration, but
+        // deliberately holds no customer, lending, savings or HR access.
+        'AUDIT:READ',
+        'SYSTEM:CONFIG_MANAGE',
+        'DOCUMENTS:READ',
       ],
     },
     {
@@ -258,6 +275,7 @@ async function main() {
     { name: 'Savings', code: 'SAVINGS' },
     { name: 'Accounts', code: 'ACCOUNTS' },
     { name: 'Management', code: 'MANAGEMENT' },
+    { name: 'Information Technology', code: 'IT' },
   ];
 
   let adminDeptId = '';
@@ -848,6 +866,56 @@ async function main() {
     });
     console.log('  Offboarding template: Standard Employee Exit (8 tasks)');
   }
+
+
+  // ══════════════════════════════════════════════════════════════════════
+  // CMS — EDITABLE MARKETING SITE CONTENT
+  // ══════════════════════════════════════════════════════════════════════
+  console.log('\n[13/13] CMS — Site Content...');
+
+  // Each block is one slot on the public site. `defaultValue` keeps the copy
+  // the site shipped with, so any edit can be reverted without a developer.
+  const contentBlocks = [
+    { key: 'home.hero.eyebrow',    page: 'home',     label: 'Hero eyebrow',       type: 'TEXT',     value: 'Secure your financial future', sortOrder: 1 },
+    { key: 'home.hero.title',      page: 'home',     label: 'Hero headline',      type: 'TEXT',     value: 'Grow your money with people who pick up the phone.', sortOrder: 2 },
+    { key: 'home.hero.body',       page: 'home',     label: 'Hero paragraph',     type: 'RICHTEXT', value: 'Savings, fixed deposits, mutual funding and debt financing - managed in one place.', sortOrder: 3 },
+    { key: 'home.hero.cta',        page: 'home',     label: 'Hero button label',  type: 'TEXT',     value: 'Open an account', sortOrder: 4 },
+
+    { key: 'home.stats.clients',   page: 'home',     label: 'Clients served',     type: 'TEXT',     value: '1,000+', sortOrder: 10 },
+    { key: 'home.stats.years',     page: 'home',     label: 'Years of trust',     type: 'TEXT',     value: '5+',     sortOrder: 11 },
+    { key: 'home.stats.disbursed', page: 'home',     label: 'Funds disbursed',    type: 'TEXT',     value: '\u20A61B+', sortOrder: 12 },
+
+    { key: 'home.services.title',  page: 'home',     label: 'Services heading',   type: 'TEXT',     value: 'Our Services', sortOrder: 20 },
+    { key: 'home.services.body',   page: 'home',     label: 'Services intro',     type: 'RICHTEXT', value: 'Everything you need to save, grow and borrow - under one roof.', sortOrder: 21 },
+
+    { key: 'contact.phone',        page: 'contact',  label: 'Phone number',       type: 'TEXT',     value: '+234 800 000 0000', sortOrder: 30 },
+    { key: 'contact.email',        page: 'contact',  label: 'Email address',      type: 'TEXT',     value: 'info@hylinkfinance.com', sortOrder: 31 },
+    { key: 'contact.address',      page: 'contact',  label: 'Office address',     type: 'RICHTEXT', value: 'Lagos, Nigeria', sortOrder: 32 },
+    { key: 'contact.hours',        page: 'contact',  label: 'Opening hours',      type: 'TEXT',     value: 'Mon-Fri, 8am - 5pm', sortOrder: 33 },
+
+    { key: 'about.title',          page: 'about',    label: 'About heading',      type: 'TEXT',     value: 'Built on real relationships', sortOrder: 40 },
+    { key: 'about.body',           page: 'about',    label: 'About paragraph',    type: 'RICHTEXT', value: 'Every account is opened by an officer who knows your file.', sortOrder: 41 },
+  ];
+
+  for (const block of contentBlocks) {
+    await prisma.contentBlock.upsert({
+      where: { key: block.key },
+      // Never overwrite an editor's change on a re-seed; only backfill the
+      // default so a revert always has something to fall back to.
+      update: { defaultValue: block.value, label: block.label, page: block.page },
+      create: {
+        key: block.key,
+        page: block.page,
+        label: block.label,
+        type: block.type,
+        value: block.value,
+        defaultValue: block.value,
+        sortOrder: block.sortOrder,
+        isPublished: true,
+      },
+    });
+  }
+  console.log(`  Content blocks: ${contentBlocks.length} upserted`);
 
   console.log('\nSeed completed successfully!');
 }

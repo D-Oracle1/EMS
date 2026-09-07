@@ -3,65 +3,14 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import {
-  LayoutDashboard, Users, Landmark, PiggyBank, Wallet, BookOpen,
-  BarChart3, UserCog, Clock, CalendarOff, Star, ClipboardCheck,
-  FileText, Shield, Settings, Bell, ChevronLeft, ChevronRight, X, UserCircle,
-  Briefcase, GraduationCap, Laptop, Megaphone, Network, ArrowRightLeft,
-  ClipboardList, Receipt, HeartHandshake,
-} from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Landmark } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { navItems, resolveNav, type NavItem } from '@/lib/navigation';
 import { isHrFocused } from '@/lib/landing';
 import type { SessionUser } from '@/types';
 import { useState, useEffect } from 'react';
 
-interface NavItem {
-  label: string;
-  href: string;
-  icon: React.ComponentType<{ className?: string }>;
-  permission?: string;
-  permissions?: string[];
-  color: string;
-  /** Heading rendered above this item, opening a new section of the nav. */
-  section?: string;
-}
 
-const navItems: NavItem[] = [
-  { label: 'Dashboard',      href: '/dashboard',      icon: LayoutDashboard, color: 'blue' },
-  { label: 'Customers',      href: '/customers',      icon: Users,           color: 'cyan',    permission: 'CUSTOMERS:READ' },
-  { label: 'Loans',          href: '/loans',          icon: Landmark,        color: 'orange',  permissions: ['LOANS:READ', 'LOANS:CREATE'] },
-  { label: 'Savings',        href: '/savings',        icon: PiggyBank,       color: 'emerald', permissions: ['SAVINGS:READ', 'SAVINGS:CREATE'] },
-  { label: 'Fixed Deposits', href: '/fixed-deposits', icon: Wallet,          color: 'purple',  permissions: ['FIXED_DEPOSITS:READ', 'FIXED_DEPOSITS:CREATE'] },
-  { label: 'Verification',   href: '/verification',   icon: ClipboardCheck,  color: 'yellow',  permissions: ['LOANS:VERIFY', 'VERIFICATION:READ', 'VERIFICATION:PROCESS'] },
-  { label: 'Accounting',     href: '/accounting',     icon: BookOpen,        color: 'sky',     permissions: ['ACCOUNTS:COA_MANAGE', 'ACCOUNTS:JOURNAL_CREATE', 'ACCOUNTS:REPORTS_VIEW'] },
-  { label: 'Reports',        href: '/reports',        icon: BarChart3,       color: 'pink',    permission: 'ACCOUNTS:REPORTS_VIEW' },
-
-  // ── Human Resources ──────────────────────────────────────────────────────
-  // Flat, not a dropdown: for HR staff this module is the entire application,
-  // so burying it behind a toggle put their daily work an extra click away.
-  // The section heading keeps a long sidebar readable without hiding anything.
-  { label: 'HR Overview',    href: '/hr',               icon: HeartHandshake, color: 'violet',  section: 'Human Resources' },
-  { label: 'My Profile',     href: '/hr/my-profile',    icon: UserCircle,     color: 'violet' },
-  { label: 'My Payslips',    href: '/hr/my-payslips',   icon: Receipt,        color: 'emerald' },
-  { label: 'People',         href: '/hr/staff',         icon: UserCog,        color: 'indigo',  permission: 'HR:STAFF_READ' },
-  { label: 'Attendance',     href: '/hr/attendance',    icon: Clock,          color: 'teal' },
-  { label: 'Leave',          href: '/hr/leave',         icon: CalendarOff,    color: 'amber' },
-  { label: 'Payroll',        href: '/hr/payroll',       icon: Wallet,         color: 'emerald', permissions: ['HR:PAYROLL_READ', 'HR:PAYROLL_MANAGE', 'HR:PAYROLL_APPROVE'] },
-  { label: 'Recruitment',    href: '/hr/recruitment',   icon: Briefcase,      color: 'cyan',    permission: 'HR:RECRUITMENT_MANAGE' },
-  { label: 'Onboarding',     href: '/hr/onboarding',    icon: ClipboardList,  color: 'sky',     permissions: ['HR:STAFF_READ', 'HR:STAFF_UPDATE'] },
-  { label: 'Movements',      href: '/hr/lifecycle',     icon: ArrowRightLeft, color: 'orange',  permissions: ['HR:STAFF_READ', 'HR:STAFF_UPDATE'] },
-  { label: 'Performance',    href: '/hr/performance',   icon: Star,           color: 'gold',    permission: 'HR:PERFORMANCE_MANAGE' },
-  { label: 'Learning',       href: '/hr/training',      icon: GraduationCap,  color: 'purple',  permissions: ['HR:TRAINING_MANAGE', 'HR:STAFF_READ'] },
-  { label: 'Assets',         href: '/hr/assets',        icon: Laptop,         color: 'slate',   permissions: ['HR:ASSET_MANAGE', 'HR:STAFF_READ'] },
-  { label: 'Announcements',  href: '/hr/announcements', icon: Megaphone,      color: 'fuchsia' },
-  { label: 'Org Chart',      href: '/hr/org-chart',     icon: Network,        color: 'blue',    permission: 'HR:STAFF_READ' },
-  { label: 'HR Settings',    href: '/hr/settings',      icon: Settings,       color: 'gray',    permissions: ['HR:CONFIG_MANAGE', 'SYSTEM:CONFIG_MANAGE'] },
-
-  { label: 'Documents',      href: '/documents',      icon: FileText,        color: 'rose',    permission: 'DOCUMENTS:READ', section: 'General' },
-  { label: 'Notifications',  href: '/notifications',  icon: Bell,            color: 'fuchsia' },
-  { label: 'Audit Logs',     href: '/audit-logs',     icon: Shield,          color: 'slate',   permission: 'AUDIT:READ' },
-  { label: 'Settings',       href: '/settings',       icon: Settings,        color: 'gray',    permission: 'SYSTEM:CONFIG_MANAGE' },
-];
 
 // All class names written out statically for Tailwind JIT
 const colorConfig: Record<string, { icon: string; activeBg: string; activeBorder: string; hoverBg: string }> = {
@@ -101,34 +50,11 @@ export function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
 
   if (!user) return null;
 
-  // For HR-only staff the HR overview *is* their dashboard, so the generic one
-  // would just be a second, thinner copy of the same numbers.
-  const hrOnly = isHrFocused(user);
-
-  const hasAccess = (item: NavItem) => {
-    if (hrOnly && item.href === '/dashboard') return false;
-    if (!item.permission && !item.permissions) return true;
-    if (item.permission) return user.permissions.includes(item.permission);
-    if (item.permissions) return item.permissions.some((p) => user.permissions.includes(p));
-    return false;
-  };
-
-  const filteredNav = navItems.filter(hasAccess);
-
-  // A section heading belongs to the first surviving item beneath it, so a
-  // heading never renders above an empty run of permission-filtered links.
-  const headingFor = new Map<string, string>();
-  {
-    let pending: string | undefined;
-    for (const item of navItems) {
-      if (item.section) pending = item.section;
-      if (!hasAccess(item)) continue;
-      if (pending) {
-        headingFor.set(item.href, pending);
-        pending = undefined;
-      }
-    }
-  }
+  // For HR-only staff the HR overview is their dashboard, so the generic one
+  // would just be a thinner copy of the same numbers.
+  const { items: filteredNav, headings: headingFor } = resolveNav(user, {
+    hideDashboard: isHrFocused(user),
+  });
 
   const sidebarContent = (
     <>

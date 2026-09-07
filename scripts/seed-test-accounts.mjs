@@ -156,6 +156,19 @@ const TEST_ACCOUNTS = [
     deptCode:    'SAVINGS',
     mustChange:  false,
   },
+
+  // -- IT Administrator (level 55) -- owns the website CMS ------------------
+  {
+    employeeId:  'EMP00009',
+    email:       'it@hylinkfinance.com',
+    firstName:   'Tobi',
+    lastName:    'Adewale',
+    phone:       '+2348100000009',
+    password:    TEST_PASSWORD,
+    roleCode:    'IT_ADMIN',
+    deptCode:    'IT',
+    mustChange:  false,
+  },
 ];
 
 // ── Main ──────────────────────────────────────────────────────────────────────

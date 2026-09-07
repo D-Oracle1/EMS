@@ -23,8 +23,11 @@ export const authConfig = {
       const isAuthPage = nextUrl.pathname === '/login' || nextUrl.pathname === '/signup';
       const isChangePasswordPage = nextUrl.pathname === '/change-password';
       const isApiAuth = nextUrl.pathname.startsWith('/api/auth');
+      // The public CMS feed the marketing site reads. Published content only,
+      // no session — it must not be bounced to the login screen.
+      const isPublicApi = nextUrl.pathname.startsWith('/api/public');
 
-      if (isApiAuth) return true;
+      if (isApiAuth || isPublicApi) return true;
 
       const userType = (auth?.user as any)?.userType ?? 'staff';
       // HR-only staff open onto the HR overview rather than the generic dashboard.

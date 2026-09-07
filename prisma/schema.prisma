@@ -249,6 +249,9 @@ model Staff {
   goals                   StaffGoal[]          @relation("GoalStaff")
   goalsCreated            StaffGoal[]          @relation("GoalCreatedBy")
   shiftAssignments        ShiftAssignment[]
+  blogPosts               BlogPost[]           @relation("PostAuthor")
+  contentBlocksEdited     ContentBlock[]       @relation("ContentBlockEditor")
+  contentRevisions        ContentRevision[]    @relation("ContentReviser")
 
   @@index([gradeId])
   @@index([departmentId])
@@ -2970,4 +2973,99 @@ model StaffGoal {
 
   @@index([staffId])
   @@index([status])
+}
+
+// ============================================================================
+// CMS — MARKETING SITE CONTENT
+// ============================================================================
+// Content for the public website, edited here and read by the static site over
+// a public JSON endpoint. Owned by the IT department.
+
+enum PostStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  ARCHIVED
+}
+
+model BlogPost {
+  id         String   @id @default(uuid())
+  slug       String   @unique
+  title      String
+  excerpt    String?
+  body       String
+  coverImage String?
+  category   String   @default("GENERAL") // NEWS, INSIGHT, PRODUCT, GENERAL
+  tags       String[]
+
+  status       PostStatus @default(DRAFT)
+  publishedAt  DateTime?
+  // Set on a SCHEDULED post; the publish job releases it once this passes.
+  scheduledFor DateTime?
+
+  // Denormalised so a published post keeps its byline even if the author
+  // record is later deactivated.
+  authorId   String
+  authorName String
+
+  seoTitle       String?
+  seoDescription String?
+
+  viewCount Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  author Staff @relation("PostAuthor", fields: [authorId], references: [id])
+
+  @@index([status, publishedAt])
+  @@index([category])
+}
+
+/// A single editable piece of copy on the marketing site, addressed by the page
+/// and slot it fills — so the website asks for "home.hero.title" rather than
+/// needing to know a database id.
+model ContentBlock {
+  id          String  @id @default(uuid())
+  key         String  @unique // e.g. "home.hero.title"
+  page        String // home, about, services, company, contact
+  label       String // Human-readable name shown in the editor
+  description String? // Guidance for whoever edits it
+  type        String  @default("TEXT") // TEXT, RICHTEXT, IMAGE, NUMBER, URL
+
+  value        String
+  /// The value as originally shipped, so an edit can always be reverted.
+  defaultValue String?
+
+  sortOrder   Int     @default(0)
+  isPublished Boolean @default(true)
+
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  updatedBy Staff? @relation("ContentBlockEditor", fields: [updatedById], references: [id])
+
+  @@index([page])
+}
+
+/// An append-only record of content changes, so a bad edit on the public site
+/// can be traced to a person and rolled back.
+model ContentRevision {
+  id          String @id @default(uuid())
+  entityType  String // CONTENT_BLOCK, BLOG_POST
+  entityId    String
+  entityLabel String
+
+  field    String
+  oldValue String?
+  newValue String?
+
+  changedById String
+  changedAt   DateTime @default(now())
+
+  changedBy Staff @relation("ContentReviser", fields: [changedById], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([changedAt])
 }
