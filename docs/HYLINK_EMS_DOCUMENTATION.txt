@@ -1,0 +1,1159 @@
+================================================================================
+        HYLINK FINANCE LIMITED
+        ENTERPRISE MANAGEMENT SYSTEM (EMS)
+        TECHNICAL & FUNCTIONAL DOCUMENTATION
+        Version 2.0.0 | March 2026
+================================================================================
+
+--------------------------------------------------------------------------------
+TABLE OF CONTENTS
+--------------------------------------------------------------------------------
+  1.  Project Overview
+  2.  Technology Stack
+  3.  System Architecture
+  4.  Project Structure
+  5.  Authentication & Security
+  6.  Roles & Permissions
+  7.  Database Schema
+  8.  Application Modules
+       8.1  Dashboard
+       8.2  Customer Management
+       8.3  Loan Management
+       8.4  Savings Management
+       8.5  Fixed Deposits
+       8.6  Accounting (Double-Entry)
+       8.7  Human Resources
+       8.8  Document Management
+       8.9  Verification (Field Operations)
+       8.10 Reports & Exports
+       8.11 Notifications
+       8.12 Audit Logs
+       8.13 Settings
+  9.  API Routes
+  10. Automated Jobs (Cron)
+  11. Deployment
+       11.1 Vercel (Cloud)
+       11.2 Docker (Self-Hosted)
+  12. Environment Variables
+  13. Database Setup & Seeding
+  14. Testing
+  15. Key Business Rules & Financial Logic
+  16. Sequence Reference Numbers
+
+
+================================================================================
+1. PROJECT OVERVIEW
+================================================================================
+
+System Name  : Hylink Finance Limited — Enterprise Management System
+Short Name   : Hylink EMS
+Version      : 2.0.0
+Type         : Full-Stack Web Application (Progressive Web App)
+Organization : Hylink Finance Limited
+Currency     : Nigerian Naira (NGN)
+
+DESCRIPTION
+-----------
+Hylink EMS is a comprehensive internal management platform for a financial
+institution. It covers the complete lifecycle of lending, savings, fixed
+deposits, HR operations, double-entry accounting, document archiving, field
+verification, audit compliance, and role-based access control — all within
+a single, unified Next.js application.
+
+The system is designed to be:
+  • Audit-ready         — every action is logged with who, what, when, and IP
+  • Double-entry clean  — all financial transactions post balanced journal entries
+  • Role-gated          — granular permissions per module and action
+  • Offline-capable     — PWA service worker caches critical assets
+  • Multi-branch        — branches, departments, and supervisory hierarchies
+
+
+================================================================================
+2. TECHNOLOGY STACK
+================================================================================
+
+RUNTIME & FRAMEWORK
+  Next.js              16.x (App Router, Server Actions, Server Components)
+  React                18.3
+  TypeScript           5.7
+  Node.js              ≥18.17
+
+DATABASE & ORM
+  PostgreSQL           16
+  Prisma ORM           5.22 (schema: prisma/schema.prisma, 1,816 lines)
+  @prisma/client       5.22
+
+AUTHENTICATION
+  NextAuth.js          5.0 (beta) — credentials provider, JWT strategy
+  @auth/prisma-adapter 2.7
+  bcryptjs             (password hashing, configurable rounds)
+
+UI & STYLING
+  Tailwind CSS         3.4
+  Radix UI             (Alert, Avatar, Badge, Checkbox, Dialog, Dropdown,
+                        Label, Popover, Select, Separator, Slot, Switch,
+                        Tabs, Toast, Tooltip)
+  lucide-react         (icon library)
+  class-variance-authority + clsx + tailwind-merge (utility-first theming)
+
+DATA VISUALISATION
+  Recharts             2.15 (charts on dashboard)
+
+FINANCE
+  Decimal.js           10.4 (precision arithmetic, 20 significant digits,
+                              ROUND_HALF_UP rounding)
+
+REPORTING & EXPORT
+  ExcelJS              4.4 (Excel .xlsx exports)
+  jsPDF + jspdf-autotable 4.x / 5.x (PDF exports)
+
+NOTIFICATIONS & DATES
+  sonner               (toast notifications)
+  date-fns             3.6 (date manipulation)
+
+PWA
+  @serwist/next + serwist 9.5 (service worker generation, offline support)
+  Web App Manifest     (public/manifest.json)
+
+FILE STORAGE
+  @vercel/blob         2.1 (document uploads on Vercel)
+
+TESTING
+  Vitest               4.1 (unit tests)
+  @vitest/coverage-v8  (code coverage)
+
+TOOLING
+  ESLint               8.x (eslint-config-next)
+  tsx                  4.x (TypeScript execution for scripts)
+  Prisma Studio        (database GUI via `npm run db:studio`)
+
+
+================================================================================
+3. SYSTEM ARCHITECTURE
+================================================================================
+
+ARCHITECTURE STYLE
+  Full-stack monolith using Next.js App Router. There is no separate API
+  server. All data access goes through Next.js Server Actions (src/actions/).
+  The database is accessed exclusively via Prisma ORM.
+
+REQUEST FLOW
+  Browser → Next.js Middleware (auth check, edge-compatible)
+          → Next.js Server Component (data fetch)
+          → Server Action (mutation / form submit)
+          → Prisma → PostgreSQL
+
+AUTHENTICATION FLOW
+  1. Staff submits credentials at /login
+  2. NextAuth Credentials provider verifies email + bcrypt hash
+  3. Failed attempts increment counter; ≥5 failures lock account 30 min
+  4. Successful login resets counter, writes audit log
+  5. JWT token issued (8-hour expiry) containing:
+       id, email, employeeId, firstName, lastName,
+       role, roleCode, roleLevel, approvalLimit,
+       department, departmentCode, branchId, branchName,
+       permissions[], mustChangePassword
+  6. Middleware checks JWT on every request (Edge runtime)
+  7. If mustChangePassword=true, user is redirected to /change-password
+
+MIDDLEWARE PROTECTION
+  All routes except static assets and /api/auth/* are protected.
+  Unauthenticated requests are redirected to /login.
+
+PWA ARCHITECTURE
+  Service worker is generated at build time by @serwist/next.
+  Offline fallback page: /~offline
+  Install prompt component: pwa-install-prompt.tsx
+
+
+================================================================================
+4. PROJECT STRUCTURE
+================================================================================
+
+  hylink-ems/
+  ├── prisma/
+  │   ├── schema.prisma          Database schema (1,816 lines, 40+ models)
+  │   └── seed.ts                Seed script (products, roles, permissions, etc.)
+  ├── public/
+  │   ├── manifest.json          PWA manifest
+  │   ├── sw.js                  Compiled service worker
+  │   └── icons/                 PWA icons (192x192, 512x512, maskable)
+  ├── scripts/
+  │   └── seed.mjs               Database seeding script (ESM)
+  ├── src/
+  │   ├── __tests__/
+  │   │   └── utils.test.ts      Vitest unit tests (23 tests)
+  │   ├── actions/               Next.js Server Actions (16 modules)
+  │   │   ├── accounting.actions.ts
+  │   │   ├── audit.actions.ts
+  │   │   ├── auth.actions.ts
+  │   │   ├── batch.actions.ts
+  │   │   ├── customer.actions.ts
+  │   │   ├── dashboard.actions.ts
+  │   │   ├── document.actions.ts
+  │   │   ├── fixed-deposit.actions.ts
+  │   │   ├── hr.actions.ts
+  │   │   ├── loan.actions.ts
+  │   │   ├── notification.actions.ts
+  │   │   ├── performance.actions.ts
+  │   │   ├── report.actions.ts
+  │   │   ├── savings.actions.ts
+  │   │   ├── staff.actions.ts
+  │   │   └── verification.actions.ts
+  │   ├── app/
+  │   │   ├── (auth)/            Auth route group
+  │   │   │   └── login/         Login page
+  │   │   ├── (dashboard)/       Protected dashboard route group
+  │   │   │   ├── accounting/    Chart of accounts, journal, periods
+  │   │   │   ├── audit-logs/
+  │   │   │   ├── change-password/
+  │   │   │   ├── customers/     List, new, detail
+  │   │   │   ├── dashboard/
+  │   │   │   ├── documents/
+  │   │   │   ├── fixed-deposits/ List, new, detail
+  │   │   │   ├── hr/            Staff, attendance, leave, performance, profile
+  │   │   │   ├── loans/         List, new, detail
+  │   │   │   ├── notifications/
+  │   │   │   ├── reports/
+  │   │   │   ├── savings/       List, new, detail, withdrawals
+  │   │   │   ├── settings/
+  │   │   │   └── verification/  List, detail, reports
+  │   │   ├── api/
+  │   │   │   ├── auth/[...nextauth]/  NextAuth route handler
+  │   │   │   └── cron/daily/          Daily cron job endpoint
+  │   │   ├── ~offline/          PWA offline fallback
+  │   │   ├── globals.css
+  │   │   ├── layout.tsx         Root layout (providers, fonts, toast)
+  │   │   ├── page.tsx           Root redirect → /dashboard
+  │   │   └── sw.ts              Service worker source
+  │   ├── components/
+  │   │   ├── layout/
+  │   │   │   ├── dashboard-shell.tsx  Page wrapper with sidebar/header
+  │   │   │   ├── header.tsx           Top navigation bar
+  │   │   │   ├── sidebar.tsx          Navigation sidebar (role-aware)
+  │   │   │   └── pwa-install.tsx      PWA install button
+  │   │   ├── ui/                Radix-based component library
+  │   │   │   └── (alert, avatar, badge, button, card, checkbox, dialog,
+  │   │   │       dropdown-menu, input, label, progress, select, separator,
+  │   │   │       switch, table, tabs, textarea)
+  │   │   ├── notification-listener.tsx  Real-time notification polling
+  │   │   ├── permission-gate.tsx        Conditional render by permission
+  │   │   ├── providers.tsx              SessionProvider wrapper
+  │   │   └── pwa-install-prompt.tsx
+  │   ├── lib/
+  │   │   ├── accounting-engine.ts  Double-entry journal engine
+  │   │   ├── approval-history.ts   Approval workflow history helpers
+  │   │   ├── audit.ts              Audit log writer
+  │   │   ├── auth.config.ts        NextAuth edge config (JWT, callbacks)
+  │   │   ├── auth.ts               NextAuth with credentials provider
+  │   │   ├── auth-utils.ts         Session helpers, permission checks
+  │   │   ├── notifications.ts      Notification creation helpers
+  │   │   ├── prisma.ts             Prisma client singleton + withTransaction
+  │   │   └── utils.ts              Currency format, date format, loan calcs
+  │   ├── middleware.ts             Edge auth middleware
+  │   └── types/
+  │       ├── index.ts              Core interfaces (SessionUser, DashboardData, etc.)
+  │       └── next-auth.d.ts        NextAuth type augmentation
+  ├── docker-compose.yml
+  ├── Dockerfile
+  ├── nginx.conf
+  ├── next.config.mjs
+  ├── postcss.config.mjs
+  ├── tailwind.config.ts
+  ├── tsconfig.json
+  ├── vercel.json
+  ├── vitest.config.ts
+  └── package.json
+
+
+================================================================================
+5. AUTHENTICATION & SECURITY
+================================================================================
+
+PROVIDER
+  NextAuth v5 Credentials Provider
+  Strategy: JWT (stateless sessions)
+  Session max age: 8 hours (configurable)
+
+PASSWORD SECURITY
+  Hashing: bcryptjs
+  Rounds: Configurable via BCRYPT_ROUNDS env var (default 12)
+  New staff: mustChangePassword = true (forced redirect to /change-password)
+
+BRUTE-FORCE PROTECTION
+  Failed login counter per staff account.
+  After 5 consecutive failures → account locked for 30 minutes.
+  All failed attempts are written to the AuditLog.
+
+ACCOUNT STATES
+  A staff account must be in ACTIVE status to log in.
+  INACTIVE / SUSPENDED / TERMINATED / ON_LEAVE accounts are blocked.
+
+SESSION PAYLOAD
+  The JWT token contains: id, email, employeeId, firstName, lastName,
+  role, roleCode, roleLevel, approvalLimit, department, departmentCode,
+  branchId, branchName, permissions[], mustChangePassword.
+
+EDGE MIDDLEWARE
+  src/middleware.ts uses the auth config (edge-compatible, no Prisma/bcrypt).
+  Protects all routes matching the defined pattern.
+  Static assets, service worker, and /api/auth/* are excluded from protection.
+
+USER SESSIONS TABLE
+  The UserSession model stores optional session metadata (IP, user agent,
+  token, expiry) for security auditing beyond what JWT provides.
+
+SOFT DELETES
+  Staff, Customer, Loan, SavingsAccount, and Document records are soft-deleted
+  (isDeleted flag + deletedAt + deletedBy) to preserve audit trail integrity.
+
+
+================================================================================
+6. ROLES & PERMISSIONS
+================================================================================
+
+ROLE MODEL
+  Roles have a numeric level (higher = more authority) and an optional
+  financial approvalLimit (maximum transaction amount a role can approve).
+
+PERMISSION MODEL
+  Permissions are defined as module + action combinations (e.g. LOANS:APPROVE).
+  They are assigned to roles via the RolePermission junction table.
+
+PERMISSION MODULES
+  AUTH, HR, LOANS, SAVINGS, FIXED_DEPOSITS, ACCOUNTING, CUSTOMERS,
+  DOCUMENTS, VERIFICATION, REPORTS, AUDIT, NOTIFICATIONS, SETTINGS, STAFF
+
+PERMISSION ACTIONS
+  CREATE, READ, UPDATE, DELETE, APPROVE, REJECT, EXPORT, PRINT, REVERSAL
+
+EXAMPLE ROLE HIERARCHY (seeded defaults)
+  SUPER_ADMIN        Level 100  — Full access, no approval limit
+  EXECUTIVE          Level 90   — Read-only executive dashboard
+  BRANCH_MANAGER     Level 70   — Branch operations + approval
+  LOAN_MANAGER       Level 60   — Loan approval within limit
+  ACCOUNTANT         Level 50   — Accounting module
+  VERIFICATION_OFFICER Level 40 — Verification tasks
+  LOAN_OFFICER       Level 30   — Loan creation, customer management
+  TELLER             Level 20   — Savings & FD transactions
+  HR_OFFICER         Level 20   — HR module
+  STAFF              Level 10   — Basic access (own profile, notifications)
+
+PERMISSION GATE COMPONENT
+  <PermissionGate permission="LOANS:APPROVE"> ... </PermissionGate>
+  Conditionally renders children based on session permissions array.
+
+SIDEBAR NAVIGATION
+  The sidebar is role-aware and only shows modules the user has access to.
+
+
+================================================================================
+7. DATABASE SCHEMA
+================================================================================
+
+Database: PostgreSQL 16
+ORM: Prisma 5.22
+Schema file: prisma/schema.prisma (1,816 lines)
+
+ALL MODELS
+----------
+
+CORE SYSTEM
+  SystemConfig       — Key-value system configuration store
+  Branch             — Physical office locations
+  Department         — Organisational departments
+  Sequence           — Sequential reference number generator
+
+ACCESS CONTROL
+  Role               — Roles with authority levels and approval limits
+  Permission         — Granular module:action permissions
+  RolePermission     — Role ↔ Permission junction
+  Staff              — Staff/user accounts (auth + HR profile)
+  UserSession        — Session tracking for security audit
+
+HR MODULE
+  Attendance         — Daily clock-in/clock-out records
+  PerformanceReview  — Quarterly/annual reviews (productivity, quality,
+                       attendance, teamwork, initiative — 1-5 scale)
+  LeaveRequest       — Leave applications with approval workflow
+  DisciplinaryAction — Warnings, suspensions, terminations
+
+CUSTOMER MODULE
+  Customer           — Individual, corporate, and group customers
+                       (personal info, KYC, BVN, next-of-kin, risk rating)
+
+LOANS MODULE
+  LoanProduct        — Product catalogue (rates, tenure, fees, limits)
+  Loan               — Loan applications through full lifecycle
+  LoanVerification   — Field verification reports per loan
+  LoanApproval       — Multi-level approval records
+  LoanDisbursement   — Disbursement details (mode, bank, cheque, cash)
+  LoanSchedule       — Amortisation schedule (principal + interest per period)
+  LoanRepayment      — Individual repayment receipts
+  LoanRestructuring  — Tenure change, rate change, partial write-off
+
+SAVINGS MODULE
+  SavingsProduct     — Product catalogue (Daily, Target, Fixed, Corporate,
+                       Junior, Current)
+  SavingsAccount     — Customer savings accounts with live balance
+  SavingsTransaction — All credits/debits with before/after balance
+  WithdrawalRequest  — Approval workflow for withdrawals
+
+FIXED DEPOSITS MODULE
+  FixedDepositRate   — Rate table by tenure/amount band
+  FixedDeposit       — Fixed deposit certificates
+  FixedDepositInterest — Periodic interest payment tracking
+
+VERIFICATION MODULE
+  VerificationTask   — Field visit tasks (address, employment, collateral,
+                       guarantor, KYC, business verification)
+
+ACCOUNTING MODULE
+  ChartOfAccounts    — Hierarchical chart of accounts (ASSET, LIABILITY,
+                       EQUITY, INCOME, EXPENSE; DEBIT/CREDIT normal balance)
+  LedgerAccount      — Customer sub-ledger accounts
+  JournalEntry       — Double-entry journal header
+  JournalEntryLine   — Individual debit/credit lines
+  FinancialPeriod    — Period lock/close management (OPEN, SOFT_CLOSE,
+                       HARD_CLOSE)
+
+DOCUMENT MODULE
+  DocumentCategory   — Hierarchical document categories
+  Document           — Document archive with version control and checksums
+  DocumentVersion    — Version history per document
+
+AUDIT & COMPLIANCE
+  AuditLog           — Immutable activity log (CREATE, READ, UPDATE, DELETE,
+                       APPROVE, REJECT, LOGIN, LOGOUT, LOGIN_FAILED,
+                       PASSWORD_CHANGE, EXPORT, PRINT, REVERSAL)
+  ApprovalHistory    — Workflow approval/rejection chain per entity
+  Notification       — In-app notifications
+
+KEY ENUMS
+  StaffStatus:        ACTIVE | INACTIVE | SUSPENDED | TERMINATED | ON_LEAVE
+  CustomerType:       INDIVIDUAL | CORPORATE | GROUP
+  CustomerStatus:     ACTIVE | INACTIVE | BLACKLISTED | DECEASED
+  RiskRating:         LOW | MEDIUM | HIGH | VERY_HIGH
+  LoanStatus:         DRAFT → PENDING_VERIFICATION → VERIFICATION_IN_PROGRESS
+                      → VERIFIED → PENDING_APPROVAL → APPROVED → REJECTED
+                      → PENDING_DISBURSEMENT → DISBURSED → ACTIVE
+                      → OVERDUE → DEFAULTED → CLOSED → WRITTEN_OFF
+  InterestType:       FLAT | REDUCING_BALANCE | COMPOUND
+  SavingsType:        DAILY | TARGET | FIXED | CORPORATE | JUNIOR | CURRENT
+  AccountStatus:      ACTIVE | DORMANT | FROZEN | CLOSED
+  JournalStatus:      DRAFT | PENDING_APPROVAL | APPROVED | POSTED |
+                      REJECTED | REVERSED
+  AccountType:        ASSET | LIABILITY | EQUITY | INCOME | EXPENSE
+  PaymentMode:        CASH | BANK_TRANSFER | CHEQUE | MOBILE_MONEY | POS |
+                      DIRECT_DEBIT
+  AuditAction:        CREATE | READ | UPDATE | DELETE | APPROVE | REJECT |
+                      LOGIN | LOGOUT | LOGIN_FAILED | PASSWORD_CHANGE |
+                      EXPORT | PRINT | REVERSAL
+
+INDEXING STRATEGY
+  All foreign keys, status fields, date fields used in filtering/sorting,
+  and unique lookup fields (loanNumber, accountNumber, etc.) are indexed.
+
+
+================================================================================
+8. APPLICATION MODULES
+================================================================================
+
+------------------------------------------------------------------------
+8.1 DASHBOARD
+------------------------------------------------------------------------
+Route:   /dashboard
+Action:  src/actions/dashboard.actions.ts
+
+The dashboard is role-aware. Each role sees a different combination of
+widgets and metrics:
+
+SUPER_ADMIN / BRANCH_MANAGER
+  • Loans summary (draft, pending verification, pending approval, active,
+    overdue, total)
+  • Savings summary (active accounts, total balance, today's activity)
+  • Fixed deposits summary
+  • Customer count
+  • HR summary (active staff, present today, absent, pending leave)
+  • Pending journals count
+  • Today's audit logs count
+  • Recent journals list
+  • Loan disbursement trend chart (last 12 months)
+
+EXECUTIVE
+  • Total loans outstanding (NGN)
+  • Total savings deposits (NGN)
+  • Total fixed deposits (NGN)
+  • Portfolio risk indicators: PAR%, NPL rate%, collection rate%
+  • Loans by category breakdown
+  • Loans by officer breakdown
+  • Disbursement trend chart
+
+LOAN_MANAGER / LOAN_OFFICER
+  • Status board of loans in pipeline
+  • Recent loans created
+  • Pending approval loans queue (manager only)
+  • Overdue loans count
+
+VERIFICATION_OFFICER
+  • My active verification tasks (count + list)
+  • All pending verification tasks count
+
+TELLER
+  • Savings activity today
+  • Pending withdrawal requests
+
+ACCOUNTANT
+  • Pending draft journal entries
+  • Recent journal entries list
+
+ALL ROLES
+  • Attendance widget (clock in/out status for today)
+  • Unread notification count
+
+------------------------------------------------------------------------
+8.2 CUSTOMER MANAGEMENT
+------------------------------------------------------------------------
+Routes:  /customers          — Paginated customer list with search/filter
+         /customers/new      — New customer registration form
+         /customers/[id]     — Customer detail, edit, and activity view
+
+Action:  src/actions/customer.actions.ts
+
+FEATURES
+  • Support for INDIVIDUAL, CORPORATE, and GROUP customer types
+  • BVN (Bank Verification Number) and National ID capture
+  • KYC status tracking (verified/unverified with officer and date)
+  • Risk rating (LOW / MEDIUM / HIGH / VERY_HIGH)
+  • Next-of-kin information
+  • Employment and income information
+  • Branch assignment
+  • Linked loans, savings accounts, and fixed deposits visible on detail page
+  • Soft delete (records retained for audit)
+
+REFERENCE NUMBERS
+  Customer numbers are auto-generated via the Sequence model (prefix + padded
+  counter, e.g. CUS000001).
+
+------------------------------------------------------------------------
+8.3 LOAN MANAGEMENT
+------------------------------------------------------------------------
+Routes:  /loans              — Paginated loan list, filterable by status
+         /loans/new          — New loan application form
+         /loans/[id]         — Full loan detail with workflow controls
+
+Action:  src/actions/loan.actions.ts
+
+LOAN LIFECYCLE
+  1. DRAFT           — Loan officer creates application; selects customer,
+                       product, amount, tenure, purpose, collateral.
+  2. PENDING_VERIFICATION — Submitted for field verification.
+  3. VERIFICATION_IN_PROGRESS — Verification officer begins field visit.
+  4. VERIFIED        — Field report submitted; ready for credit decision.
+  5. PENDING_APPROVAL — Sent to approving authority.
+  6. APPROVED        — Credit committee/manager approves.
+  7. REJECTED        — Application rejected at any decision point.
+  8. PENDING_DISBURSEMENT — Approved; awaiting funds transfer.
+  9. DISBURSED       — Funds released; repayment schedule generated.
+  10. ACTIVE         — Loan being serviced.
+  11. OVERDUE        — Missed repayment(s).
+  12. DEFAULTED      — Significantly overdue (as per policy).
+  13. CLOSED         — Fully repaid.
+  14. WRITTEN_OFF    — Bad debt write-off.
+
+INTEREST CALCULATION
+  • FLAT rate: total interest = principal × rate × (tenure/12)
+    monthly instalment = (principal + total interest) / tenure
+  • REDUCING BALANCE: EMI = P × r × (1+r)^n / ((1+r)^n - 1)
+    where r = annual rate / 12 / 100, n = tenure in months
+  All calculations use Decimal.js (20 significant digits, ROUND_HALF_UP).
+
+FEES
+  • Processing fee (% of principal)
+  • Insurance fee (% of principal, optional)
+  • Late fee per missed payment
+
+DISBURSEMENT MODES
+  BANK_TRANSFER | CHEQUE | CASH | MOBILE_MONEY
+
+REPAYMENT MODES
+  CASH | BANK_TRANSFER | CHEQUE | MOBILE_MONEY | POS | DIRECT_DEBIT
+
+LOAN RESTRUCTURING
+  Types: TENURE_CHANGE | RATE_CHANGE | PARTIAL_WRITE_OFF | COMBINED
+  Requires approval workflow. Previous terms are snapshotted for audit.
+  On approval, old schedule lines are marked SUPERSEDED and new schedule
+  is generated from outstanding balance.
+
+OWING BYPASS
+  If a customer has an outstanding loan, new loan creation is normally
+  blocked. A loan officer with appropriate permission can bypass this
+  by providing a reason (owingBypass flag + owingBypassReason + linked
+  loan IDs recorded on the application).
+
+JOURNAL ENTRIES GENERATED
+  • Disbursement: Dr Loan Receivable / Cr Cash/Bank
+  • Repayment (principal): Dr Cash/Bank / Cr Loan Receivable
+  • Repayment (interest): Dr Cash/Bank / Cr Interest Income
+  • Fees: Dr Cash/Bank / Cr Fee Income
+  • Write-off: Dr Bad Debt Expense / Cr Loan Receivable
+
+------------------------------------------------------------------------
+8.4 SAVINGS MANAGEMENT
+------------------------------------------------------------------------
+Routes:  /savings                — Account list
+         /savings/new            — Open new savings account
+         /savings/[id]           — Account detail + transaction history
+         /savings/withdrawals    — Withdrawal approval queue
+
+Action:  src/actions/savings.actions.ts
+
+SAVINGS TYPES
+  DAILY    — Regular daily savings (field agents collect)
+  TARGET   — Goal-based savings with target amount and date
+  FIXED    — Fixed-term savings (not the same as Fixed Deposit)
+  CORPORATE — Corporate savings accounts
+  JUNIOR   — Under-18 savings
+  CURRENT  — Current/transactional accounts
+
+ACCOUNT BALANCE FIELDS
+  currentBalance   — Actual balance
+  availableBalance — Balance minus any holds
+  holdAmount       — Amount temporarily held (pending withdrawals, etc.)
+
+TRANSACTIONS
+  Types: DEPOSIT | WITHDRAWAL | INTEREST_CREDIT | FEE_DEBIT |
+         TRANSFER_IN | TRANSFER_OUT | REVERSAL | ADJUSTMENT
+  Every transaction stores balanceBefore and balanceAfter for reconciliation.
+  Transactions can be reversed (isReversed flag + reversalRef).
+
+WITHDRAWAL WORKFLOW
+  1. Teller/officer creates WithdrawalRequest.
+  2. Request goes to queue (/savings/withdrawals).
+  3. Authorised staff approves/rejects.
+  4. On approval: actual SavingsTransaction is created and balance updated.
+  Status: PENDING → APPROVED / REJECTED → PROCESSED
+
+INTEREST ACCRUAL
+  Handled by the daily cron job. Frequency configurable per product:
+  DAILY | WEEKLY | MONTHLY | QUARTERLY | ANNUALLY.
+
+------------------------------------------------------------------------
+8.5 FIXED DEPOSITS
+------------------------------------------------------------------------
+Routes:  /fixed-deposits         — Certificate list
+         /fixed-deposits/new     — Place new fixed deposit
+         /fixed-deposits/[id]    — Certificate detail + interest schedule
+
+Action:  src/actions/fixed-deposit.actions.ts
+
+FEATURES
+  • Tenure in days
+  • Rate lookup from FixedDepositRate table (by tenure band and amount band)
+  • Interest payment options: AT_MATURITY | MONTHLY | QUARTERLY
+  • Maturity instructions: ROLLOVER_PRINCIPAL_AND_INTEREST |
+                           ROLLOVER_PRINCIPAL_ONLY | PAY_OUT |
+                           TRANSFER_TO_SAVINGS
+  • Early termination with penalty calculation
+  • Interest accrual tracking (accruedInterest + lastAccrualDate)
+  • Certificate number auto-generated
+
+JOURNAL ENTRIES GENERATED
+  • Placement: Dr Cash/Bank / Cr Fixed Deposit Liability
+  • Interest accrual: Dr Interest Expense / Cr Accrued Interest
+  • Maturity payout: Dr Fixed Deposit Liability / Cr Cash/Bank
+
+------------------------------------------------------------------------
+8.6 ACCOUNTING (DOUBLE-ENTRY)
+------------------------------------------------------------------------
+Routes:  /accounting              — Overview + pending entries
+         /accounting/journal      — Journal entry list
+         /accounting/journal/new  — Manual journal entry form
+         /accounting/chart-of-accounts — Account hierarchy
+         /accounting/periods      — Financial period management
+
+Actions: src/actions/accounting.actions.ts
+Engine:  src/lib/accounting-engine.ts
+
+CHART OF ACCOUNTS
+  Hierarchical (parent/child via parentId + level).
+  Account types: ASSET | LIABILITY | EQUITY | INCOME | EXPENSE.
+  Normal balance: DEBIT (Assets, Expenses) or CREDIT (Liabilities,
+  Equity, Income).
+  System accounts (isSystemAccount=true) cannot be deleted.
+  Header accounts (isHeader=true) are for grouping; cannot post to them.
+
+DOUBLE-ENTRY ENGINE (accounting-engine.ts)
+  createJournalEntry(params):
+    1. Validates financial period is not HARD_CLOSE.
+    2. Validates debits = credits (throws if unbalanced or zero-value).
+    3. Validates all account IDs are active non-header accounts.
+    4. Generates sequential entry number.
+    5. Creates JournalEntry + JournalEntryLine records in a transaction.
+    6. If autoPost=true, updates account currentBalance immediately.
+
+  postJournalEntry(entryId, approvedById):
+    Posts a DRAFT/APPROVED entry. Updates all account balances.
+
+  reverseJournalEntry(entryId, reason, reversedById):
+    Creates a reversal entry (debits ↔ credits swapped), auto-posts it,
+    marks original as isReversed=true with reversal entry link.
+
+  generateTrialBalance():
+    Returns all non-zero leaf accounts with debit/credit classification
+    and confirms total debits = total credits.
+
+  closePeriod(year, month, closeType, closedById):
+    SOFT_CLOSE allows adjustments; HARD_CLOSE is permanent.
+    HARD_CLOSE cannot be reversed.
+
+FINANCIAL PERIOD MANAGEMENT
+  Periods must be explicitly opened/closed. Journal entries cannot be
+  posted to a HARD_CLOSE period (validatePeriodOpen check).
+
+ENTRY TYPES
+  STANDARD | OPENING | CLOSING | ADJUSTMENT | REVERSAL | ACCRUAL | SYSTEM
+
+------------------------------------------------------------------------
+8.7 HUMAN RESOURCES
+------------------------------------------------------------------------
+Routes:  /hr/staff          — Staff directory (admin/manager view)
+         /hr/attendance     — Attendance tracking + clock in/out
+         /hr/leave          — Leave request management
+         /hr/my-profile     — Self-service profile view/edit
+         /hr/performance    — Performance review management
+
+Actions: src/actions/hr.actions.ts, src/actions/performance.actions.ts
+
+STAFF MANAGEMENT
+  • Employee ID, department, role, branch, supervisor hierarchy
+  • Profile photo upload
+  • Emergency contact, national ID, gender, address
+  • Hire date, termination date, status management
+
+ATTENDANCE
+  Clock-in and clock-out captured with IP address and optional location.
+  Unique constraint on (staffId, date) — one record per day.
+  Status: PRESENT | ABSENT | LATE | HALF_DAY | ON_LEAVE | HOLIDAY
+
+LEAVE MANAGEMENT
+  Leave types: ANNUAL | SICK | MATERNITY | PATERNITY | COMPASSIONATE | UNPAID
+  Workflow: PENDING → APPROVED / REJECTED / CANCELLED
+  Supervisor/manager approves; approverComments recorded.
+
+PERFORMANCE REVIEWS
+  Scored on 5 dimensions (1-5): productivity, quality, attendance, teamwork,
+  initiative. Overall rating computed as decimal average.
+  Review periods: quarterly ("Q1 2024") or annual ("Annual 2024").
+  Status: DRAFT → SUBMITTED → ACKNOWLEDGED (by reviewed staff).
+
+DISCIPLINARY ACTIONS
+  Types: WARNING | SUSPENSION | QUERY | TERMINATION
+  Severity: MINOR | MAJOR | CRITICAL
+  Full response/resolution workflow. Can attach documents.
+
+------------------------------------------------------------------------
+8.8 DOCUMENT MANAGEMENT
+------------------------------------------------------------------------
+Route:   /documents
+Action:  src/actions/document.actions.ts
+
+FEATURES
+  • Hierarchical document categories (DocumentCategory with parentId)
+  • Version control (Document.version + DocumentVersion history)
+  • Integrity checksums stored per version
+  • Expiry date tracking (for ID documents, certificates, etc.)
+  • Confidentiality flag (isConfidential) + access level
+  • Linkable to: Customer, Loan, Staff
+  • Approval workflow: DRAFT → PENDING_APPROVAL → APPROVED → ARCHIVED
+  • File storage: @vercel/blob (on Vercel) or local path
+  • Soft delete with deletion reason
+
+------------------------------------------------------------------------
+8.9 VERIFICATION (FIELD OPERATIONS)
+------------------------------------------------------------------------
+Routes:  /verification           — Task list + assignment view
+         /verification/[id]      — Task detail + result entry form
+         /verification/reports   — Verification outcome reports
+
+Action:  src/actions/verification.actions.ts
+
+TASK TYPES
+  ADDRESS_VERIFICATION | EMPLOYMENT_VERIFICATION | COLLATERAL_VERIFICATION
+  GUARANTOR_VERIFICATION | KYC_VERIFICATION | BUSINESS_VERIFICATION
+
+TASK LIFECYCLE
+  PENDING → ASSIGNED → IN_PROGRESS → COMPLETED / FAILED / CANCELLED
+
+VERIFICATION CHECKLIST
+  • addressVerified
+  • employmentVerified
+  • incomeVerified
+  • collateralVerified
+  Each is a boolean result from the field visit.
+
+TASK DETAILS
+  GPS coordinates, verified address, photo attachments, visit attempt count,
+  recommendations, findings, and remarks.
+
+PRIORITY LEVELS
+  LOW | NORMAL | HIGH | URGENT
+
+------------------------------------------------------------------------
+8.10 REPORTS & EXPORTS
+------------------------------------------------------------------------
+Route:   /reports
+Action:  src/actions/report.actions.ts
+
+REPORT TYPES
+  • Loan Portfolio Report (all active loans, balances, status)
+  • Overdue Loans Report (with days overdue, amount due)
+  • Repayment Collection Report (by date range)
+  • Customer Statements
+  • Savings Account Statements
+  • Trial Balance
+  • Income Statement
+  • Balance Sheet
+
+EXPORT FORMATS
+  • Excel (.xlsx) — via ExcelJS
+  • PDF           — via jsPDF + jspdf-autotable
+
+------------------------------------------------------------------------
+8.11 NOTIFICATIONS
+------------------------------------------------------------------------
+Route:   /notifications
+Action:  src/actions/notification.actions.ts
+Helper:  src/lib/notifications.ts
+
+NOTIFICATION TYPES
+  INFO | WARNING | ERROR | APPROVAL_REQUIRED | TASK_ASSIGNED |
+  PAYMENT_RECEIVED | LOAN_OVERDUE | MATURITY_REMINDER
+
+DELIVERY
+  In-app only (stored in Notification table).
+  notification-listener.tsx polls for unread count and triggers toast.
+  Bell icon in header shows unread badge.
+  All unread can be marked read in bulk.
+
+------------------------------------------------------------------------
+8.12 AUDIT LOGS
+------------------------------------------------------------------------
+Route:   /audit-logs
+Action:  src/actions/audit.actions.ts
+Helper:  src/lib/audit.ts
+
+WHAT IS LOGGED
+  Every significant action: CRUD operations, login/logout, failed logins,
+  approvals, rejections, exports, prints, reversals, password changes.
+
+AUDIT LOG FIELDS
+  userId, userEmail, userRole, action, module, entityType, entityId,
+  description, oldValues (JSON), newValues (JSON), changedFields[],
+  ipAddress, userAgent, sessionId, metadata (JSON), createdAt.
+
+IMMUTABILITY
+  AuditLog records have no update or delete operations in the schema.
+  They are append-only.
+
+------------------------------------------------------------------------
+8.13 SETTINGS
+------------------------------------------------------------------------
+Route:   /settings
+Access:  SUPER_ADMIN role
+
+CONFIGURABLE ITEMS (via SystemConfig key-value store)
+  • Company name, address, logo
+  • Interest rates (defaults)
+  • Loan approval limits per role
+  • Working hours (for attendance)
+  • Holiday calendar
+  • Notification preferences
+  • Password policy (minimum length, complexity)
+
+
+================================================================================
+9. API ROUTES
+================================================================================
+
+  /api/auth/[...nextauth]   — NextAuth handlers (GET + POST)
+                              Handles sign-in, sign-out, session, CSRF
+
+  /api/cron/daily           — Daily automated job endpoint (POST)
+                              Protected by CRON_SECRET Bearer token
+                              Runs at 01:00 UTC daily (configured in
+                              vercel.json)
+                              Tasks:
+                                - Mark overdue loans
+                                - Accrue savings interest
+                                - Accrue fixed deposit interest
+                                - Process matured fixed deposits
+                                - Send maturity reminder notifications
+                                - Mark absent staff (no clock-in by cutoff)
+                                - Reset daily attendance flags
+
+
+================================================================================
+10. AUTOMATED JOBS (CRON)
+================================================================================
+
+Platform: Vercel Cron (vercel.json)
+Schedule: 0 1 * * *  (01:00 UTC every day)
+Endpoint: POST /api/cron/daily
+
+AUTHENTICATION
+  The cron route checks the Authorization header for:
+  "Bearer <CRON_SECRET>" where CRON_SECRET is an environment variable.
+
+TASKS PERFORMED
+  1. Loan overdue marking — loans with passed maturity/due dates set to OVERDUE
+  2. Savings interest accrual — credits interest per product frequency
+  3. Fixed deposit interest accrual — daily interest on active FDs
+  4. FD maturity processing — processes matured FDs per maturity instruction
+  5. Maturity reminder notifications — sent X days before FD maturity date
+  6. Attendance marking — marks staff as ABSENT if no clock-in recorded
+
+
+================================================================================
+11. DEPLOYMENT
+================================================================================
+
+------------------------------------------------------------------------
+11.1 VERCEL (Cloud — Recommended)
+------------------------------------------------------------------------
+  1. Connect repository to Vercel project.
+  2. Set all environment variables in Vercel dashboard (see Section 12).
+  3. Add a PostgreSQL database (Vercel Postgres or external Neon/Supabase).
+  4. Run initial migration: npx prisma migrate deploy
+  5. Run seed: npm run db:seed
+  6. Deploy — Vercel auto-deploys on push to main branch.
+
+  Vercel features used:
+    • Vercel Cron (vercel.json — daily job at 01:00 UTC)
+    • @vercel/blob (document file storage)
+    • Edge Middleware (src/middleware.ts)
+
+------------------------------------------------------------------------
+11.2 DOCKER (Self-Hosted)
+------------------------------------------------------------------------
+  The docker-compose.yml defines 4 services:
+
+  postgres     — PostgreSQL 16 Alpine
+                 Data volume: postgres_data (persistent)
+                 Health check: pg_isready
+
+  backend      — Next.js app (built from Dockerfile, target: backend)
+                 Exposes port 3000
+                 Waits for postgres healthy
+
+  frontend     — Nginx serving static build (target: frontend)
+                 Exposes port 80
+                 Reverse proxies API calls to backend
+
+  migrations   — One-shot container running: npx prisma migrate deploy
+                 Runs once on startup, then exits
+
+  NOTE: The Dockerfile uses the legacy monorepo structure. For the current
+  unified Next.js app, the Dockerfile should be updated to build the root
+  Next.js app with `next build` and run with `next start`.
+
+  DOCKER QUICK START
+    cp .env.example .env
+    # Edit .env with production values
+    docker-compose up -d
+    # After migrations complete:
+    docker-compose exec backend node scripts/seed.mjs
+
+
+================================================================================
+12. ENVIRONMENT VARIABLES
+================================================================================
+
+  Variable              Required  Description
+  ──────────────────────────────────────────────────────────────────────────
+  DATABASE_URL          YES       PostgreSQL connection string (Prisma)
+  DIRECT_URL            YES       Direct PostgreSQL URL (for migrations)
+  AUTH_SECRET           YES       NextAuth JWT signing secret (random string)
+  AUTH_URL              YES       App base URL (e.g. https://ems.hylink.com)
+  AUTH_TRUST_HOST       YES       Set to "true" for production
+  NEXTAUTH_SECRET       NO        Fallback for AUTH_SECRET (legacy)
+  NEXTAUTH_URL          NO        Fallback for AUTH_URL (legacy)
+  BCRYPT_ROUNDS         NO        Password hashing rounds (default: 12)
+  CRON_SECRET           YES       Bearer token for /api/cron/daily
+  NODE_ENV              NO        "development" or "production"
+  BLOB_READ_WRITE_TOKEN NO        Vercel Blob token (for document uploads)
+
+  Generate AUTH_SECRET: openssl rand -base64 32
+  Generate CRON_SECRET: openssl rand -base64 32
+
+
+================================================================================
+13. DATABASE SETUP & SEEDING
+================================================================================
+
+COMMANDS
+  npm run db:generate     Generate Prisma client types
+  npm run db:push         Push schema to DB (dev only, no migration history)
+  npm run db:migrate      Create and apply migration (development)
+  npm run db:seed         Run seeding script (scripts/seed.mjs)
+  npm run db:studio       Open Prisma Studio GUI (localhost:5555)
+
+WHAT THE SEED SCRIPT CREATES
+  • System sequences (LOAN, CUSTOMER, SAVINGS, FD, JOURNAL, etc.)
+  • System configuration defaults
+  • Default branches (Head Office)
+  • Default departments (HR, Finance, Operations, Credit, IT)
+  • Default roles with permission assignments
+  • Default permissions (all module:action combinations)
+  • Default loan products (Personal Loan, Business Loan, etc.)
+  • Default savings products (Daily Savings, Target Savings, etc.)
+  • Default fixed deposit rate table
+  • Default chart of accounts (full COA hierarchy)
+  • Default document categories
+  • Super Admin staff account (email: admin@hylink.com, temp password)
+
+  IMPORTANT: Change the Super Admin password immediately after seeding.
+  The mustChangePassword flag is set to true on all seeded accounts.
+
+
+================================================================================
+14. TESTING
+================================================================================
+
+FRAMEWORK
+  Vitest 4.1 (compatible with TypeScript, ESM, path aliases)
+  Coverage: @vitest/coverage-v8
+
+COMMANDS
+  npm test               Run all tests (once)
+  npm run test:watch     Watch mode
+  npm run test:coverage  Generate coverage report (text + lcov)
+
+TEST FILES
+  src/__tests__/utils.test.ts    (23 tests across 6 suites)
+
+TEST SUITES
+  formatCurrency  (4 tests)
+    - Positive NGN format
+    - Zero value
+    - String input
+    - Large amounts
+
+  formatDate / formatDateTime  (3 tests)
+    - Date object input
+    - ISO string input
+    - DateTime with time component
+
+  getFinancialPeriod  (3 tests)
+    - Year and month extraction
+    - January (month=1)
+    - December (month=12)
+
+  getPeriodDateRange  (3 tests)
+    - Leap year February (29 days)
+    - 31-day month
+    - 30-day month
+
+  calculateReducingBalanceSchedule  (5 tests)
+    - Correct number of installments
+    - Outstanding balance reaches zero
+    - totalRepayment = principal + totalInterest
+    - All installments have positive components
+    - Sequential installment numbering
+
+  calculateFlatRateSchedule  (5 tests)
+    - Correct number of installments
+    - Total interest formula: P × rate × (tenure/12)
+    - Outstanding balance reaches zero
+    - Consistent monthly instalment
+    - totalRepayment = principal + totalInterest
+
+MOCKING STRATEGY
+  Prisma client is mocked at the module level so pure utility functions
+  can be tested without a database connection.
+
+
+================================================================================
+15. KEY BUSINESS RULES & FINANCIAL LOGIC
+================================================================================
+
+LOAN CREATION RULES
+  • Customer must be ACTIVE and KYC-verified
+  • Loan amount must be within product min/max limits
+  • Tenure must be within product min/max tenure
+  • Customer cannot have an existing active loan unless owingBypass is used
+  • Processing fee and insurance fee are calculated on principal amount
+
+LOAN APPROVAL RULES
+  • Approver's role.approvalLimit must be ≥ loan principalAmount
+  • If amount exceeds manager limit → REFERRED_UP to higher authority
+  • Multi-level approvals are tracked (LoanApproval.level)
+
+SAVINGS WITHDRAWAL RULES
+  • Withdrawal cannot exceed availableBalance (currentBalance - holdAmount)
+  • Product may have maxDailyWithdrawal limit
+  • Withdrawals above a threshold require approval workflow
+  • WithdrawalRequest creates a hold on the account until processed/rejected
+
+FIXED DEPOSIT RULES
+  • Interest rate determined by FixedDepositRate table (tenure + amount band)
+  • Premature closure incurs penalty (penaltyAmount calculated on accrued interest)
+  • At maturity: rollover, payout, or transfer per maturityInstruction
+
+ACCOUNTING RULES
+  • All financial transactions MUST create balanced journal entries
+  • Debits must exactly equal credits (validated before DB write)
+  • Cannot post to HARD_CLOSE periods
+  • Cannot post to header accounts (isHeader=true)
+  • Account balances updated atomically within a Prisma transaction
+  • Normal balance rules:
+      Assets + Expenses: DEBIT increases, CREDIT decreases
+      Liabilities + Equity + Income: CREDIT increases, DEBIT decreases
+
+AUDIT RULES
+  • Every login (successful and failed) is logged
+  • Every CRUD operation on financial entities is logged
+  • Old and new values are captured as JSON on UPDATE operations
+  • Soft deletes (not hard deletes) are used to preserve audit trail
+  • AuditLog table is append-only (no update/delete operations)
+
+PASSWORD RULES
+  • New accounts have mustChangePassword=true
+  • After 5 failed logins, account is locked for 30 minutes
+  • Password hashed with bcryptjs (min 12 rounds recommended)
+  • Users are forced to /change-password if mustChangePassword=true
+
+REFERENCE NUMBER FORMAT
+  Generated by Sequence model: prefix + zero-padded counter
+  Example sequences: LOAN (LN000001), CUSTOMER (CUS000001),
+  SAVINGS (SAV000001), FD (FD000001), JOURNAL (JNL000001),
+  RECEIPT (RCP000001), WITHDRAWAL (WDR000001)
+
+
+================================================================================
+16. SEQUENCE REFERENCE NUMBERS
+================================================================================
+
+  Sequence Code   Prefix    Pad Length   Example
+  ─────────────────────────────────────────────────────
+  LOAN            LN        6            LN000001
+  CUSTOMER        CUS       6            CUS000001
+  SAVINGS         SAV       6            SAV000001
+  FIXED_DEPOSIT   FD        6            FD000001
+  JOURNAL         JNL       6            JNL000001
+  RECEIPT         RCP       6            RCP000001
+  WITHDRAWAL      WDR       6            WDR000001
+  RESTRUCTURING   RST       6            RST000001
+  DOCUMENT        DOC       6            DOC000001
+  VERIFICATION    VRF       6            VRF000001
+
+  Sequences are incremented atomically using Prisma's increment operation.
+  The Sequence.resetFrequency field supports DAILY/MONTHLY/YEARLY/NEVER
+  resets (handled by the daily cron job).
+
+
+================================================================================
+END OF DOCUMENTATION
+Hylink Finance Limited — Enterprise Management System v2.0.0
+Generated: March 2026
+================================================================================

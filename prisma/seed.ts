@@ -53,9 +53,14 @@ async function main() {
     'ACCOUNTS:JOURNAL_POST', 'ACCOUNTS:JOURNAL_REVERSE', 'ACCOUNTS:PERIOD_CLOSE',
     // Document management
     'DOCUMENTS:READ', 'DOCUMENTS:CREATE', 'DOCUMENTS:APPROVE', 'DOCUMENTS:DELETE',
-    // HR module
+    // HR module — core
     'HR:STAFF_READ', 'HR:STAFF_CREATE', 'HR:STAFF_UPDATE',
     'HR:ATTENDANCE_MANAGE', 'HR:LEAVE_MANAGE', 'HR:PERFORMANCE_MANAGE',
+    // HR module — payroll (separated so processing and approval can be split)
+    'HR:PAYROLL_READ', 'HR:PAYROLL_MANAGE', 'HR:PAYROLL_APPROVE',
+    // HR module — talent, assets, communication and configuration
+    'HR:RECRUITMENT_MANAGE', 'HR:TRAINING_MANAGE', 'HR:ASSET_MANAGE',
+    'HR:ANNOUNCE', 'HR:CONFIG_MANAGE', 'HR:ANALYTICS_VIEW',
     // Verification field operations
     'VERIFICATION:READ', 'VERIFICATION:PROCESS',
     // Audit & compliance
@@ -104,6 +109,8 @@ async function main() {
         'ACCOUNTS:JOURNAL_POST', 'ACCOUNTS:JOURNAL_REVERSE', 'ACCOUNTS:PERIOD_CLOSE',
         'DOCUMENTS:READ', 'DOCUMENTS:CREATE', 'DOCUMENTS:APPROVE',
         'HR:STAFF_READ', 'HR:ATTENDANCE_MANAGE', 'HR:LEAVE_MANAGE', 'HR:PERFORMANCE_MANAGE',
+        'HR:PAYROLL_READ', 'HR:PAYROLL_APPROVE', 'HR:ANALYTICS_VIEW',
+        'HR:RECRUITMENT_MANAGE', 'HR:ANNOUNCE',
         'VERIFICATION:READ',
         'AUDIT:READ',
       ],
@@ -113,9 +120,13 @@ async function main() {
       code: 'HR_ADMIN',
       level: 80,
       perms: [
-        // Full HR module access
+        // Full HR module access. Payroll can be processed here but NOT approved —
+        // approval sits with the Director so no one person can run and release pay.
         'HR:STAFF_READ', 'HR:STAFF_CREATE', 'HR:STAFF_UPDATE',
         'HR:ATTENDANCE_MANAGE', 'HR:LEAVE_MANAGE', 'HR:PERFORMANCE_MANAGE',
+        'HR:PAYROLL_READ', 'HR:PAYROLL_MANAGE',
+        'HR:RECRUITMENT_MANAGE', 'HR:TRAINING_MANAGE', 'HR:ASSET_MANAGE',
+        'HR:ANNOUNCE', 'HR:CONFIG_MANAGE', 'HR:ANALYTICS_VIEW',
         'DOCUMENTS:READ', 'DOCUMENTS:CREATE',
         'AUDIT:READ',
         'SYSTEM:USER_MANAGE',
@@ -136,6 +147,7 @@ async function main() {
         'ACCOUNTS:REPORTS_VIEW',
         'DOCUMENTS:READ', 'DOCUMENTS:CREATE', 'DOCUMENTS:APPROVE',
         'HR:STAFF_READ', 'HR:ATTENDANCE_MANAGE', 'HR:LEAVE_MANAGE', 'HR:PERFORMANCE_MANAGE',
+        'HR:ANALYTICS_VIEW', 'HR:TRAINING_MANAGE', 'HR:ASSET_MANAGE',
         'VERIFICATION:READ', 'VERIFICATION:PROCESS',
       ],
     },
@@ -468,6 +480,7 @@ async function main() {
   const acctCurrAssets = await upsertAccount({ accountCode: '1100', accountName: 'Current Assets',      accountType: 'ASSET',     normalBalance: 'DEBIT',  isHeader: true, level: 2, parentId: acctAssets.id });
   const acctLoanPort   = await upsertAccount({ accountCode: '1300', accountName: 'Loan Portfolio',       accountType: 'ASSET',     normalBalance: 'DEBIT',  isHeader: true, level: 2, parentId: acctAssets.id });
   const acctCurrLiab   = await upsertAccount({ accountCode: '2100', accountName: 'Customer Deposits',    accountType: 'LIABILITY', normalBalance: 'CREDIT', isHeader: true, level: 2, parentId: acctLiab.id });
+  const acctOtherLiab  = await upsertAccount({ accountCode: '2200', accountName: 'Other Liabilities',     accountType: 'LIABILITY', normalBalance: 'CREDIT', isHeader: true, level: 2, parentId: acctLiab.id });
   const acctInterestInc = await upsertAccount({ accountCode: '4100', accountName: 'Interest Income',     accountType: 'INCOME',    normalBalance: 'CREDIT', isHeader: true, level: 2, parentId: acctIncome.id });
   const acctFeeInc     = await upsertAccount({ accountCode: '4200', accountName: 'Fee & Commission Income', accountType: 'INCOME', normalBalance: 'CREDIT', isHeader: true, level: 2, parentId: acctIncome.id });
   const acctPersonnel  = await upsertAccount({ accountCode: '5100', accountName: 'Personnel Expenses',   accountType: 'EXPENSE',   normalBalance: 'DEBIT',  isHeader: true, level: 2, parentId: acctExpenses.id });
@@ -487,6 +500,12 @@ async function main() {
   await upsertAccount({ accountCode: '2120', accountName: 'Fixed Deposits Payable',   accountType: 'LIABILITY', normalBalance: 'CREDIT', level: 3, parentId: acctCurrLiab.id, isSystemAccount: true });
   await upsertAccount({ accountCode: '2130', accountName: 'Interest Payable',         accountType: 'LIABILITY', normalBalance: 'CREDIT', level: 3, parentId: acctCurrLiab.id });
 
+  // Payroll settlement accounts — credited by the monthly payroll accrual and
+  // cleared when salaries, PAYE and pension contributions are actually remitted.
+  await upsertAccount({ accountCode: '2210', accountName: 'Salaries Payable',        accountType: 'LIABILITY', normalBalance: 'CREDIT', level: 3, parentId: acctOtherLiab.id, isSystemAccount: true, description: 'GL_SALARY_PAYABLE' });
+  await upsertAccount({ accountCode: '2220', accountName: 'PAYE Payable',            accountType: 'LIABILITY', normalBalance: 'CREDIT', level: 3, parentId: acctOtherLiab.id, isSystemAccount: true, description: 'GL_PAYE_PAYABLE' });
+  await upsertAccount({ accountCode: '2230', accountName: 'Pension Payable',         accountType: 'LIABILITY', normalBalance: 'CREDIT', level: 3, parentId: acctOtherLiab.id, isSystemAccount: true, description: 'GL_PENSION_PAYABLE' });
+
   await upsertAccount({ accountCode: '3100', accountName: 'Share Capital',            accountType: 'EQUITY',    normalBalance: 'CREDIT', level: 2, parentId: acctEquity.id });
   await upsertAccount({ accountCode: '3200', accountName: 'Retained Earnings',        accountType: 'EQUITY',    normalBalance: 'CREDIT', level: 2, parentId: acctEquity.id });
   await upsertAccount({ accountCode: '3300', accountName: 'Current Year Profit',      accountType: 'EQUITY',    normalBalance: 'CREDIT', level: 2, parentId: acctEquity.id });
@@ -505,6 +524,7 @@ async function main() {
 
   console.log('  Postable accounts created (1110-5320)');
   console.log('  Key GL codes: 1120=Cash/Bank, 1310=Loans Receivable, 4110=Interest Income, 4210=Fee Income, 5310=Bad Debt');
+  console.log('  Payroll GL codes: 5110=Salaries Expense, 2210=Salaries Payable, 2220=PAYE Payable, 2230=Pension Payable');
 
   // ── Savings Products ─────────────────────────────────────────────────────
   console.log('\n[7/8] Savings Products...');
@@ -630,6 +650,203 @@ async function main() {
       });
     }
     console.log(`  FD Rate: ${rate.minTenure}–${rate.maxTenure} days @ ${rate.interestRate}%`);
+  }
+
+
+  // ══════════════════════════════════════════════════════════════════════
+  // HR MODULE REFERENCE DATA
+  // ══════════════════════════════════════════════════════════════════════
+  console.log('\n[9/12] HR — Leave Types...');
+
+  const leaveTypes = [
+    { code: 'ANNUAL',       name: 'Annual Leave',        defaultDays: 20, isPaid: true,  carryForward: true,  maxCarryForwardDays: 5,  minServiceMonths: 6,  colorHex: '#0ea5e9', sortOrder: 1 },
+    { code: 'SICK',         name: 'Sick Leave',          defaultDays: 12, isPaid: true,  requiresDocument: true, colorHex: '#ef4444', sortOrder: 2 },
+    { code: 'CASUAL',       name: 'Casual Leave',        defaultDays: 5,  isPaid: true,  allowHalfDay: true, colorHex: '#f59e0b', sortOrder: 3 },
+    { code: 'MATERNITY',    name: 'Maternity Leave',     defaultDays: 84, isPaid: true,  genderRestriction: 'FEMALE', minServiceMonths: 12, countsWeekends: true, colorHex: '#ec4899', sortOrder: 4 },
+    { code: 'PATERNITY',    name: 'Paternity Leave',     defaultDays: 10, isPaid: true,  genderRestriction: 'MALE',   minServiceMonths: 12, colorHex: '#8b5cf6', sortOrder: 5 },
+    { code: 'COMPASSIONATE',name: 'Compassionate Leave', defaultDays: 5,  isPaid: true,  colorHex: '#64748b', sortOrder: 6 },
+    { code: 'STUDY',        name: 'Study Leave',         defaultDays: 10, isPaid: true,  requiresDocument: true, minServiceMonths: 24, colorHex: '#14b8a6', sortOrder: 7 },
+    { code: 'UNPAID',       name: 'Unpaid Leave',        defaultDays: 0,  isPaid: false, colorHex: '#94a3b8', sortOrder: 8 },
+  ];
+
+  for (const lt of leaveTypes) {
+    await prisma.leaveType.upsert({
+      where: { code: lt.code },
+      update: { name: lt.name, defaultDays: lt.defaultDays, isPaid: lt.isPaid },
+      create: {
+        code: lt.code,
+        name: lt.name,
+        defaultDays: lt.defaultDays,
+        isPaid: lt.isPaid,
+        carryForward: lt.carryForward ?? false,
+        maxCarryForwardDays: lt.maxCarryForwardDays ?? 0,
+        requiresDocument: lt.requiresDocument ?? false,
+        allowHalfDay: lt.allowHalfDay ?? false,
+        minServiceMonths: lt.minServiceMonths ?? 0,
+        genderRestriction: lt.genderRestriction ?? null,
+        countsWeekends: lt.countsWeekends ?? false,
+        colorHex: lt.colorHex,
+        sortOrder: lt.sortOrder,
+        isActive: true,
+      },
+    });
+    console.log(`  Leave type: ${lt.name} (${lt.defaultDays} days)`);
+  }
+
+  // ── Work shift ───────────────────────────────────────────────────────
+  console.log('\n[10/12] HR — Work Shifts & Holidays...');
+
+  await prisma.workShift.upsert({
+    where: { code: 'STANDARD' },
+    update: {},
+    create: {
+      code: 'STANDARD',
+      name: 'Standard Day Shift',
+      startTime: '08:00',
+      endTime: '17:00',
+      graceMinutes: 15,
+      breakMinutes: 60,
+      workDays: [1, 2, 3, 4, 5],
+      isDefault: true,
+      isActive: true,
+    },
+  });
+  console.log('  Work shift: Standard Day Shift (08:00-17:00, Mon-Fri)');
+
+  // ── Nigerian public holidays (recurring fixed-date ones only) ─────────
+  const holidayYear = new Date().getFullYear();
+  const holidays = [
+    { name: 'New Year Day',      month: 1,  day: 1 },
+    { name: 'Workers Day',       month: 5,  day: 1 },
+    { name: 'Democracy Day',     month: 6,  day: 12 },
+    { name: 'Independence Day',  month: 10, day: 1 },
+    { name: 'Christmas Day',     month: 12, day: 25 },
+    { name: 'Boxing Day',        month: 12, day: 26 },
+  ];
+
+  for (const h of holidays) {
+    const date = new Date(holidayYear, h.month - 1, h.day);
+    const existing = await prisma.holiday.findFirst({ where: { name: h.name, date } });
+    if (!existing) {
+      await prisma.holiday.create({
+        data: { name: h.name, date, isRecurring: true, description: 'Nigerian public holiday' },
+      });
+    }
+  }
+  console.log(`  Holidays: ${holidays.length} recurring public holidays for ${holidayYear}`);
+
+  // ── Salary grades ────────────────────────────────────────────────────
+  console.log('\n[11/12] HR — Salary Grades & Payroll Components...');
+
+  const grades = [
+    { code: 'EXEC',   name: 'Executive',        level: 90, minGross: 1500000, maxGross: 5000000, annualLeaveDays: 30 },
+    { code: 'MGT',    name: 'Management',       level: 70, minGross: 700000,  maxGross: 1500000, annualLeaveDays: 25 },
+    { code: 'SNR',    name: 'Senior Officer',   level: 50, minGross: 350000,  maxGross: 700000,  annualLeaveDays: 22 },
+    { code: 'OFF',    name: 'Officer',          level: 30, minGross: 180000,  maxGross: 350000,  annualLeaveDays: 20 },
+    { code: 'JNR',    name: 'Junior Officer',   level: 20, minGross: 90000,   maxGross: 180000,  annualLeaveDays: 18 },
+    { code: 'SUPPORT',name: 'Support Staff',    level: 10, minGross: 50000,   maxGross: 90000,   annualLeaveDays: 15 },
+  ];
+
+  for (const g of grades) {
+    await prisma.salaryGrade.upsert({
+      where: { code: g.code },
+      update: { name: g.name, level: g.level },
+      create: { ...g, isActive: true },
+    });
+    console.log(`  Grade: ${g.name} [${g.code}] level ${g.level}`);
+  }
+
+  // ── Payroll components ───────────────────────────────────────────────
+  // BASIC, PAYE, PENSION_EE/ER, NHF and LOP are computed by the payroll
+  // engine itself, so only the discretionary allowances live here.
+  const components = [
+    { code: 'HOUSING',    name: 'Housing Allowance',    type: 'EARNING',   calculationType: 'PERCENT_OF_BASIC', defaultValue: 30, isTaxable: true,  isPensionable: true,  sortOrder: 10 },
+    { code: 'TRANSPORT',  name: 'Transport Allowance',  type: 'EARNING',   calculationType: 'PERCENT_OF_BASIC', defaultValue: 20, isTaxable: true,  isPensionable: true,  sortOrder: 20 },
+    { code: 'UTILITY',    name: 'Utility Allowance',    type: 'EARNING',   calculationType: 'PERCENT_OF_BASIC', defaultValue: 10, isTaxable: true,  isPensionable: false, sortOrder: 30 },
+    { code: 'MEAL',       name: 'Meal Allowance',       type: 'EARNING',   calculationType: 'FIXED',            defaultValue: 0,  isTaxable: true,  isPensionable: false, sortOrder: 40 },
+    { code: 'LEAVE_ALLW', name: 'Leave Allowance',      type: 'EARNING',   calculationType: 'PERCENT_OF_BASIC', defaultValue: 10, isTaxable: true,  isPensionable: false, sortOrder: 50 },
+    { code: 'STAFF_LOAN', name: 'Staff Loan Repayment', type: 'DEDUCTION', calculationType: 'FIXED',            defaultValue: 0,  isTaxable: false, isPensionable: false, sortOrder: 10 },
+    { code: 'COOP',       name: 'Cooperative Deduction',type: 'DEDUCTION', calculationType: 'FIXED',            defaultValue: 0,  isTaxable: false, isPensionable: false, sortOrder: 20 },
+    { code: 'NHIS_ER',    name: 'NHIS (Employer)',      type: 'EMPLOYER_CONTRIBUTION', calculationType: 'PERCENT_OF_BASIC', defaultValue: 5, isTaxable: false, isPensionable: false, sortOrder: 10 },
+  ];
+
+  for (const c of components) {
+    await prisma.payrollComponent.upsert({
+      where: { code: c.code },
+      update: { name: c.name },
+      create: {
+        code: c.code,
+        name: c.name,
+        type: c.type as any,
+        calculationType: c.calculationType as any,
+        defaultValue: c.defaultValue,
+        isTaxable: c.isTaxable,
+        isPensionable: c.isPensionable,
+        sortOrder: c.sortOrder,
+        glAccountCode: c.type === 'EARNING' ? '5110' : c.type === 'EMPLOYER_CONTRIBUTION' ? '5120' : null,
+        isActive: true,
+      },
+    });
+    console.log(`  Payroll component: ${c.name} [${c.code}]`);
+  }
+
+  // ── Onboarding / offboarding templates ───────────────────────────────
+  console.log('\n[12/12] HR — Onboarding Templates...');
+
+  const onboardingTemplate = await prisma.onboardingTemplate.findFirst({
+    where: { name: 'Standard Employee Onboarding', type: 'ONBOARDING' },
+  });
+  if (!onboardingTemplate) {
+    await prisma.onboardingTemplate.create({
+      data: {
+        name: 'Standard Employee Onboarding',
+        type: 'ONBOARDING',
+        description: 'Default checklist applied to every new hire.',
+        isActive: true,
+        tasks: {
+          create: [
+            { title: 'Signed offer letter and contract on file', category: 'HR',         dueDayOffset: 0,  ownerRoleCode: 'HR_ADMIN', sortOrder: 0 },
+            { title: 'Collect statutory documents (BVN, NIN, TIN)', category: 'COMPLIANCE', dueDayOffset: 1, ownerRoleCode: 'HR_ADMIN', sortOrder: 1 },
+            { title: 'Create system login and assign role',       category: 'IT',         dueDayOffset: 1,  ownerRoleCode: 'SUPER_ADMIN', sortOrder: 2 },
+            { title: 'Issue laptop and access card',              category: 'IT',         dueDayOffset: 1,  ownerRoleCode: 'SUPER_ADMIN', sortOrder: 3 },
+            { title: 'Register bank and pension details',         category: 'FINANCE',    dueDayOffset: 3,  ownerRoleCode: 'HR_ADMIN', sortOrder: 4 },
+            { title: 'Set up salary package in payroll',          category: 'FINANCE',    dueDayOffset: 5,  ownerRoleCode: 'HR_ADMIN', sortOrder: 5 },
+            { title: 'Company orientation and policy briefing',   category: 'TRAINING',   dueDayOffset: 5,  ownerRoleCode: 'HR_ADMIN', sortOrder: 6 },
+            { title: 'Introduce to team and assign supervisor',   category: 'GENERAL',    dueDayOffset: 2,  sortOrder: 7 },
+            { title: 'Set first-quarter performance goals',       category: 'GENERAL',    dueDayOffset: 14, sortOrder: 8 },
+            { title: 'Schedule 30-day probation check-in',        category: 'HR',         dueDayOffset: 30, ownerRoleCode: 'HR_ADMIN', sortOrder: 9 },
+          ],
+        },
+      },
+    });
+    console.log('  Onboarding template: Standard Employee Onboarding (10 tasks)');
+  }
+
+  const offboardingTemplate = await prisma.onboardingTemplate.findFirst({
+    where: { name: 'Standard Employee Exit', type: 'OFFBOARDING' },
+  });
+  if (!offboardingTemplate) {
+    await prisma.onboardingTemplate.create({
+      data: {
+        name: 'Standard Employee Exit',
+        type: 'OFFBOARDING',
+        description: 'Clearance checklist completed before an exit is finalised.',
+        isActive: true,
+        tasks: {
+          create: [
+            { title: 'Acknowledge resignation / issue exit letter', category: 'HR',        dueDayOffset: 0,  ownerRoleCode: 'HR_ADMIN', sortOrder: 0 },
+            { title: 'Handover notes and work-in-progress list',    category: 'GENERAL',   dueDayOffset: 7,  sortOrder: 1 },
+            { title: 'Return laptop, access card and phone',        category: 'IT',        dueDayOffset: 14, ownerRoleCode: 'SUPER_ADMIN', sortOrder: 2 },
+            { title: 'Revoke system access and revoke sessions',    category: 'IT',        dueDayOffset: 14, ownerRoleCode: 'SUPER_ADMIN', sortOrder: 3 },
+            { title: 'Clear outstanding staff loans and advances',  category: 'FINANCE',   dueDayOffset: 14, ownerRoleCode: 'ACCOUNT_OFFICER', sortOrder: 4 },
+            { title: 'Compute final settlement and leave payout',   category: 'FINANCE',   dueDayOffset: 14, ownerRoleCode: 'HR_ADMIN', sortOrder: 5 },
+            { title: 'Conduct exit interview',                      category: 'HR',        dueDayOffset: 13, ownerRoleCode: 'HR_ADMIN', sortOrder: 6 },
+            { title: 'Issue reference / service letter',            category: 'HR',        dueDayOffset: 20, ownerRoleCode: 'HR_ADMIN', isMandatory: false, sortOrder: 7 },
+          ],
+        },
+      },
+    });
+    console.log('  Offboarding template: Standard Employee Exit (8 tasks)');
   }
 
   console.log('\nSeed completed successfully!');

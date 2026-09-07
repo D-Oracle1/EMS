@@ -14,6 +14,8 @@ import {
   FileText,
   History,
   Upload,
+  Wallet,
+  Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -53,8 +55,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { getStaffCompensation, setStaffCompensation } from '@/actions/payroll.actions';
+import { getSalaryGrades, getPayrollComponents } from '@/actions/hr-config.actions';
+import { getStaffAssets } from '@/actions/hr-engagement.actions';
+import { getStaffMovements } from '@/actions/hr-lifecycle.actions';
 import { Textarea } from '@/components/ui/textarea';
-import { formatDate, formatDateTime } from '@/lib/utils';
+import { formatDate, formatDateTime, formatCurrency } from '@/lib/utils';
 import { getStaffList } from '@/actions/hr.actions';
 import { resetStaffPassword, unlockAccount } from '@/actions/auth.actions';
 import {
@@ -211,6 +217,27 @@ export function StaffClient({ user }: { user: SessionUser }) {
   // ---- detail dialog ----
   const [detailOpen, setDetailOpen] = useState(false);
   const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null);
+
+  // Compensation tab
+  const [compensations, setCompensations] = useState<any[]>([]);
+  const [staffAssets, setStaffAssets] = useState<any[]>([]);
+  const [staffMovements, setStaffMovements] = useState<any[]>([]);
+  const [salaryGrades, setSalaryGrades] = useState<any[]>([]);
+  const [payComponents, setPayComponents] = useState<any[]>([]);
+  const [packageOpen, setPackageOpen] = useState(false);
+  const [packageForm, setPackageForm] = useState<{
+    gradeId: string;
+    basicSalary: string;
+    effectiveFrom: string;
+    reason: string;
+    items: Record<string, string>;
+  }>({
+    gradeId: '__none',
+    basicSalary: '',
+    effectiveFrom: new Date().toISOString().slice(0, 10),
+    reason: '',
+    items: {},
+  });
   const [detailTab, setDetailTab] = useState('info');
   const [staffDocuments, setStaffDocuments] = useState<any[]>([]);
   const [staffActivityLogs, setStaffActivityLogs] = useState<any[]>([]);
@@ -311,9 +338,100 @@ export function StaffClient({ user }: { user: SessionUser }) {
     setDetailTab('info');
     setStaffDocuments([]);
     setStaffActivityLogs([]);
+    setCompensations([]);
+    setStaffAssets([]);
+    setStaffMovements([]);
     setDetailOpen(true);
     fetchStaffDocuments(staff.id);
     fetchStaffActivityLogs(staff.id);
+    fetchEmploymentData(staff.id);
+  };
+
+  /**
+   * Load the employment tab in one pass. Each call is independent, so a
+   * permission failure on one (payroll, say) still leaves the others usable.
+   */
+  const fetchEmploymentData = (staffId: string) => {
+    getStaffCompensation(staffId)
+      .then(setCompensations)
+      .catch(() => setCompensations([]));
+    getStaffAssets(staffId)
+      .then(setStaffAssets)
+      .catch(() => setStaffAssets([]));
+    getStaffMovements({ staffId })
+      .then(setStaffMovements)
+      .catch(() => setStaffMovements([]));
+  };
+
+  /** Open the package dialog, seeded from the current package where one exists. */
+  const openPackageDialog = () => {
+    if (!selectedStaff) return;
+
+    Promise.all([getSalaryGrades(), getPayrollComponents()])
+      .then(([grades, components]) => {
+        setSalaryGrades(grades);
+        setPayComponents(components);
+      })
+      .catch(() => undefined);
+
+    const current = compensations.find((c) => c.isCurrent);
+    const items: Record<string, string> = {};
+    if (current) {
+      for (const item of current.items) {
+        items[item.componentId] = String(
+          item.calculationType === 'FIXED' ? (item.amount ?? 0) : (item.percentage ?? 0)
+        );
+      }
+    }
+
+    setPackageForm({
+      gradeId: current?.grade?.id ?? '__none',
+      basicSalary: current ? String(current.basicSalary) : '',
+      effectiveFrom: new Date().toISOString().slice(0, 10),
+      reason: '',
+      items,
+    });
+    setPackageOpen(true);
+  };
+
+  const handleSavePackage = () => {
+    if (!selectedStaff) return;
+
+    const basic = parseFloat(packageForm.basicSalary);
+    if (!Number.isFinite(basic) || basic <= 0) {
+      toast.error('Enter a basic salary greater than zero');
+      return;
+    }
+
+    // Only components the user actually filled in are sent.
+    const items = Object.entries(packageForm.items)
+      .filter(([, value]) => value.trim() !== '' && parseFloat(value) > 0)
+      .map(([componentId, value]) => {
+        const component = payComponents.find((c) => c.id === componentId);
+        const numeric = parseFloat(value);
+        return component?.calculationType === 'FIXED'
+          ? { componentId, amount: numeric }
+          : { componentId, percentage: numeric };
+      });
+
+    startTransition(async () => {
+      const result = await setStaffCompensation({
+        staffId: selectedStaff.id,
+        gradeId: packageForm.gradeId === '__none' ? undefined : packageForm.gradeId,
+        basicSalary: basic,
+        effectiveFrom: packageForm.effectiveFrom,
+        reason: packageForm.reason || undefined,
+        items,
+      });
+
+      if (result.success) {
+        toast.success(result.message);
+        setPackageOpen(false);
+        fetchEmploymentData(selectedStaff.id);
+      } else {
+        toast.error(result.error || 'Failed to save the salary package');
+      }
+    });
   };
 
   const handleCreate = () => {
@@ -475,6 +593,7 @@ export function StaffClient({ user }: { user: SessionUser }) {
   const canManageUsers = user.permissions.includes('SYSTEM:USER_MANAGE');
   const canCreateStaff = user.permissions.includes('HR:STAFF_CREATE');
   const canUpdateStaff = user.permissions.includes('HR:STAFF_UPDATE');
+  const canManagePayroll = user.permissions.includes('HR:PAYROLL_MANAGE');
 
   /* ---------------------------------------------------------------- */
   /*  JSX                                                              */
@@ -866,10 +985,14 @@ export function StaffClient({ user }: { user: SessionUser }) {
           </DialogHeader>
 
           <Tabs value={detailTab} onValueChange={setDetailTab}>
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="info">
                 <Eye className="mr-2 h-4 w-4" />
                 Info
+              </TabsTrigger>
+              <TabsTrigger value="employment">
+                <Wallet className="mr-2 h-4 w-4" />
+                Employment
               </TabsTrigger>
               <TabsTrigger value="documents">
                 <FileText className="mr-2 h-4 w-4" />
@@ -880,6 +1003,141 @@ export function StaffClient({ user }: { user: SessionUser }) {
                 Activity
               </TabsTrigger>
             </TabsList>
+
+            {/* ---- Employment Tab: package, assets and movement history ---- */}
+            <TabsContent value="employment" className="space-y-5 mt-4">
+              {/* Salary package */}
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <h4 className="text-sm font-semibold">Salary Package</h4>
+                  {canManagePayroll && (
+                    <Button size="sm" variant="outline" onClick={openPackageDialog}>
+                      <Wallet className="mr-2 h-3.5 w-3.5" />
+                      {compensations.some((c) => c.isCurrent) ? 'Revise' : 'Set Package'}
+                    </Button>
+                  )}
+                </div>
+
+                {compensations.length === 0 ? (
+                  <p className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
+                    No salary package on file. This staff member will be skipped by payroll runs.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {compensations.map((comp) => (
+                      <div
+                        key={comp.id}
+                        className={`rounded-md border p-3 ${comp.isCurrent ? 'border-primary/40 bg-primary/5' : ''}`}
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <span className="text-lg font-bold tabular-nums">
+                              {formatCurrency(comp.basicSalary)}
+                            </span>
+                            <span className="ml-1 text-xs text-muted-foreground">basic / month</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {comp.grade && <Badge variant="outline">{comp.grade.name}</Badge>}
+                            {comp.isCurrent ? (
+                              <Badge variant="success">Current</Badge>
+                            ) : (
+                              <Badge variant="secondary">Historical</Badge>
+                            )}
+                          </div>
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Effective {formatDate(comp.effectiveFrom)}
+                          {comp.effectiveTo ? ` to ${formatDate(comp.effectiveTo)}` : ''} · set by{' '}
+                          {comp.createdBy}
+                          {comp.reason ? ` · ${comp.reason}` : ''}
+                        </p>
+                        {comp.items.length > 0 && (
+                          <div className="mt-2 space-y-1 border-t pt-2">
+                            {comp.items.map((item: any) => (
+                              <div key={item.id} className="flex justify-between text-xs">
+                                <span>
+                                  {item.name}
+                                  <span className="ml-1 text-muted-foreground">
+                                    ({item.type.toLowerCase().replace(/_/g, ' ')})
+                                  </span>
+                                </span>
+                                <span className="tabular-nums">
+                                  {item.calculationType === 'FIXED'
+                                    ? formatCurrency(item.amount ?? 0)
+                                    : `${item.percentage ?? 0}%`}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Assets held */}
+              <div>
+                <h4 className="mb-2 text-sm font-semibold">
+                  Company Assets Held
+                  <Badge variant="secondary" className="ml-2">{staffAssets.length}</Badge>
+                </h4>
+                {staffAssets.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No assets currently assigned.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {staffAssets.map((asset) => (
+                      <div
+                        key={asset.id}
+                        className={`flex items-center justify-between rounded-md border p-2.5 text-sm ${asset.isOverdue ? 'border-amber-500/40 bg-amber-500/5' : ''}`}
+                      >
+                        <div className="min-w-0">
+                          <span className="font-medium">{asset.name}</span>
+                          <span className="ml-2 font-mono text-xs text-muted-foreground">
+                            {asset.assetTag}
+                          </span>
+                          <div className="text-xs text-muted-foreground">
+                            Issued {formatDate(asset.assignedAt)}
+                            {asset.dueReturnAt ? ` · due ${formatDate(asset.dueReturnAt)}` : ''}
+                          </div>
+                        </div>
+                        {asset.isOverdue && <Badge variant="warning">Overdue</Badge>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Movement history */}
+              <div>
+                <h4 className="mb-2 text-sm font-semibold">
+                  Movement History
+                  <Badge variant="secondary" className="ml-2">{staffMovements.length}</Badge>
+                </h4>
+                {staffMovements.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No recorded movements.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {staffMovements.map((movement) => (
+                      <div key={movement.id} className="rounded-md border p-2.5 text-sm">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <Badge variant="outline">{movement.type.replace(/_/g, ' ')}</Badge>
+                          <span className="text-xs text-muted-foreground">
+                            {formatDate(movement.effectiveDate)}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-xs">{movement.reason}</p>
+                        {movement.toRole && movement.fromRole !== movement.toRole && (
+                          <p className="text-xs text-muted-foreground">
+                            {movement.fromRole} &rarr; {movement.toRole}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </TabsContent>
 
             {/* ---- Info Tab ---- */}
             <TabsContent value="info" className="space-y-4 mt-4">
@@ -1479,6 +1737,153 @@ export function StaffClient({ user }: { user: SessionUser }) {
             </Button>
             <Button onClick={handleDocumentUpload} disabled={isPending}>
               {isPending ? 'Uploading...' : 'Upload'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ---- Salary Package Dialog ---- */}
+      <Dialog open={packageOpen} onOpenChange={setPackageOpen}>
+        <DialogContent className="max-h-[90vh] max-w-xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Salary Package</DialogTitle>
+            <DialogDescription>
+              {selectedStaff
+                ? `${selectedStaff.firstName} ${selectedStaff.lastName} (${selectedStaff.employeeId})`
+                : ''}
+              . The current package is closed off the day before this one takes effect.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="pk-basic">Basic Salary (monthly)</Label>
+                <Input
+                  id="pk-basic"
+                  type="number"
+                  min={0}
+                  value={packageForm.basicSalary}
+                  onChange={(e) =>
+                    setPackageForm({ ...packageForm, basicSalary: e.target.value })
+                  }
+                  placeholder="250000"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="pk-grade">Salary Grade</Label>
+                <Select
+                  value={packageForm.gradeId}
+                  onValueChange={(v) => setPackageForm({ ...packageForm, gradeId: v })}
+                >
+                  <SelectTrigger id="pk-grade">
+                    <SelectValue placeholder="No grade" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">No grade</SelectItem>
+                    {salaryGrades.map((grade: any) => (
+                      <SelectItem key={grade.id} value={grade.id}>
+                        {grade.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="pk-from">Effective From</Label>
+                <Input
+                  id="pk-from"
+                  type="date"
+                  value={packageForm.effectiveFrom}
+                  onChange={(e) =>
+                    setPackageForm({ ...packageForm, effectiveFrom: e.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="pk-reason">Reason</Label>
+                <Input
+                  id="pk-reason"
+                  value={packageForm.reason}
+                  onChange={(e) => setPackageForm({ ...packageForm, reason: e.target.value })}
+                  placeholder="Annual review"
+                />
+              </div>
+            </div>
+
+            <div>
+              <h4 className="mb-1 text-sm font-medium">Allowances & Deductions</h4>
+              <p className="mb-3 text-xs text-muted-foreground">
+                Leave a component blank to exclude it. PAYE, pension, NHF and loss of pay are
+                computed automatically and are not listed here.
+              </p>
+
+              <div className="space-y-2">
+                {payComponents.length === 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    No payroll components configured yet.
+                  </p>
+                )}
+                {payComponents.map((component: any) => (
+                  <div
+                    key={component.id}
+                    className="grid grid-cols-[1fr,140px] items-center gap-3 rounded-md border p-2.5"
+                  >
+                    <div className="min-w-0">
+                      <span className="text-sm font-medium">{component.name}</span>
+                      <div className="flex flex-wrap gap-1 pt-0.5">
+                        <Badge
+                          variant={
+                            component.type === 'EARNING'
+                              ? 'success'
+                              : component.type === 'DEDUCTION'
+                                ? 'error'
+                                : 'purple'
+                          }
+                          className="text-[10px]"
+                        >
+                          {component.type.replace(/_/g, ' ').toLowerCase()}
+                        </Badge>
+                        {component.isPensionable && (
+                          <Badge variant="outline" className="text-[10px]">
+                            pensionable
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={packageForm.items[component.id] ?? ''}
+                      onChange={(e) =>
+                        setPackageForm({
+                          ...packageForm,
+                          items: { ...packageForm.items, [component.id]: e.target.value },
+                        })
+                      }
+                      placeholder={
+                        component.calculationType === 'FIXED'
+                          ? 'Amount'
+                          : `% of ${component.calculationType === 'PERCENT_OF_BASIC' ? 'basic' : 'gross'}`
+                      }
+                      className="tabular-nums"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPackageOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSavePackage} disabled={isPending}>
+              {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save Package
             </Button>
           </DialogFooter>
         </DialogContent>

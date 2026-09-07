@@ -1,8 +1,41 @@
+import { randomBytes } from 'crypto';
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import bcrypt from 'bcryptjs';
 import { prisma } from './prisma';
 import { authConfig } from './auth.config';
+import { getConfigNumber } from './system-config';
+
+/**
+ * Record a staff sign-in as a UserSession row so administrators can see who is
+ * signed in and revoke access. Best-effort: a failure here must never block a
+ * legitimate login.
+ */
+async function recordStaffSession(staffId: string, request: Request | undefined): Promise<void> {
+  try {
+    const idleMinutes = await getConfigNumber('security.sessionIdleMinutes');
+    const expiresAt = new Date();
+    expiresAt.setMinutes(expiresAt.getMinutes() + (idleMinutes > 0 ? idleMinutes : 480));
+
+    const headers = request?.headers;
+    // Behind a proxy the client IP is the first entry in x-forwarded-for.
+    const forwarded = headers?.get('x-forwarded-for');
+    const ipAddress =
+      forwarded?.split(',')[0]?.trim() || headers?.get('x-real-ip') || null;
+
+    await prisma.userSession.create({
+      data: {
+        staffId,
+        token: randomBytes(32).toString('hex'),
+        ipAddress,
+        userAgent: headers?.get('user-agent') ?? null,
+        expiresAt,
+      },
+    });
+  } catch (error) {
+    console.error('Failed to record user session:', error);
+  }
+}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
@@ -13,7 +46,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
         if (!credentials?.email || !credentials?.password) {
           return null;
         }
@@ -111,10 +144,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             failedLoginAttempts: failedAttempts,
           };
 
-          // Lock account after 5 failed attempts for 30 minutes
-          if (failedAttempts >= 5) {
+          // Lock the account once the configured attempt ceiling is reached.
+          const [maxAttempts, lockoutMinutes] = await Promise.all([
+            getConfigNumber('security.maxFailedLogins'),
+            getConfigNumber('security.lockoutMinutes'),
+          ]);
+          const attemptCeiling = maxAttempts > 0 ? maxAttempts : 5;
+
+          if (failedAttempts >= attemptCeiling) {
             const lockUntil = new Date();
-            lockUntil.setMinutes(lockUntil.getMinutes() + 30);
+            lockUntil.setMinutes(lockUntil.getMinutes() + (lockoutMinutes > 0 ? lockoutMinutes : 30));
             updateData.lockedUntil = lockUntil;
           }
 
@@ -133,7 +172,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               module: 'AUTH',
               entityType: 'STAFF',
               entityId: staff.id,
-              description: `Failed login attempt for ${staff.email} (attempt ${failedAttempts}${failedAttempts >= 5 ? ' - account locked' : ''})`,
+              description: `Failed login attempt for ${staff.email} (attempt ${failedAttempts}${updateData.lockedUntil ? ' - account locked' : ''})`,
             },
           });
 
@@ -163,6 +202,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             description: `Staff ${staff.firstName} ${staff.lastName} logged in`,
           },
         });
+
+        // Track the session so administrators can review and revoke access.
+        await recordStaffSession(staff.id, request as Request | undefined);
 
         const permissions = staff.role.permissions.map(
           (rp) => rp.permission.code

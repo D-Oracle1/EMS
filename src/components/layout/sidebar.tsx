@@ -7,6 +7,8 @@ import {
   LayoutDashboard, Users, Landmark, PiggyBank, Wallet, BookOpen,
   BarChart3, UserCog, Clock, CalendarOff, Star, ClipboardCheck,
   FileText, Shield, Settings, Bell, ChevronLeft, ChevronRight, X, UserCircle,
+  Briefcase, GraduationCap, Laptop, Megaphone, Network, ArrowRightLeft,
+  ClipboardList, Receipt, ChevronDown, HeartHandshake,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { SessionUser } from '@/types';
@@ -19,6 +21,8 @@ interface NavItem {
   permission?: string;
   permissions?: string[];
   color: string;
+  /** When present the item renders as a collapsible group rather than a link. */
+  children?: NavItem[];
 }
 
 const navItems: NavItem[] = [
@@ -30,11 +34,35 @@ const navItems: NavItem[] = [
   { label: 'Verification',   href: '/verification',   icon: ClipboardCheck,  color: 'yellow',  permissions: ['LOANS:VERIFY', 'VERIFICATION:READ', 'VERIFICATION:PROCESS'] },
   { label: 'Accounting',     href: '/accounting',     icon: BookOpen,        color: 'sky',     permissions: ['ACCOUNTS:COA_MANAGE', 'ACCOUNTS:JOURNAL_CREATE', 'ACCOUNTS:REPORTS_VIEW'] },
   { label: 'Reports',        href: '/reports',        icon: BarChart3,       color: 'pink',    permission: 'ACCOUNTS:REPORTS_VIEW' },
-  { label: 'My Profile',     href: '/hr/my-profile',  icon: UserCircle,      color: 'violet' },
-  { label: 'Staff',          href: '/hr/staff',       icon: UserCog,         color: 'indigo',  permission: 'HR:STAFF_READ' },
-  { label: 'Attendance',     href: '/hr/attendance',  icon: Clock,           color: 'teal' },
-  { label: 'Leave',          href: '/hr/leave',       icon: CalendarOff,     color: 'amber' },
-  { label: 'Performance',    href: '/hr/performance', icon: Star,            color: 'gold',    permission: 'HR:PERFORMANCE_MANAGE' },
+
+  // ── Human Resources ──────────────────────────────────────────────────────
+  // A world of its own, but still inside the system: everything HR hangs off
+  // this one group so the top-level nav stays readable as the module grows.
+  {
+    label: 'Human Resources',
+    href: '/hr',
+    icon: HeartHandshake,
+    color: 'violet',
+    children: [
+      { label: 'HR Overview',    href: '/hr',                icon: BarChart3,      color: 'violet' },
+      { label: 'My Profile',     href: '/hr/my-profile',     icon: UserCircle,     color: 'violet' },
+      { label: 'My Payslips',    href: '/hr/my-payslips',    icon: Receipt,        color: 'emerald' },
+      { label: 'People',         href: '/hr/staff',          icon: UserCog,        color: 'indigo',  permission: 'HR:STAFF_READ' },
+      { label: 'Attendance',     href: '/hr/attendance',     icon: Clock,          color: 'teal' },
+      { label: 'Leave',          href: '/hr/leave',          icon: CalendarOff,    color: 'amber' },
+      { label: 'Payroll',        href: '/hr/payroll',        icon: Wallet,         color: 'emerald', permissions: ['HR:PAYROLL_READ', 'HR:PAYROLL_MANAGE', 'HR:PAYROLL_APPROVE'] },
+      { label: 'Recruitment',    href: '/hr/recruitment',    icon: Briefcase,      color: 'cyan',    permission: 'HR:RECRUITMENT_MANAGE' },
+      { label: 'Onboarding',     href: '/hr/onboarding',     icon: ClipboardList,  color: 'sky',     permissions: ['HR:STAFF_READ', 'HR:STAFF_UPDATE'] },
+      { label: 'Movements',      href: '/hr/lifecycle',      icon: ArrowRightLeft, color: 'orange',  permissions: ['HR:STAFF_READ', 'HR:STAFF_UPDATE'] },
+      { label: 'Performance',    href: '/hr/performance',    icon: Star,           color: 'gold',    permission: 'HR:PERFORMANCE_MANAGE' },
+      { label: 'Learning',       href: '/hr/training',       icon: GraduationCap,  color: 'purple',  permissions: ['HR:TRAINING_MANAGE', 'HR:STAFF_READ'] },
+      { label: 'Assets',         href: '/hr/assets',         icon: Laptop,         color: 'slate',   permissions: ['HR:ASSET_MANAGE', 'HR:STAFF_READ'] },
+      { label: 'Announcements',  href: '/hr/announcements',  icon: Megaphone,      color: 'fuchsia' },
+      { label: 'Org Chart',      href: '/hr/org-chart',      icon: Network,        color: 'blue',    permission: 'HR:STAFF_READ' },
+      { label: 'HR Settings',    href: '/hr/settings',       icon: Settings,       color: 'gray',    permissions: ['HR:CONFIG_MANAGE', 'SYSTEM:CONFIG_MANAGE'] },
+    ],
+  },
+
   { label: 'Documents',      href: '/documents',      icon: FileText,        color: 'rose',    permission: 'DOCUMENTS:READ' },
   { label: 'Notifications',  href: '/notifications',  icon: Bell,            color: 'fuchsia' },
   { label: 'Audit Logs',     href: '/audit-logs',     icon: Shield,          color: 'slate',   permission: 'AUDIT:READ' },
@@ -72,10 +100,19 @@ export function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
   const { data: session } = useSession();
   const user = session?.user as SessionUser | undefined;
   const [collapsed, setCollapsed] = useState(false);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     onClose?.();
   }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Open the group containing the current route so the active item is visible.
+  useEffect(() => {
+    const active = navItems.find(
+      (item) => item.children && pathname.startsWith(item.href)
+    );
+    if (active) setOpenGroups((prev) => ({ ...prev, [active.href]: true }));
+  }, [pathname]);
 
   if (!user) return null;
 
@@ -86,7 +123,14 @@ export function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
     return false;
   };
 
-  const filteredNav = navItems.filter(hasAccess);
+  // A group survives filtering when at least one of its children does.
+  const filteredNav = navItems
+    .map((item) =>
+      item.children
+        ? { ...item, children: item.children.filter(hasAccess) }
+        : item
+    )
+    .filter((item) => (item.children ? item.children.length > 0 : hasAccess(item)));
 
   const sidebarContent = (
     <>
@@ -126,9 +170,96 @@ export function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
       <nav className="flex-1 overflow-y-auto py-3 px-2">
         <ul className="space-y-0.5">
           {filteredNav.map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
             const Icon = item.icon;
             const colors = colorConfig[item.color] ?? colorConfig.blue;
+            const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+
+            // ── Collapsible group ──
+            if (item.children) {
+              const isOpen = openGroups[item.href] ?? false;
+
+              // When the rail is collapsed there is no room for a sub-list, so
+              // the group behaves as a plain link to its landing page.
+              if (collapsed) {
+                return (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      className={cn(
+                        'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 border-l-2',
+                        isActive
+                          ? `${colors.activeBg} ${colors.activeBorder} text-white shadow-sm`
+                          : `border-transparent text-slate-400 hover:text-white ${colors.hoverBg}`
+                      )}
+                      title={item.label}
+                    >
+                      <Icon className={cn('h-5 w-5 shrink-0', colors.icon)} />
+                    </Link>
+                  </li>
+                );
+              }
+
+              return (
+                <li key={item.href}>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setOpenGroups((prev) => ({ ...prev, [item.href]: !isOpen }))
+                    }
+                    aria-expanded={isOpen}
+                    className={cn(
+                      'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 border-l-2',
+                      isActive
+                        ? `${colors.activeBg} ${colors.activeBorder} text-white shadow-sm`
+                        : `border-transparent text-slate-400 hover:text-white ${colors.hoverBg}`
+                    )}
+                  >
+                    <Icon className={cn('h-5 w-5 shrink-0', colors.icon)} />
+                    <span className="flex-1 text-left">{item.label}</span>
+                    <ChevronDown
+                      className={cn(
+                        'h-4 w-4 shrink-0 transition-transform duration-200',
+                        isOpen && 'rotate-180'
+                      )}
+                    />
+                  </button>
+
+                  {isOpen && (
+                    <ul className="mt-0.5 space-y-0.5 border-l border-white/10 pl-3 ml-4">
+                      {item.children.map((child) => {
+                        const ChildIcon = child.icon;
+                        const childColors = colorConfig[child.color] ?? colorConfig.blue;
+                        // Exact match for the group landing page, prefix match otherwise,
+                        // so /hr does not light up while sitting on /hr/payroll.
+                        const childActive =
+                          child.href === item.href
+                            ? pathname === child.href
+                            : pathname === child.href || pathname.startsWith(child.href + '/');
+
+                        return (
+                          <li key={child.href}>
+                            <Link
+                              href={child.href}
+                              className={cn(
+                                'flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition-all duration-200 border-l-2',
+                                childActive
+                                  ? `${childColors.activeBg} ${childColors.activeBorder} text-white`
+                                  : `border-transparent text-slate-400 hover:text-white ${childColors.hoverBg}`
+                              )}
+                            >
+                              <ChildIcon className={cn('h-4 w-4 shrink-0', childColors.icon)} />
+                              <span>{child.label}</span>
+                            </Link>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </li>
+              );
+            }
+
+            // ── Plain link ──
             return (
               <li key={item.href}>
                 <Link
@@ -141,7 +272,7 @@ export function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
                   )}
                   title={collapsed ? item.label : undefined}
                 >
-                  <Icon className={cn('h-4.5 w-4.5 h-5 w-5 shrink-0', colors.icon)} />
+                  <Icon className={cn('h-5 w-5 shrink-0', colors.icon)} />
                   {!collapsed && <span>{item.label}</span>}
                 </Link>
               </li>

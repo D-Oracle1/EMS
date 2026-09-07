@@ -17,34 +17,43 @@ datasource db {
 
 // System Configuration
 model SystemConfig {
-  id        String   @id @default(uuid())
-  key       String   @unique
-  value     String
-  category  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       String
+  category    String
+  label       String?
+  description String?
+  dataType    String   @default("STRING") // STRING, NUMBER, BOOLEAN, TIME, JSON
+  isEditable  Boolean  @default(true)
+  isSecret    Boolean  @default(false)
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([category])
 }
 
 // Branches/Locations
 model Branch {
-  id          String   @id @default(uuid())
-  code        String   @unique
-  name        String
-  address     String?
-  phone       String?
-  email       String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(uuid())
+  code      String   @unique
+  name      String
+  address   String?
+  phone     String?
+  email     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  staff       Staff[]
-  customers   Customer[]
-  loans       Loan[]
-  savings     SavingsAccount[]
-  fixedDeposits FixedDeposit[]
+  staff          Staff[]
+  customers      Customer[]
+  loans          Loan[]
+  savings        SavingsAccount[]
+  fixedDeposits  FixedDeposit[]
   journalEntries JournalEntry[]
+  jobOpenings    JobOpening[]
+  assets         CompanyAsset[]
+  shifts         WorkShift[]
 }
 
 // ============================================================================
@@ -61,32 +70,34 @@ model Department {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  staff       Staff[]
-  journalEntries JournalEntry[]
+  staff               Staff[]
+  journalEntries      JournalEntry[]
+  jobOpenings         JobOpening[]
+  onboardingTemplates OnboardingTemplate[]
 }
 
 // Roles with hierarchical structure
 model Role {
-  id              String   @id @default(uuid())
-  code            String   @unique
-  name            String
-  description     String?
-  level           Int      @default(0) // Higher = more authority
-  approvalLimit   Decimal? @db.Decimal(18, 2) // Financial approval limit
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id            String   @id @default(uuid())
+  code          String   @unique
+  name          String
+  description   String?
+  level         Int      @default(0) // Higher = more authority
+  approvalLimit Decimal? @db.Decimal(18, 2) // Financial approval limit
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  permissions     RolePermission[]
-  staff           Staff[]
+  permissions RolePermission[]
+  staff       Staff[]
 }
 
 // Granular Permissions
 model Permission {
   id          String   @id @default(uuid())
   code        String   @unique
-  module      String   // HR, LOANS, SAVINGS, ACCOUNTS, etc.
-  action      String   // CREATE, READ, UPDATE, DELETE, APPROVE, etc.
+  module      String // HR, LOANS, SAVINGS, ACCOUNTS, etc.
+  action      String // CREATE, READ, UPDATE, DELETE, APPROVE, etc.
   description String?
   createdAt   DateTime @default(now())
 
@@ -103,8 +114,8 @@ model RolePermission {
   permissionId String
   createdAt    DateTime @default(now())
 
-  role         Role       @relation(fields: [roleId], references: [id])
-  permission   Permission @relation(fields: [permissionId], references: [id])
+  role       Role       @relation(fields: [roleId], references: [id])
+  permission Permission @relation(fields: [permissionId], references: [id])
 
   @@unique([roleId, permissionId])
 }
@@ -123,68 +134,123 @@ model Staff {
   gender            String?
   address           String?
   emergencyContact  String?
+  emergencyRelation String?
   nationalId        String?
   profilePhoto      String?
 
-  departmentId      String
-  roleId            String
-  branchId          String?
-  supervisorId      String?
+  // Extended HR profile
+  maritalStatus String?
+  nationality   String? @default("Nigerian")
+  stateOfOrigin String?
+  bloodGroup    String?
+  religion      String?
 
-  hireDate          DateTime  @default(now())
-  terminationDate   DateTime?
-  status            StaffStatus @default(ACTIVE)
+  jobTitle         String?
+  employmentType   EmploymentType @default(FULL_TIME)
+  workLocation     String?
+  gradeId          String?
+  probationEndDate DateTime?
+  confirmationDate DateTime?
+  contractEndDate  DateTime?
 
-  lastLoginAt       DateTime?
-  failedLoginAttempts Int     @default(0)
-  lockedUntil       DateTime?
-  passwordChangedAt DateTime?
-  mustChangePassword Boolean  @default(true)
+  // Payroll identifiers
+  bankName          String?
+  bankAccountNumber String?
+  bankAccountName   String?
+  pensionPin        String?
+  pensionProvider   String?
+  taxId             String?
+  nhfNumber         String?
+  nhisNumber        String?
+
+  departmentId String
+  roleId       String
+  branchId     String?
+  supervisorId String?
+
+  hireDate        DateTime    @default(now())
+  terminationDate DateTime?
+  status          StaffStatus @default(ACTIVE)
+
+  lastLoginAt         DateTime?
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+  passwordChangedAt   DateTime?
+  mustChangePassword  Boolean   @default(true)
 
   // Soft delete
-  isDeleted         Boolean   @default(false)
-  deletedAt         DateTime?
-  deletedBy         String?
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?
 
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  createdBy         String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
 
-  department        Department @relation(fields: [departmentId], references: [id])
-  role              Role       @relation(fields: [roleId], references: [id])
-  branch            Branch?    @relation(fields: [branchId], references: [id])
-  supervisor        Staff?     @relation("StaffSupervisor", fields: [supervisorId], references: [id])
-  subordinates      Staff[]    @relation("StaffSupervisor")
+  department   Department @relation(fields: [departmentId], references: [id])
+  role         Role       @relation(fields: [roleId], references: [id])
+  branch       Branch?    @relation(fields: [branchId], references: [id])
+  supervisor   Staff?     @relation("StaffSupervisor", fields: [supervisorId], references: [id])
+  subordinates Staff[]    @relation("StaffSupervisor")
 
   // Activity Relations
-  auditLogs         AuditLog[]
-  disciplinaryActions    DisciplinaryAction[] @relation("DisciplinedStaff")
-  disciplinaryIssued     DisciplinaryAction[] @relation("DisciplinaryIssuer")
-  createdLoans      Loan[]     @relation("LoanCreatedBy")
-  assignedLoansForVerification Loan[] @relation("LoanVerificationOfficer")
-  verifiedLoans     LoanVerification[] @relation("VerificationOfficer")
-  approvedLoans     LoanApproval[]
-  disbursedLoans    LoanDisbursement[]
-  savingsTransactions SavingsTransaction[]
-  fixedDepositCreated FixedDeposit[]
-  journalEntriesCreated JournalEntry[] @relation("JournalCreatedBy")
-  journalEntriesApproved JournalEntry[] @relation("JournalApprovedBy")
-  documentsUploaded Document[]
-  attendanceRecords Attendance[]
-  performanceReviews PerformanceReview[] @relation("ReviewedStaff")
-  performanceReviewsConducted PerformanceReview[] @relation("ReviewerStaff")
-  verificationTasks VerificationTask[] @relation("VerificationAssigned")
-  verificationTasksCreated VerificationTask[] @relation("VerificationCreated")
-  sessions          UserSession[]
-  leaveRequests     LeaveRequest[] @relation("LeaveRequestStaff")
-  leaveApprovals    LeaveRequest[] @relation("LeaveRequestApprover")
-  restructuringsRequested LoanRestructuring[] @relation("RestructuringRequestedBy")
-  restructuringsApproved  LoanRestructuring[] @relation("RestructuringApprovedBy")
-  withdrawalRequests      WithdrawalRequest[] @relation("WithdrawalRequested")
-  withdrawalApprovals     WithdrawalRequest[] @relation("WithdrawalApproved")
-  terminationRequests     SavingsTermination[] @relation("TerminationRequested")
-  terminationApprovals    SavingsTermination[] @relation("TerminationApproved")
+  auditLogs                    AuditLog[]
+  disciplinaryActions          DisciplinaryAction[] @relation("DisciplinedStaff")
+  disciplinaryIssued           DisciplinaryAction[] @relation("DisciplinaryIssuer")
+  createdLoans                 Loan[]               @relation("LoanCreatedBy")
+  assignedLoansForVerification Loan[]               @relation("LoanVerificationOfficer")
+  verifiedLoans                LoanVerification[]   @relation("VerificationOfficer")
+  approvedLoans                LoanApproval[]
+  disbursedLoans               LoanDisbursement[]
+  savingsTransactions          SavingsTransaction[]
+  fixedDepositCreated          FixedDeposit[]
+  journalEntriesCreated        JournalEntry[]       @relation("JournalCreatedBy")
+  journalEntriesApproved       JournalEntry[]       @relation("JournalApprovedBy")
+  documentsUploaded            Document[]
+  attendanceRecords            Attendance[]
+  performanceReviews           PerformanceReview[]  @relation("ReviewedStaff")
+  performanceReviewsConducted  PerformanceReview[]  @relation("ReviewerStaff")
+  verificationTasks            VerificationTask[]   @relation("VerificationAssigned")
+  verificationTasksCreated     VerificationTask[]   @relation("VerificationCreated")
+  sessions                     UserSession[]
+  leaveRequests                LeaveRequest[]       @relation("LeaveRequestStaff")
+  leaveApprovals               LeaveRequest[]       @relation("LeaveRequestApprover")
+  restructuringsRequested      LoanRestructuring[]  @relation("RestructuringRequestedBy")
+  restructuringsApproved       LoanRestructuring[]  @relation("RestructuringApprovedBy")
+  withdrawalRequests           WithdrawalRequest[]  @relation("WithdrawalRequested")
+  withdrawalApprovals          WithdrawalRequest[]  @relation("WithdrawalApproved")
+  terminationRequests          SavingsTermination[] @relation("TerminationRequested")
+  terminationApprovals         SavingsTermination[] @relation("TerminationApproved")
 
+  // HR module relations
+  grade                   SalaryGrade?         @relation(fields: [gradeId], references: [id])
+  leaveBalances           LeaveBalance[]
+  compensations           StaffCompensation[]  @relation("CompensationStaff")
+  compensationsCreated    StaffCompensation[]  @relation("CompensationCreatedBy")
+  payslips                Payslip[]
+  payrollProcessed        PayrollPeriod[]      @relation("PayrollProcessedBy")
+  payrollApproved         PayrollPeriod[]      @relation("PayrollApprovedBy")
+  jobOpeningsManaged      JobOpening[]         @relation("HiringManager")
+  interviewsConducted     Interview[]          @relation("Interviewer")
+  hiredFromApplication    JobApplication[]     @relation("HiredStaff")
+  onboardings             StaffOnboarding[]    @relation("OnboardingStaff")
+  onboardingTasksAssigned OnboardingTask[]     @relation("OnboardingAssignee")
+  onboardingTasksDone     OnboardingTask[]     @relation("OnboardingCompletedBy")
+  trainingEnrollments     TrainingEnrollment[]
+  trainingsFacilitated    TrainingProgram[]    @relation("TrainingFacilitator")
+  assetAssignments        AssetAssignment[]    @relation("AssetHolder")
+  assetsIssued            AssetAssignment[]    @relation("AssetIssuer")
+  announcementsAuthored   Announcement[]       @relation("AnnouncementAuthor")
+  announcementAcks        AnnouncementAck[]
+  movements               StaffMovement[]      @relation("MovementStaff")
+  movementsCreated        StaffMovement[]      @relation("MovementCreatedBy")
+  exitRecord              StaffExit?           @relation("ExitStaff")
+  exitsProcessed          StaffExit[]          @relation("ExitProcessedBy")
+  goals                   StaffGoal[]          @relation("GoalStaff")
+  goalsCreated            StaffGoal[]          @relation("GoalCreatedBy")
+  shiftAssignments        ShiftAssignment[]
+
+  @@index([gradeId])
   @@index([departmentId])
   @@index([roleId])
   @@index([branchId])
@@ -199,18 +265,27 @@ enum StaffStatus {
   ON_LEAVE
 }
 
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERN
+  NYSC
+  CONSULTANT
+}
+
 // User Sessions for security
 model UserSession {
-  id          String   @id @default(uuid())
-  staffId     String
-  token       String   @unique
-  ipAddress   String?
-  userAgent   String?
-  expiresAt   DateTime
-  createdAt   DateTime @default(now())
-  revokedAt   DateTime?
+  id        String    @id @default(uuid())
+  staffId   String
+  token     String    @unique
+  ipAddress String?
+  userAgent String?
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
 
-  staff       Staff    @relation(fields: [staffId], references: [id])
+  staff Staff @relation(fields: [staffId], references: [id])
 
   @@index([staffId])
   @@index([expiresAt])
@@ -222,19 +297,24 @@ model UserSession {
 
 // Attendance Records
 model Attendance {
-  id          String   @id @default(uuid())
-  staffId     String
-  date        DateTime @db.Date
-  clockIn     DateTime?
-  clockOut    DateTime?
-  status      AttendanceStatus @default(PRESENT)
-  notes       String?
-  ipAddress   String?
-  location    String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String           @id @default(uuid())
+  staffId         String
+  date            DateTime         @db.Date
+  clockIn         DateTime?
+  clockOut        DateTime?
+  status          AttendanceStatus @default(PRESENT)
+  notes           String?
+  ipAddress       String?
+  location        String?
+  shiftId         String?
+  minutesLate     Int              @default(0)
+  overtimeMinutes Int              @default(0)
+  workedMinutes   Int              @default(0)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 
-  staff       Staff    @relation(fields: [staffId], references: [id])
+  staff Staff      @relation(fields: [staffId], references: [id])
+  shift WorkShift? @relation(fields: [shiftId], references: [id])
 
   @@unique([staffId, date])
   @@index([date])
@@ -251,33 +331,33 @@ enum AttendanceStatus {
 
 // Performance Reviews
 model PerformanceReview {
-  id              String   @id @default(uuid())
-  staffId         String
-  reviewerId      String
-  reviewPeriod    String   // e.g., "Q1 2024", "Annual 2024"
-  reviewDate      DateTime
+  id           String   @id @default(uuid())
+  staffId      String
+  reviewerId   String
+  reviewPeriod String // e.g., "Q1 2024", "Annual 2024"
+  reviewDate   DateTime
 
   // Metrics (1-5 scale)
-  productivity    Int
-  quality         Int
-  attendance      Int
-  teamwork        Int
-  initiative      Int
+  productivity Int
+  quality      Int
+  attendance   Int
+  teamwork     Int
+  initiative   Int
 
-  overallRating   Decimal  @db.Decimal(3, 2)
-  strengths       String?
+  overallRating       Decimal @db.Decimal(3, 2)
+  strengths           String?
   areasForImprovement String?
-  goals           String?
-  comments        String?
+  goals               String?
+  comments            String?
 
-  status          ReviewStatus @default(DRAFT)
-  acknowledgedAt  DateTime?
+  status         ReviewStatus @default(DRAFT)
+  acknowledgedAt DateTime?
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  staff           Staff    @relation("ReviewedStaff", fields: [staffId], references: [id])
-  reviewer        Staff    @relation("ReviewerStaff", fields: [reviewerId], references: [id])
+  staff    Staff @relation("ReviewedStaff", fields: [staffId], references: [id])
+  reviewer Staff @relation("ReviewerStaff", fields: [reviewerId], references: [id])
 
   @@index([staffId])
   @@index([reviewPeriod])
@@ -291,27 +371,33 @@ enum ReviewStatus {
 
 // Leave Requests
 model LeaveRequest {
-  id              String   @id @default(uuid())
-  staffId         String
-  leaveType       String   // ANNUAL, SICK, MATERNITY, PATERNITY, COMPASSIONATE, UNPAID
-  startDate       DateTime @db.Date
-  endDate         DateTime @db.Date
-  days            Int
-  reason          String
-  status          LeaveStatus @default(PENDING)
+  id                 String      @id @default(uuid())
+  staffId            String
+  leaveType          String // ANNUAL, SICK, MATERNITY, PATERNITY, COMPASSIONATE, UNPAID
+  leaveTypeId        String? // FK to configurable LeaveType (legacy rows may be null)
+  handoverToId       String?
+  contactDuringLeave String?
+  attachmentUrl      String?
+  startDate          DateTime    @db.Date
+  endDate            DateTime    @db.Date
+  days               Int
+  reason             String
+  status             LeaveStatus @default(PENDING)
 
-  approverId      String?
-  approvedAt      DateTime?
+  approverId       String?
+  approvedAt       DateTime?
   approverComments String?
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  staff           Staff    @relation("LeaveRequestStaff", fields: [staffId], references: [id])
-  approver        Staff?   @relation("LeaveRequestApprover", fields: [approverId], references: [id])
+  staff        Staff      @relation("LeaveRequestStaff", fields: [staffId], references: [id])
+  approver     Staff?     @relation("LeaveRequestApprover", fields: [approverId], references: [id])
+  leaveTypeRef LeaveType? @relation(fields: [leaveTypeId], references: [id])
 
   @@index([staffId])
   @@index([status])
+  @@index([leaveTypeId])
   @@index([startDate, endDate])
 }
 
@@ -324,33 +410,33 @@ enum LeaveStatus {
 
 // Disciplinary Actions
 model DisciplinaryAction {
-  id              String   @id @default(uuid())
-  staffId         String
-  issuedById      String
+  id         String @id @default(uuid())
+  staffId    String
+  issuedById String
 
-  type            String   // WARNING, SUSPENSION, QUERY, TERMINATION
-  severity        String   // MINOR, MAJOR, CRITICAL
+  type     String // WARNING, SUSPENSION, QUERY, TERMINATION
+  severity String // MINOR, MAJOR, CRITICAL
 
-  description     String
-  incidentDate    DateTime
-  actionDate      DateTime @default(now())
+  description  String
+  incidentDate DateTime
+  actionDate   DateTime @default(now())
 
-  response        String?
-  respondedAt     DateTime?
+  response    String?
+  respondedAt DateTime?
 
-  resolution      String?
-  resolvedAt      DateTime?
-  resolvedById    String?
+  resolution   String?
+  resolvedAt   DateTime?
+  resolvedById String?
 
-  status          DisciplinaryStatus @default(OPEN)
+  status DisciplinaryStatus @default(OPEN)
 
-  attachments     String[] // Document IDs
+  attachments String[] // Document IDs
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  staff           Staff    @relation("DisciplinedStaff", fields: [staffId], references: [id])
-  issuedBy        Staff    @relation("DisciplinaryIssuer", fields: [issuedById], references: [id])
+  staff    Staff @relation("DisciplinedStaff", fields: [staffId], references: [id])
+  issuedBy Staff @relation("DisciplinaryIssuer", fields: [issuedById], references: [id])
 
   @@index([staffId])
   @@index([status])
@@ -368,78 +454,78 @@ enum DisciplinaryStatus {
 // ============================================================================
 
 model Customer {
-  id                String   @id @default(uuid())
-  customerNumber    String   @unique
+  id             String @id @default(uuid())
+  customerNumber String @unique
 
   // Personal Information
-  customerType      CustomerType @default(INDIVIDUAL)
-  title             String?
-  firstName         String
-  lastName          String
-  middleName        String?
-  dateOfBirth       DateTime?
-  gender            String?
-  maritalStatus     String?
+  customerType  CustomerType @default(INDIVIDUAL)
+  title         String?
+  firstName     String
+  lastName      String
+  middleName    String?
+  dateOfBirth   DateTime?
+  gender        String?
+  maritalStatus String?
 
   // Contact
-  email             String?
-  phone             String
-  alternatePhone    String?
-  address           String
-  city              String?
-  state             String?
-  country           String   @default("Nigeria")
+  email          String?
+  phone          String
+  alternatePhone String?
+  address        String
+  city           String?
+  state          String?
+  country        String  @default("Nigeria")
 
   // Identification
-  nationalId        String?
-  bvn               String?  // Bank Verification Number
-  passportNumber    String?
-  driversLicense    String?
+  nationalId     String?
+  bvn            String? // Bank Verification Number
+  passportNumber String?
+  driversLicense String?
 
   // Employment
-  occupation        String?
-  employer          String?
-  employerAddress   String?
-  monthlyIncome     Decimal? @db.Decimal(18, 2)
+  occupation      String?
+  employer        String?
+  employerAddress String?
+  monthlyIncome   Decimal? @db.Decimal(18, 2)
 
   // Next of Kin
-  nokName           String?
-  nokRelationship   String?
-  nokPhone          String?
-  nokAddress        String?
+  nokName         String?
+  nokRelationship String?
+  nokPhone        String?
+  nokAddress      String?
 
   // For Corporate Customers
-  companyName       String?
-  rcNumber          String?  // Registration Number
-  taxId             String?
+  companyName String?
+  rcNumber    String? // Registration Number
+  taxId       String?
 
-  branchId          String?
-  profilePhoto      String?
-  status            CustomerStatus @default(ACTIVE)
-  riskRating        RiskRating @default(MEDIUM)
+  branchId     String?
+  profilePhoto String?
+  status       CustomerStatus @default(ACTIVE)
+  riskRating   RiskRating     @default(MEDIUM)
 
-  kycVerified       Boolean  @default(false)
-  kycVerifiedAt     DateTime?
-  kycVerifiedBy     String?
+  kycVerified   Boolean   @default(false)
+  kycVerifiedAt DateTime?
+  kycVerifiedBy String?
 
   // Customer portal login
-  passwordHash          String?
-  portalEnabled         Boolean  @default(false)
-  mustResetPassword     Boolean  @default(true)
-  portalLastLoginAt     DateTime?
-  portalFailedAttempts  Int      @default(0)
-  portalLockedUntil     DateTime?
+  passwordHash         String?
+  portalEnabled        Boolean   @default(false)
+  mustResetPassword    Boolean   @default(true)
+  portalLastLoginAt    DateTime?
+  portalFailedAttempts Int       @default(0)
+  portalLockedUntil    DateTime?
 
   // Soft delete
-  isDeleted         Boolean  @default(false)
-  deletedAt         DateTime?
-  deletedBy         String?
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?
 
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  createdBy         String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
 
-  branch            Branch?  @relation(fields: [branchId], references: [id])
+  branch Branch? @relation(fields: [branchId], references: [id])
 
   loans             Loan[]
   savingsAccounts   SavingsAccount[]
@@ -482,34 +568,34 @@ enum RiskRating {
 
 // Loan Products Configuration
 model LoanProduct {
-  id                String   @id @default(uuid())
-  code              String   @unique
-  name              String
-  description       String?
+  id          String  @id @default(uuid())
+  code        String  @unique
+  name        String
+  description String?
 
-  minAmount         Decimal  @db.Decimal(18, 2)
-  maxAmount         Decimal  @db.Decimal(18, 2)
-  minTenure         Int      // In months
-  maxTenure         Int
+  minAmount Decimal @db.Decimal(18, 2)
+  maxAmount Decimal @db.Decimal(18, 2)
+  minTenure Int // In months
+  maxTenure Int
 
-  interestRate      Decimal  @db.Decimal(5, 2) // Annual rate
-  interestType      InterestType @default(FLAT)
+  interestRate Decimal      @db.Decimal(5, 2) // Annual rate
+  interestType InterestType @default(FLAT)
 
-  processingFee     Decimal  @db.Decimal(5, 2) // Percentage
-  insuranceFee      Decimal? @db.Decimal(5, 2)
-  lateFee           Decimal? @db.Decimal(18, 2)
+  processingFee Decimal  @db.Decimal(5, 2) // Percentage
+  insuranceFee  Decimal? @db.Decimal(5, 2)
+  lateFee       Decimal? @db.Decimal(18, 2)
 
-  gracePeriodDays   Int      @default(0)
-  penaltyRate       Decimal? @db.Decimal(5, 2) // Per day
+  gracePeriodDays Int      @default(0)
+  penaltyRate     Decimal? @db.Decimal(5, 2) // Per day
 
   requiresCollateral Boolean @default(false)
   requiresGuarantor  Boolean @default(false)
 
-  isActive          Boolean  @default(true)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  loans             Loan[]
+  loans Loan[]
 
   // Accounting Configuration
   loanReceivableAccountId String?
@@ -525,66 +611,66 @@ enum InterestType {
 
 // Main Loan Table
 model Loan {
-  id                String   @id @default(uuid())
-  loanNumber        String   @unique
+  id         String @id @default(uuid())
+  loanNumber String @unique
 
-  customerId        String
-  productId         String
-  branchId          String?
+  customerId String
+  productId  String
+  branchId   String?
 
   // Loan Terms
-  principalAmount   Decimal  @db.Decimal(18, 2)
-  interestRate      Decimal  @db.Decimal(5, 2)
-  tenure            Int      // Months
+  principalAmount Decimal @db.Decimal(18, 2)
+  interestRate    Decimal @db.Decimal(5, 2)
+  tenure          Int // Months
 
-  processingFee     Decimal  @db.Decimal(18, 2)
-  insuranceFee      Decimal  @db.Decimal(18, 2) @default(0)
-  totalFees         Decimal  @db.Decimal(18, 2)
+  processingFee Decimal @db.Decimal(18, 2)
+  insuranceFee  Decimal @default(0) @db.Decimal(18, 2)
+  totalFees     Decimal @db.Decimal(18, 2)
 
-  totalInterest     Decimal  @db.Decimal(18, 2)
-  totalRepayment    Decimal  @db.Decimal(18, 2)
+  totalInterest  Decimal @db.Decimal(18, 2)
+  totalRepayment Decimal @db.Decimal(18, 2)
 
-  monthlyInstalment Decimal  @db.Decimal(18, 2)
+  monthlyInstalment Decimal @db.Decimal(18, 2)
 
   // Purpose & Details
   purpose           String?
   collateralDetails String?
-  guarantorDetails  String?  // legacy single free-text guarantor (kept for backward compatibility)
+  guarantorDetails  String? // legacy single free-text guarantor (kept for backward compatibility)
 
   // Owing Bypass — set when loan officer creates loan for customer with outstanding debt
-  owingBypass          Boolean  @default(false)
-  owingBypassReason    String?
-  owingBypassLoanIds   String[]
+  owingBypass        Boolean  @default(false)
+  owingBypassReason  String?
+  owingBypassLoanIds String[]
 
   // Workflow Status
-  status            LoanStatus @default(DRAFT)
-  rejectionReason   String?
+  status          LoanStatus @default(DRAFT)
+  rejectionReason String?
 
   // Soft delete
-  isDeleted         Boolean  @default(false)
-  deletedAt         DateTime?
-  deletedBy         String?
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?
 
   // Dates
-  applicationDate   DateTime @default(now())
-  approvedAt        DateTime?
-  disbursedAt       DateTime?
+  applicationDate    DateTime  @default(now())
+  approvedAt         DateTime?
+  disbursedAt        DateTime?
   firstRepaymentDate DateTime?
-  maturityDate      DateTime?
-  closedAt          DateTime?
+  maturityDate       DateTime?
+  closedAt           DateTime?
 
   // Tracking
-  createdById       String
+  createdById           String
   verificationOfficerId String?
 
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  customer          Customer @relation(fields: [customerId], references: [id])
-  product           LoanProduct @relation(fields: [productId], references: [id])
-  branch            Branch?  @relation(fields: [branchId], references: [id])
-  createdBy         Staff    @relation("LoanCreatedBy", fields: [createdById], references: [id])
-  verificationOfficer Staff? @relation("LoanVerificationOfficer", fields: [verificationOfficerId], references: [id])
+  customer            Customer    @relation(fields: [customerId], references: [id])
+  product             LoanProduct @relation(fields: [productId], references: [id])
+  branch              Branch?     @relation(fields: [branchId], references: [id])
+  createdBy           Staff       @relation("LoanCreatedBy", fields: [createdById], references: [id])
+  verificationOfficer Staff?      @relation("LoanVerificationOfficer", fields: [verificationOfficerId], references: [id])
 
   verifications     LoanVerification[]
   approvals         LoanApproval[]
@@ -625,23 +711,23 @@ enum LoanStatus {
 // Loan Guarantors — a loan can have multiple guarantors, each optionally linked
 // to a registered Customer record.
 model Guarantor {
-  id            String   @id @default(uuid())
-  loanId        String
-  customerId    String?  // optional link to a registered customer
+  id         String  @id @default(uuid())
+  loanId     String
+  customerId String? // optional link to a registered customer
 
   // Identity
-  title         String?
-  firstName     String
-  lastName      String
-  middleName    String?
-  relationship  String?  // relationship to the borrower
+  title        String?
+  firstName    String
+  lastName     String
+  middleName   String?
+  relationship String? // relationship to the borrower
 
   // Contact
-  phone         String
-  email         String?
-  address       String?
-  city          String?
-  state         String?
+  phone   String
+  email   String?
+  address String?
+  city    String?
+  state   String?
 
   // Employment & Financial
   occupation    String?
@@ -649,14 +735,14 @@ model Guarantor {
   monthlyIncome Decimal? @db.Decimal(18, 2)
 
   // Identification
-  bvn           String?
-  nationalId    String?
+  bvn        String?
+  nationalId String?
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  loan          Loan      @relation(fields: [loanId], references: [id], onDelete: Cascade)
-  customer      Customer? @relation(fields: [customerId], references: [id])
+  loan     Loan      @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  customer Customer? @relation(fields: [customerId], references: [id])
 
   @@index([loanId])
   @@index([customerId])
@@ -664,45 +750,45 @@ model Guarantor {
 
 // Loan Verification Reports
 model LoanVerification {
-  id                  String   @id @default(uuid())
-  loanId              String
-  officerId           String
+  id        String @id @default(uuid())
+  loanId    String
+  officerId String
 
-  verificationType    VerificationType
+  verificationType VerificationType
 
   // Address Verification
-  addressVerified     Boolean?
-  addressComments     String?
+  addressVerified Boolean?
+  addressComments String?
 
   // Employment Verification
-  employmentVerified  Boolean?
-  employmentComments  String?
+  employmentVerified Boolean?
+  employmentComments String?
 
   // Property Verification (for collateral)
-  propertyExists      Boolean?
-  propertyCondition   String?
-  estimatedValue      Decimal? @db.Decimal(18, 2)
-  propertyComments    String?
+  propertyExists    Boolean?
+  propertyCondition String?
+  estimatedValue    Decimal? @db.Decimal(18, 2)
+  propertyComments  String?
 
   // Risk Assessment
-  riskLevel           RiskRating?
-  recommendation      VerificationRecommendation?
+  riskLevel      RiskRating?
+  recommendation VerificationRecommendation?
 
   // General
-  findings            String?
-  photos              String[] // Array of document IDs
-  documents           String[] // Array of document IDs
-  gpsCoordinates      String?
-  visitedAt           DateTime?
+  findings       String?
+  photos         String[] // Array of document IDs
+  documents      String[] // Array of document IDs
+  gpsCoordinates String?
+  visitedAt      DateTime?
 
-  status              VerificationStatus @default(PENDING)
+  status VerificationStatus @default(PENDING)
 
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-  submittedAt         DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  submittedAt DateTime?
 
-  loan                Loan     @relation(fields: [loanId], references: [id])
-  officer             Staff    @relation("VerificationOfficer", fields: [officerId], references: [id])
+  loan    Loan  @relation(fields: [loanId], references: [id])
+  officer Staff @relation("VerificationOfficer", fields: [officerId], references: [id])
 
   @@index([loanId])
   @@index([officerId])
@@ -733,21 +819,21 @@ enum VerificationRecommendation {
 
 // Loan Approvals (Multi-level)
 model LoanApproval {
-  id            String   @id @default(uuid())
-  loanId        String
-  approverId    String
-  level         Int      // 1 = Manager, 2 = Director, etc.
+  id         String @id @default(uuid())
+  loanId     String
+  approverId String
+  level      Int // 1 = Manager, 2 = Director, etc.
 
-  decision      ApprovalDecision
-  comments      String?
-  conditions    String?
+  decision   ApprovalDecision
+  comments   String?
+  conditions String?
 
   approvedAmount Decimal? @db.Decimal(18, 2) // Can be different from requested
 
-  createdAt     DateTime @default(now())
+  createdAt DateTime @default(now())
 
-  loan          Loan     @relation(fields: [loanId], references: [id])
-  approver      Staff    @relation(fields: [approverId], references: [id])
+  loan     Loan  @relation(fields: [loanId], references: [id])
+  approver Staff @relation(fields: [approverId], references: [id])
 
   @@index([loanId])
   @@index([approverId])
@@ -762,35 +848,35 @@ enum ApprovalDecision {
 
 // Loan Disbursement
 model LoanDisbursement {
-  id                String   @id @default(uuid())
-  loanId            String   @unique
+  id     String @id @default(uuid())
+  loanId String @unique
 
-  disbursedAmount   Decimal  @db.Decimal(18, 2)
-  disbursementMode  DisbursementMode
+  disbursedAmount  Decimal          @db.Decimal(18, 2)
+  disbursementMode DisbursementMode
 
   // Bank Transfer Details
-  bankName          String?
-  accountNumber     String?
-  accountName       String?
+  bankName      String?
+  accountNumber String?
+  accountName   String?
 
   // Cheque Details
-  chequeNumber      String?
+  chequeNumber String?
 
   // Cash Details
-  cashReceiverName  String?
-  cashReceiverIdType String?
+  cashReceiverName     String?
+  cashReceiverIdType   String?
   cashReceiverIdNumber String?
 
-  reference         String?
-  notes             String?
+  reference String?
+  notes     String?
 
-  disbursedById     String
-  disbursedAt       DateTime @default(now())
+  disbursedById String
+  disbursedAt   DateTime @default(now())
 
-  journalEntryId    String?
+  journalEntryId String?
 
-  loan              Loan     @relation(fields: [loanId], references: [id])
-  disbursedBy       Staff    @relation(fields: [disbursedById], references: [id])
+  loan        Loan  @relation(fields: [loanId], references: [id])
+  disbursedBy Staff @relation(fields: [disbursedById], references: [id])
 
   @@index([disbursedAt])
 }
@@ -804,33 +890,33 @@ enum DisbursementMode {
 
 // Loan Repayment Schedule
 model LoanSchedule {
-  id                String   @id @default(uuid())
+  id                String @id @default(uuid())
   loanId            String
   installmentNumber Int
 
-  dueDate           DateTime
-  principalDue      Decimal  @db.Decimal(18, 2)
-  interestDue       Decimal  @db.Decimal(18, 2)
-  feesDue           Decimal  @db.Decimal(18, 2) @default(0)
-  totalDue          Decimal  @db.Decimal(18, 2)
+  dueDate      DateTime
+  principalDue Decimal  @db.Decimal(18, 2)
+  interestDue  Decimal  @db.Decimal(18, 2)
+  feesDue      Decimal  @default(0) @db.Decimal(18, 2)
+  totalDue     Decimal  @db.Decimal(18, 2)
 
-  principalPaid     Decimal  @db.Decimal(18, 2) @default(0)
-  interestPaid      Decimal  @db.Decimal(18, 2) @default(0)
-  feesPaid          Decimal  @db.Decimal(18, 2) @default(0)
-  penaltyPaid       Decimal  @db.Decimal(18, 2) @default(0)
-  totalPaid         Decimal  @db.Decimal(18, 2) @default(0)
+  principalPaid Decimal @default(0) @db.Decimal(18, 2)
+  interestPaid  Decimal @default(0) @db.Decimal(18, 2)
+  feesPaid      Decimal @default(0) @db.Decimal(18, 2)
+  penaltyPaid   Decimal @default(0) @db.Decimal(18, 2)
+  totalPaid     Decimal @default(0) @db.Decimal(18, 2)
 
   outstandingBalance Decimal @db.Decimal(18, 2)
 
-  status            ScheduleStatus @default(PENDING)
-  paidDate          DateTime?
-  restructuringId   String?
+  status          ScheduleStatus @default(PENDING)
+  paidDate        DateTime?
+  restructuringId String?
 
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  loan              Loan     @relation(fields: [loanId], references: [id])
-  repayments        LoanRepayment[]
+  loan       Loan            @relation(fields: [loanId], references: [id])
+  repayments LoanRepayment[]
 
   @@unique([loanId, installmentNumber])
   @@index([dueDate])
@@ -848,31 +934,31 @@ enum ScheduleStatus {
 
 // Loan Repayments
 model LoanRepayment {
-  id              String   @id @default(uuid())
-  loanId          String
-  scheduleId      String?
+  id         String  @id @default(uuid())
+  loanId     String
+  scheduleId String?
 
-  receiptNumber   String   @unique
+  receiptNumber String @unique
 
-  amount          Decimal  @db.Decimal(18, 2)
+  amount           Decimal @db.Decimal(18, 2)
   principalPortion Decimal @db.Decimal(18, 2)
-  interestPortion Decimal  @db.Decimal(18, 2)
-  feesPortion     Decimal  @db.Decimal(18, 2) @default(0)
-  penaltyPortion  Decimal  @db.Decimal(18, 2) @default(0)
+  interestPortion  Decimal @db.Decimal(18, 2)
+  feesPortion      Decimal @default(0) @db.Decimal(18, 2)
+  penaltyPortion   Decimal @default(0) @db.Decimal(18, 2)
 
-  paymentMode     PaymentMode
+  paymentMode      PaymentMode
   paymentReference String?
 
-  collectedById   String
-  collectedAt     DateTime @default(now())
+  collectedById String
+  collectedAt   DateTime @default(now())
 
-  notes           String?
-  journalEntryId  String?
+  notes          String?
+  journalEntryId String?
 
-  createdAt       DateTime @default(now())
+  createdAt DateTime @default(now())
 
-  loan            Loan     @relation(fields: [loanId], references: [id])
-  schedule        LoanSchedule? @relation(fields: [scheduleId], references: [id])
+  loan     Loan          @relation(fields: [loanId], references: [id])
+  schedule LoanSchedule? @relation(fields: [scheduleId], references: [id])
 
   @@index([loanId])
   @@index([receiptNumber])
@@ -890,46 +976,46 @@ enum PaymentMode {
 
 // Loan Restructuring
 model LoanRestructuring {
-  id                        String   @id @default(uuid())
-  loanId                    String
-  restructuringNumber       String   @unique
+  id                  String @id @default(uuid())
+  loanId              String
+  restructuringNumber String @unique
 
-  restructuringType         RestructuringType
+  restructuringType RestructuringType
 
   // Previous terms snapshot (audit)
-  previousTenure            Int
-  previousInterestRate      Decimal  @db.Decimal(5, 2)
+  previousTenure             Int
+  previousInterestRate       Decimal @db.Decimal(5, 2)
   previousOutstandingBalance Decimal @db.Decimal(18, 2)
 
   // New terms
-  newTenure                 Int?
-  newInterestRate           Decimal? @db.Decimal(5, 2)
+  newTenure       Int?
+  newInterestRate Decimal? @db.Decimal(5, 2)
 
   // Write-off
-  writeOffAmount            Decimal? @db.Decimal(18, 2)
+  writeOffAmount Decimal? @db.Decimal(18, 2)
 
   // Outstanding balance used as basis for new schedule
-  effectiveBalance          Decimal  @db.Decimal(18, 2)
+  effectiveBalance Decimal @db.Decimal(18, 2)
 
-  reason                    String
+  reason String
 
   // Approval workflow
-  status                    RestructuringStatus @default(PENDING)
-  requestedById             String
-  approvedById              String?
-  approvalComments          String?
-  journalEntryId            String?
+  status           RestructuringStatus @default(PENDING)
+  requestedById    String
+  approvedById     String?
+  approvalComments String?
+  journalEntryId   String?
 
-  requestedAt               DateTime @default(now())
-  approvedAt                DateTime?
-  effectiveDate             DateTime?
+  requestedAt   DateTime  @default(now())
+  approvedAt    DateTime?
+  effectiveDate DateTime?
 
-  createdAt                 DateTime @default(now())
-  updatedAt                 DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  loan                      Loan     @relation(fields: [loanId], references: [id])
-  requestedBy               Staff    @relation("RestructuringRequestedBy", fields: [requestedById], references: [id])
-  approvedBy                Staff?   @relation("RestructuringApprovedBy", fields: [approvedById], references: [id])
+  loan        Loan   @relation(fields: [loanId], references: [id])
+  requestedBy Staff  @relation("RestructuringRequestedBy", fields: [requestedById], references: [id])
+  approvedBy  Staff? @relation("RestructuringApprovedBy", fields: [approvedById], references: [id])
 
   @@index([loanId])
   @@index([status])
@@ -957,45 +1043,45 @@ enum RestructuringStatus {
 
 // Savings Products Configuration
 model SavingsProduct {
-  id                String   @id @default(uuid())
-  code              String   @unique
-  name              String
-  description       String?
+  id          String  @id @default(uuid())
+  code        String  @unique
+  name        String
+  description String?
 
-  savingsType       SavingsType
+  savingsType SavingsType
 
-  minBalance        Decimal  @db.Decimal(18, 2) @default(0)
-  maxBalance        Decimal? @db.Decimal(18, 2)
-  minDeposit        Decimal  @db.Decimal(18, 2) @default(0)
+  minBalance         Decimal  @default(0) @db.Decimal(18, 2)
+  maxBalance         Decimal? @db.Decimal(18, 2)
+  minDeposit         Decimal  @default(0) @db.Decimal(18, 2)
   maxDailyWithdrawal Decimal? @db.Decimal(18, 2)
 
-  interestRate      Decimal  @db.Decimal(5, 2) @default(0)
+  interestRate      Decimal           @default(0) @db.Decimal(5, 2)
   interestFrequency InterestFrequency @default(MONTHLY)
 
-  allowWithdrawal   Boolean  @default(true)
-  withdrawalNotice  Int      @default(0) // Days
+  allowWithdrawal  Boolean @default(true)
+  withdrawalNotice Int     @default(0) // Days
 
-  monthlyFee        Decimal  @db.Decimal(18, 2) @default(0)
-  transactionFee    Decimal  @db.Decimal(18, 2) @default(0)
+  monthlyFee     Decimal @default(0) @db.Decimal(18, 2)
+  transactionFee Decimal @default(0) @db.Decimal(18, 2)
 
   // Fixed-Term Savings Engine Configuration
-  durationMonths                Int?
-  totalInterestRate             Decimal?  @db.Decimal(5, 2)   // Total rate for full term
-  monthlyInterestRate           Decimal?  @db.Decimal(5, 2)   // Auto: totalInterestRate / durationMonths
-  interestCalculationMethod     InterestCalculationMethod @default(MATURITY_ONLY)
-  interestEligibilityDelayMonths Int      @default(0)          // Months before deposits earn interest
-  allowEarlyTermination         Boolean   @default(false)
-  defaultTerminationPenaltyRate Decimal?  @db.Decimal(5, 2)   // % penalty on approved interest
-  createdById                   String?
+  durationMonths                 Int?
+  totalInterestRate              Decimal?                  @db.Decimal(5, 2) // Total rate for full term
+  monthlyInterestRate            Decimal?                  @db.Decimal(5, 2) // Auto: totalInterestRate / durationMonths
+  interestCalculationMethod      InterestCalculationMethod @default(MATURITY_ONLY)
+  interestEligibilityDelayMonths Int                       @default(0) // Months before deposits earn interest
+  allowEarlyTermination          Boolean                   @default(false)
+  defaultTerminationPenaltyRate  Decimal?                  @db.Decimal(5, 2) // % penalty on approved interest
+  createdById                    String?
 
-  isActive          Boolean  @default(true)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  accounts          SavingsAccount[]
+  accounts SavingsAccount[]
 
   // Accounting Configuration
-  liabilityAccountId String?
+  liabilityAccountId       String?
   interestExpenseAccountId String?
 }
 
@@ -1018,65 +1104,65 @@ enum InterestFrequency {
 
 // How a fixed-term product's interest is calculated & applied
 enum InterestCalculationMethod {
-  MATURITY_ONLY       // Accrue monthly, pay lump sum at maturity (default)
-  MONTHLY_ALLOCATION  // Credit interest to the account balance each month
-  FLAT                // Flat rate (provisional — treated as maturity accrual for now)
-  COMPOUND            // Interest compounds into the eligible balance monthly
+  MATURITY_ONLY // Accrue monthly, pay lump sum at maturity (default)
+  MONTHLY_ALLOCATION // Credit interest to the account balance each month
+  FLAT // Flat rate (provisional — treated as maturity accrual for now)
+  COMPOUND // Interest compounds into the eligible balance monthly
 }
 
 // Savings Accounts
 model SavingsAccount {
-  id              String   @id @default(uuid())
-  accountNumber   String   @unique
+  id            String @id @default(uuid())
+  accountNumber String @unique
 
-  customerId      String
-  productId       String
-  branchId        String?
+  customerId String
+  productId  String
+  branchId   String?
 
-  currentBalance  Decimal  @db.Decimal(18, 2) @default(0)
-  availableBalance Decimal @db.Decimal(18, 2) @default(0)
-  holdAmount      Decimal  @db.Decimal(18, 2) @default(0)
+  currentBalance   Decimal @default(0) @db.Decimal(18, 2)
+  availableBalance Decimal @default(0) @db.Decimal(18, 2)
+  holdAmount       Decimal @default(0) @db.Decimal(18, 2)
 
   // For Target Savings
-  targetAmount    Decimal? @db.Decimal(18, 2)
-  targetDate      DateTime?
+  targetAmount Decimal?  @db.Decimal(18, 2)
+  targetDate   DateTime?
 
-  interestAccrued Decimal  @db.Decimal(18, 2) @default(0)
+  interestAccrued  Decimal   @default(0) @db.Decimal(18, 2)
   lastInterestDate DateTime?
 
   // Fixed-Term Savings Fields
-  eligibleBalance  Decimal  @db.Decimal(18, 2) @default(0)   // Balance currently earning interest
-  pendingDeposits  Decimal  @db.Decimal(18, 2) @default(0)   // Deposits awaiting next month roll
-  totalDeposits    Decimal  @db.Decimal(18, 2) @default(0)   // Cumulative deposits ever made
-  startDate        DateTime?
-  maturityDate     DateTime?
-  monthsCompleted  Int      @default(0)   // Months elapsed of the fixed term
-  monthsRemaining  Int?                   // Months left until maturity
-  createdById      String?
+  eligibleBalance Decimal   @default(0) @db.Decimal(18, 2) // Balance currently earning interest
+  pendingDeposits Decimal   @default(0) @db.Decimal(18, 2) // Deposits awaiting next month roll
+  totalDeposits   Decimal   @default(0) @db.Decimal(18, 2) // Cumulative deposits ever made
+  startDate       DateTime?
+  maturityDate    DateTime?
+  monthsCompleted Int       @default(0) // Months elapsed of the fixed term
+  monthsRemaining Int? // Months left until maturity
+  createdById     String?
 
-  status          AccountStatus @default(ACTIVE)
+  status AccountStatus @default(ACTIVE)
 
-  openedAt        DateTime @default(now())
-  closedAt        DateTime?
+  openedAt          DateTime  @default(now())
+  closedAt          DateTime?
   lastTransactionAt DateTime?
 
   // Soft delete
-  isDeleted       Boolean  @default(false)
-  deletedAt       DateTime?
-  deletedBy       String?
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  customer        Customer @relation(fields: [customerId], references: [id])
-  product         SavingsProduct @relation(fields: [productId], references: [id])
-  branch          Branch?  @relation(fields: [branchId], references: [id])
+  customer Customer       @relation(fields: [customerId], references: [id])
+  product  SavingsProduct @relation(fields: [productId], references: [id])
+  branch   Branch?        @relation(fields: [branchId], references: [id])
 
-  transactions        SavingsTransaction[]
-  withdrawalRequests  WithdrawalRequest[]
-  terminations        SavingsTermination[]
-  journalEntries      JournalEntry[]
-  interestPostings    SavingsInterest[]
+  transactions       SavingsTransaction[]
+  withdrawalRequests WithdrawalRequest[]
+  terminations       SavingsTermination[]
+  journalEntries     JournalEntry[]
+  interestPostings   SavingsInterest[]
 
   @@index([accountNumber])
   @@index([customerId])
@@ -1088,24 +1174,24 @@ model SavingsAccount {
 // The unique (accountId, year, month) constraint guarantees interest is
 // never posted twice for the same account in the same period.
 model SavingsInterest {
-  id                String   @id @default(uuid())
-  accountId         String
-  year              Int
-  month             Int      // 1-12
+  id        String @id @default(uuid())
+  accountId String
+  year      Int
+  month     Int // 1-12
 
-  eligibleBalance   Decimal  @db.Decimal(18, 2)   // Base the interest was computed on
-  interestRate      Decimal  @db.Decimal(5, 2)    // Monthly rate applied
-  interestAmount    Decimal  @db.Decimal(18, 2)
+  eligibleBalance Decimal @db.Decimal(18, 2) // Base the interest was computed on
+  interestRate    Decimal @db.Decimal(5, 2) // Monthly rate applied
+  interestAmount  Decimal @db.Decimal(18, 2)
 
   calculationMethod InterestCalculationMethod @default(MATURITY_ONLY)
   status            InterestPostingStatus     @default(ACCRUED)
 
-  transactionId     String?  // Linked SavingsTransaction, if any
-  generatedById     String?
-  generatedAt       DateTime @default(now())
-  createdAt         DateTime @default(now())
+  transactionId String? // Linked SavingsTransaction, if any
+  generatedById String?
+  generatedAt   DateTime @default(now())
+  createdAt     DateTime @default(now())
 
-  account           SavingsAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  account SavingsAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   @@unique([accountId, year, month])
   @@index([accountId])
@@ -1114,8 +1200,8 @@ model SavingsInterest {
 }
 
 enum InterestPostingStatus {
-  ACCRUED    // Booked to interestAccrued, payable at maturity
-  CREDITED   // Credited to the account balance
+  ACCRUED // Booked to interestAccrued, payable at maturity
+  CREDITED // Credited to the account balance
   REVERSED
 }
 
@@ -1132,37 +1218,37 @@ enum AccountStatus {
 
 // Savings Transactions
 model SavingsTransaction {
-  id              String   @id @default(uuid())
-  accountId       String
+  id        String @id @default(uuid())
+  accountId String
 
-  transactionRef  String   @unique
+  transactionRef  String                 @unique
   transactionType SavingsTransactionType
 
-  amount          Decimal  @db.Decimal(18, 2)
-  balanceBefore   Decimal  @db.Decimal(18, 2)
-  balanceAfter    Decimal  @db.Decimal(18, 2)
+  amount        Decimal @db.Decimal(18, 2)
+  balanceBefore Decimal @db.Decimal(18, 2)
+  balanceAfter  Decimal @db.Decimal(18, 2)
 
-  paymentMode     PaymentMode
+  paymentMode      PaymentMode
   paymentReference String?
 
-  description     String?
-  narration       String?
+  description String?
+  narration   String?
 
-  processedById   String
-  processedAt     DateTime @default(now())
+  processedById String
+  processedAt   DateTime @default(now())
 
-  valueDate       DateTime @default(now())
-  journalEntryId  String?
+  valueDate      DateTime @default(now())
+  journalEntryId String?
 
   // For reversals
-  isReversed      Boolean  @default(false)
-  reversedAt      DateTime?
-  reversalRef     String?
+  isReversed  Boolean   @default(false)
+  reversedAt  DateTime?
+  reversalRef String?
 
-  createdAt       DateTime @default(now())
+  createdAt DateTime @default(now())
 
-  account         SavingsAccount @relation(fields: [accountId], references: [id])
-  processedBy     Staff    @relation(fields: [processedById], references: [id])
+  account     SavingsAccount @relation(fields: [accountId], references: [id])
+  processedBy Staff          @relation(fields: [processedById], references: [id])
 
   @@index([accountId])
   @@index([transactionRef])
@@ -1186,34 +1272,34 @@ enum SavingsTransactionType {
 
 // Withdrawal approval workflow
 model WithdrawalRequest {
-  id                String   @id @default(uuid())
-  requestNumber     String   @unique
+  id            String @id @default(uuid())
+  requestNumber String @unique
 
-  accountId         String
-  amount            Decimal  @db.Decimal(18, 2)
+  accountId String
+  amount    Decimal @db.Decimal(18, 2)
 
-  reason            String?
-  paymentMode       PaymentMode @default(CASH)
-  paymentReference  String?
+  reason           String?
+  paymentMode      PaymentMode @default(CASH)
+  paymentReference String?
 
-  status            WithdrawalRequestStatus @default(PENDING)
+  status WithdrawalRequestStatus @default(PENDING)
 
-  requestedById     String
-  requestedAt       DateTime @default(now())
+  requestedById String
+  requestedAt   DateTime @default(now())
 
-  approvedById      String?
-  approvedAt        DateTime?
-  rejectionReason   String?
+  approvedById    String?
+  approvedAt      DateTime?
+  rejectionReason String?
 
   // Link to actual transaction once processed
-  transactionId     String?
+  transactionId String?
 
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  account           SavingsAccount @relation(fields: [accountId], references: [id])
-  requestedBy       Staff          @relation("WithdrawalRequested", fields: [requestedById], references: [id])
-  approvedBy        Staff?         @relation("WithdrawalApproved", fields: [approvedById], references: [id])
+  account     SavingsAccount @relation(fields: [accountId], references: [id])
+  requestedBy Staff          @relation("WithdrawalRequested", fields: [requestedById], references: [id])
+  approvedBy  Staff?         @relation("WithdrawalApproved", fields: [approvedById], references: [id])
 
   @@index([accountId])
   @@index([requestedById])
@@ -1230,34 +1316,34 @@ enum WithdrawalRequestStatus {
 
 // Early Termination Requests for Fixed-Term Savings
 model SavingsTermination {
-  id                String    @id @default(uuid())
-  requestNumber     String    @unique
+  id            String @id @default(uuid())
+  requestNumber String @unique
 
-  accountId         String
-  requestedById     String
+  accountId     String
+  requestedById String
 
-  requestDate       DateTime  @default(now())
-  principalAmount   Decimal   @db.Decimal(18, 2)
-  accruedInterest   Decimal   @db.Decimal(18, 2) @default(0)
+  requestDate     DateTime @default(now())
+  principalAmount Decimal  @db.Decimal(18, 2)
+  accruedInterest Decimal  @default(0) @db.Decimal(18, 2)
 
   // Admin decision fields
-  approvedInterest  Decimal?  @db.Decimal(18, 2)
-  penaltyAmount     Decimal?  @db.Decimal(18, 2)
-  payoutAmount      Decimal?  @db.Decimal(18, 2)
-  notes             String?
-  rejectionReason   String?
+  approvedInterest Decimal? @db.Decimal(18, 2)
+  penaltyAmount    Decimal? @db.Decimal(18, 2)
+  payoutAmount     Decimal? @db.Decimal(18, 2)
+  notes            String?
+  rejectionReason  String?
 
-  status            TerminationStatus @default(PENDING)
+  status TerminationStatus @default(PENDING)
 
-  approvedById      String?
-  approvedAt        DateTime?
+  approvedById String?
+  approvedAt   DateTime?
 
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  account           SavingsAccount @relation(fields: [accountId], references: [id])
-  requestedBy       Staff          @relation("TerminationRequested", fields: [requestedById], references: [id])
-  approvedBy        Staff?         @relation("TerminationApproved", fields: [approvedById], references: [id])
+  account     SavingsAccount @relation(fields: [accountId], references: [id])
+  requestedBy Staff          @relation("TerminationRequested", fields: [requestedById], references: [id])
+  approvedBy  Staff?         @relation("TerminationApproved", fields: [approvedById], references: [id])
 
   @@index([accountId])
   @@index([status])
@@ -1277,73 +1363,73 @@ enum TerminationStatus {
 
 // Fixed Deposit Rates Configuration
 model FixedDepositRate {
-  id              String   @id @default(uuid())
-  minTenure       Int      // Days
-  maxTenure       Int
-  minAmount       Decimal  @db.Decimal(18, 2)
-  maxAmount       Decimal? @db.Decimal(18, 2)
-  interestRate    Decimal  @db.Decimal(5, 2)
-  isActive        Boolean  @default(true)
-  effectiveFrom   DateTime @default(now())
-  effectiveTo     DateTime?
+  id            String    @id @default(uuid())
+  minTenure     Int // Days
+  maxTenure     Int
+  minAmount     Decimal   @db.Decimal(18, 2)
+  maxAmount     Decimal?  @db.Decimal(18, 2)
+  interestRate  Decimal   @db.Decimal(5, 2)
+  isActive      Boolean   @default(true)
+  effectiveFrom DateTime  @default(now())
+  effectiveTo   DateTime?
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([isActive])
 }
 
 // Fixed Deposits
 model FixedDeposit {
-  id                  String   @id @default(uuid())
-  certificateNumber   String   @unique
+  id                String @id @default(uuid())
+  certificateNumber String @unique
 
-  customerId          String
-  branchId            String?
+  customerId String
+  branchId   String?
 
-  principalAmount     Decimal  @db.Decimal(18, 2)
-  interestRate        Decimal  @db.Decimal(5, 2)
-  tenure              Int      // Days
+  principalAmount Decimal @db.Decimal(18, 2)
+  interestRate    Decimal @db.Decimal(5, 2)
+  tenure          Int // Days
 
-  interestAmount      Decimal  @db.Decimal(18, 2)
-  maturityAmount      Decimal  @db.Decimal(18, 2)
+  interestAmount Decimal @db.Decimal(18, 2)
+  maturityAmount Decimal @db.Decimal(18, 2)
 
   // Interest Payment Option
-  interestPayment     InterestPaymentOption @default(AT_MATURITY)
-  interestAccountId   String?  // For monthly/quarterly interest
+  interestPayment   InterestPaymentOption @default(AT_MATURITY)
+  interestAccountId String? // For monthly/quarterly interest
 
-  startDate           DateTime
-  maturityDate        DateTime
+  startDate    DateTime
+  maturityDate DateTime
 
   // Funding Details
-  fundingMode         PaymentMode
-  fundingReference    String?
+  fundingMode      PaymentMode
+  fundingReference String?
 
   // Maturity Instructions
   maturityInstruction MaturityInstruction @default(ROLLOVER_PRINCIPAL_AND_INTEREST)
 
-  status              FixedDepositStatus @default(ACTIVE)
+  status FixedDepositStatus @default(ACTIVE)
 
   // Interest Accrual Tracking
-  accruedInterest     Decimal  @db.Decimal(18, 2) @default(0)
-  lastAccrualDate     DateTime?
+  accruedInterest Decimal   @default(0) @db.Decimal(18, 2)
+  lastAccrualDate DateTime?
 
   // Termination
-  terminatedAt        DateTime?
-  terminationReason   String?
-  penaltyAmount       Decimal? @db.Decimal(18, 2)
-  amountPaid          Decimal? @db.Decimal(18, 2)
+  terminatedAt      DateTime?
+  terminationReason String?
+  penaltyAmount     Decimal?  @db.Decimal(18, 2)
+  amountPaid        Decimal?  @db.Decimal(18, 2)
 
-  createdById         String
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  customer            Customer @relation(fields: [customerId], references: [id])
-  branch              Branch?  @relation(fields: [branchId], references: [id])
-  createdBy           Staff    @relation(fields: [createdById], references: [id])
+  customer  Customer @relation(fields: [customerId], references: [id])
+  branch    Branch?  @relation(fields: [branchId], references: [id])
+  createdBy Staff    @relation(fields: [createdById], references: [id])
 
-  interestPayments    FixedDepositInterest[]
-  journalEntries      JournalEntry[]
+  interestPayments FixedDepositInterest[]
+  journalEntries   JournalEntry[]
 
   @@index([certificateNumber])
   @@index([customerId])
@@ -1374,24 +1460,24 @@ enum FixedDepositStatus {
 
 // Fixed Deposit Interest Payments
 model FixedDepositInterest {
-  id              String   @id @default(uuid())
-  fixedDepositId  String
+  id             String @id @default(uuid())
+  fixedDepositId String
 
-  periodStart     DateTime
-  periodEnd       DateTime
-  daysInPeriod    Int
+  periodStart  DateTime
+  periodEnd    DateTime
+  daysInPeriod Int
 
-  interestAmount  Decimal  @db.Decimal(18, 2)
-  status          InterestPaymentStatus @default(ACCRUED)
+  interestAmount Decimal               @db.Decimal(18, 2)
+  status         InterestPaymentStatus @default(ACCRUED)
 
-  paidAt          DateTime?
-  paymentMode     PaymentMode?
+  paidAt           DateTime?
+  paymentMode      PaymentMode?
   paymentReference String?
-  journalEntryId  String?
+  journalEntryId   String?
 
-  createdAt       DateTime @default(now())
+  createdAt DateTime @default(now())
 
-  fixedDeposit    FixedDeposit @relation(fields: [fixedDepositId], references: [id])
+  fixedDeposit FixedDeposit @relation(fields: [fixedDepositId], references: [id])
 
   @@index([fixedDepositId])
   @@index([status])
@@ -1409,34 +1495,34 @@ enum InterestPaymentStatus {
 
 // Verification Tasks (General - not just for loans)
 model VerificationTask {
-  id                String   @id @default(uuid())
+  id String @id @default(uuid())
 
-  taskType          TaskType
-  referenceType     String   // LOAN, CUSTOMER, etc.
-  referenceId       String
+  taskType      TaskType
+  referenceType String // LOAN, CUSTOMER, etc.
+  referenceId   String
 
   // Direct relations for loan and customer
-  loanId            String?
-  customerId        String?
+  loanId     String?
+  customerId String?
 
-  assignedToId      String?
-  createdById       String?
+  assignedToId String?
+  createdById  String?
 
-  priority          TaskPriority @default(NORMAL)
-  dueDate           DateTime?
+  priority TaskPriority @default(NORMAL)
+  dueDate  DateTime?
 
   // Location
-  address           String
-  city              String?
-  gpsCoordinates    String?
+  address        String
+  city           String?
+  gpsCoordinates String?
 
-  instructions      String?
+  instructions String?
 
   // Results
-  status            TaskStatus @default(PENDING)
-  result            String?    // VERIFIED, FAILED, INCONCLUSIVE
-  startedAt         DateTime?
-  completedAt       DateTime?
+  status      TaskStatus @default(PENDING)
+  result      String? // VERIFIED, FAILED, INCONCLUSIVE
+  startedAt   DateTime?
+  completedAt DateTime?
 
   // Verification checks
   addressVerified    Boolean?
@@ -1444,25 +1530,25 @@ model VerificationTask {
   incomeVerified     Boolean?
   collateralVerified Boolean?
 
-  remarks           String?
-  findings          String?
-  recommendation    String?
+  remarks        String?
+  findings       String?
+  recommendation String?
 
   // Verified address from field visit
-  verifiedAddress   String?
+  verifiedAddress String?
 
-  photos            String[] // Document IDs
-  attachments       String[] // Document IDs
+  photos      String[] // Document IDs
+  attachments String[] // Document IDs
 
-  visitAttempts     Int      @default(0)
+  visitAttempts Int @default(0)
 
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  assignedTo        Staff?    @relation("VerificationAssigned", fields: [assignedToId], references: [id])
-  createdBy         Staff?    @relation("VerificationCreated", fields: [createdById], references: [id])
-  loan              Loan?     @relation(fields: [loanId], references: [id])
-  customer          Customer? @relation(fields: [customerId], references: [id])
+  assignedTo Staff?    @relation("VerificationAssigned", fields: [assignedToId], references: [id])
+  createdBy  Staff?    @relation("VerificationCreated", fields: [createdById], references: [id])
+  loan       Loan?     @relation(fields: [loanId], references: [id])
+  customer   Customer? @relation(fields: [customerId], references: [id])
 
   @@index([assignedToId])
   @@index([createdById])
@@ -1503,37 +1589,37 @@ enum TaskStatus {
 
 // Chart of Accounts
 model ChartOfAccounts {
-  id              String   @id @default(uuid())
-  accountCode     String   @unique
-  accountName     String
-  accountType     AccountType
+  id          String      @id @default(uuid())
+  accountCode String      @unique
+  accountName String
+  accountType AccountType
 
-  parentId        String?
-  level           Int      @default(1)
+  parentId String?
+  level    Int     @default(1)
 
-  description     String?
+  description String?
 
-  isHeader        Boolean  @default(false)  // Parent accounts
-  isActive        Boolean  @default(true)
-  isSystemAccount Boolean  @default(false)  // Cannot be deleted
+  isHeader        Boolean @default(false) // Parent accounts
+  isActive        Boolean @default(true)
+  isSystemAccount Boolean @default(false) // Cannot be deleted
 
-  normalBalance   BalanceType // DEBIT or CREDIT
+  normalBalance BalanceType // DEBIT or CREDIT
 
   // For bank accounts
-  bankName        String?
+  bankName          String?
   bankAccountNumber String?
 
-  openingBalance  Decimal  @db.Decimal(18, 2) @default(0)
-  currentBalance  Decimal  @db.Decimal(18, 2) @default(0)
+  openingBalance Decimal @default(0) @db.Decimal(18, 2)
+  currentBalance Decimal @default(0) @db.Decimal(18, 2)
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  parent          ChartOfAccounts? @relation("AccountHierarchy", fields: [parentId], references: [id])
-  children        ChartOfAccounts[] @relation("AccountHierarchy")
+  parent   ChartOfAccounts?  @relation("AccountHierarchy", fields: [parentId], references: [id])
+  children ChartOfAccounts[] @relation("AccountHierarchy")
 
   journalEntryLines JournalEntryLine[]
-  ledgerAccounts  LedgerAccount[]
+  ledgerAccounts    LedgerAccount[]
 
   @@index([accountCode])
   @@index([accountType])
@@ -1555,23 +1641,23 @@ enum BalanceType {
 
 // Customer/Loan Sub-Ledger Accounts
 model LedgerAccount {
-  id              String   @id @default(uuid())
+  id String @id @default(uuid())
 
-  accountId       String   // Links to ChartOfAccounts
-  customerId      String?
+  accountId  String // Links to ChartOfAccounts
+  customerId String?
 
-  ledgerType      LedgerType
-  referenceType   String?  // LOAN, SAVINGS, FD
-  referenceId     String?
+  ledgerType    LedgerType
+  referenceType String? // LOAN, SAVINGS, FD
+  referenceId   String?
 
-  currentBalance  Decimal  @db.Decimal(18, 2) @default(0)
+  currentBalance Decimal @default(0) @db.Decimal(18, 2)
 
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  account         ChartOfAccounts @relation(fields: [accountId], references: [id])
-  customer        Customer? @relation(fields: [customerId], references: [id])
+  account  ChartOfAccounts @relation(fields: [accountId], references: [id])
+  customer Customer?       @relation(fields: [customerId], references: [id])
 
   @@unique([accountId, referenceType, referenceId])
   @@index([customerId])
@@ -1588,58 +1674,58 @@ enum LedgerType {
 
 // Journal Entries (Header)
 model JournalEntry {
-  id              String   @id @default(uuid())
-  entryNumber     String   @unique
+  id          String @id @default(uuid())
+  entryNumber String @unique
 
-  entryDate       DateTime @db.Date
-  valueDate       DateTime @db.Date
+  entryDate DateTime @db.Date
+  valueDate DateTime @db.Date
 
-  entryType       JournalEntryType
+  entryType JournalEntryType
 
-  description     String
-  narration       String?
+  description String
+  narration   String?
 
   // Source Transaction Reference
-  sourceModule    String?   // LOANS, SAVINGS, FD, MANUAL
-  sourceType      String?   // DISBURSEMENT, REPAYMENT, DEPOSIT, etc.
-  sourceId        String?
+  sourceModule String? // LOANS, SAVINGS, FD, MANUAL
+  sourceType   String? // DISBURSEMENT, REPAYMENT, DEPOSIT, etc.
+  sourceId     String?
 
   // Links to source records
-  loanId          String?
+  loanId           String?
   savingsAccountId String?
-  fixedDepositId  String?
+  fixedDepositId   String?
 
-  totalDebit      Decimal  @db.Decimal(18, 2)
-  totalCredit     Decimal  @db.Decimal(18, 2)
+  totalDebit  Decimal @db.Decimal(18, 2)
+  totalCredit Decimal @db.Decimal(18, 2)
 
-  status          JournalStatus @default(DRAFT)
+  status JournalStatus @default(DRAFT)
 
-  branchId        String?
-  departmentId    String?
+  branchId     String?
+  departmentId String?
 
-  createdById     String
-  approvedById    String?
+  createdById  String
+  approvedById String?
 
-  createdAt       DateTime @default(now())
-  postedAt        DateTime?
-  approvedAt      DateTime?
+  createdAt  DateTime  @default(now())
+  postedAt   DateTime?
+  approvedAt DateTime?
 
   // For reversals
-  isReversed      Boolean  @default(false)
+  isReversed      Boolean   @default(false)
   reversedAt      DateTime?
   reversalEntryId String?
   reversalReason  String?
 
-  branch          Branch?  @relation(fields: [branchId], references: [id])
-  department      Department? @relation(fields: [departmentId], references: [id])
-  createdBy       Staff    @relation("JournalCreatedBy", fields: [createdById], references: [id])
-  approvedBy      Staff?   @relation("JournalApprovedBy", fields: [approvedById], references: [id])
+  branch     Branch?     @relation(fields: [branchId], references: [id])
+  department Department? @relation(fields: [departmentId], references: [id])
+  createdBy  Staff       @relation("JournalCreatedBy", fields: [createdById], references: [id])
+  approvedBy Staff?      @relation("JournalApprovedBy", fields: [approvedById], references: [id])
 
-  loan            Loan?    @relation(fields: [loanId], references: [id])
-  savingsAccount  SavingsAccount? @relation(fields: [savingsAccountId], references: [id])
-  fixedDeposit    FixedDeposit? @relation(fields: [fixedDepositId], references: [id])
+  loan           Loan?           @relation(fields: [loanId], references: [id])
+  savingsAccount SavingsAccount? @relation(fields: [savingsAccountId], references: [id])
+  fixedDeposit   FixedDeposit?   @relation(fields: [fixedDepositId], references: [id])
 
-  lines           JournalEntryLine[]
+  lines JournalEntryLine[]
 
   @@index([entryNumber])
   @@index([entryDate])
@@ -1668,26 +1754,26 @@ enum JournalStatus {
 
 // Journal Entry Lines (Double-Entry)
 model JournalEntryLine {
-  id              String   @id @default(uuid())
-  journalEntryId  String
-  lineNumber      Int
+  id             String @id @default(uuid())
+  journalEntryId String
+  lineNumber     Int
 
-  accountId       String   // ChartOfAccounts
+  accountId String // ChartOfAccounts
 
-  debitAmount     Decimal  @db.Decimal(18, 2) @default(0)
-  creditAmount    Decimal  @db.Decimal(18, 2) @default(0)
+  debitAmount  Decimal @default(0) @db.Decimal(18, 2)
+  creditAmount Decimal @default(0) @db.Decimal(18, 2)
 
-  description     String?
+  description String?
 
   // Sub-ledger reference
-  customerId      String?
-  referenceType   String?
-  referenceId     String?
+  customerId    String?
+  referenceType String?
+  referenceId   String?
 
-  createdAt       DateTime @default(now())
+  createdAt DateTime @default(now())
 
-  journalEntry    JournalEntry @relation(fields: [journalEntryId], references: [id])
-  account         ChartOfAccounts @relation(fields: [accountId], references: [id])
+  journalEntry JournalEntry    @relation(fields: [journalEntryId], references: [id])
+  account      ChartOfAccounts @relation(fields: [accountId], references: [id])
 
   @@index([journalEntryId])
   @@index([accountId])
@@ -1695,21 +1781,21 @@ model JournalEntryLine {
 
 // Financial Period Lock
 model FinancialPeriod {
-  id              String   @id @default(uuid())
-  year            Int
-  month           Int
+  id    String @id @default(uuid())
+  year  Int
+  month Int
 
-  startDate       DateTime @db.Date
-  endDate         DateTime @db.Date
+  startDate DateTime @db.Date
+  endDate   DateTime @db.Date
 
-  status          PeriodStatus @default(OPEN)
+  status PeriodStatus @default(OPEN)
 
-  closedById      String?
-  closedAt        DateTime?
-  closingNotes    String?
+  closedById   String?
+  closedAt     DateTime?
+  closingNotes String?
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([year, month])
   @@index([status])
@@ -1734,71 +1820,71 @@ model DocumentCategory {
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
 
-  parent      DocumentCategory? @relation("CategoryHierarchy", fields: [parentId], references: [id])
-  children    DocumentCategory[] @relation("CategoryHierarchy")
-  documents   Document[]
+  parent    DocumentCategory?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children  DocumentCategory[] @relation("CategoryHierarchy")
+  documents Document[]
 }
 
 model Document {
-  id              String   @id @default(uuid())
+  id String @id @default(uuid())
 
-  documentNumber  String   @unique
+  documentNumber String @unique
 
-  categoryId      String
+  categoryId String
 
-  title           String
-  description     String?
+  title       String
+  description String?
 
   // File Information
-  fileName        String
-  fileType        String
-  fileSize        Int
-  filePath        String
-  checksum        String   // For integrity verification
+  fileName String
+  fileType String
+  fileSize Int
+  filePath String
+  checksum String // For integrity verification
 
   // Metadata
-  documentDate    DateTime?
-  expiryDate      DateTime?
+  documentDate DateTime?
+  expiryDate   DateTime?
 
   // References
-  customerId      String?
-  loanId          String?
-  staffId         String?
+  customerId String?
+  loanId     String?
+  staffId    String?
 
-  departmentCode  String?
+  departmentCode String?
 
   // Version Control
-  version         Int      @default(1)
+  version           Int     @default(1)
   previousVersionId String?
 
   // Access Control
-  isConfidential  Boolean  @default(false)
-  accessLevel     String   @default("INTERNAL")
+  isConfidential Boolean @default(false)
+  accessLevel    String  @default("INTERNAL")
 
   // Status
-  status          DocumentStatus @default(DRAFT)
+  status DocumentStatus @default(DRAFT)
 
-  uploadedById    String
-  uploadedAt      DateTime @default(now())
+  uploadedById String
+  uploadedAt   DateTime @default(now())
 
-  approvedById    String?
-  approvedAt      DateTime?
+  approvedById String?
+  approvedAt   DateTime?
 
   // Soft delete
-  isDeleted       Boolean  @default(false)
-  deletedAt       DateTime?
-  deletedById     String?
-  deletionReason  String?
+  isDeleted      Boolean   @default(false)
+  deletedAt      DateTime?
+  deletedById    String?
+  deletionReason String?
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  category        DocumentCategory @relation(fields: [categoryId], references: [id])
-  customer        Customer? @relation(fields: [customerId], references: [id])
-  loan            Loan?    @relation(fields: [loanId], references: [id])
-  uploadedBy      Staff    @relation(fields: [uploadedById], references: [id])
+  category   DocumentCategory @relation(fields: [categoryId], references: [id])
+  customer   Customer?        @relation(fields: [customerId], references: [id])
+  loan       Loan?            @relation(fields: [loanId], references: [id])
+  uploadedBy Staff            @relation(fields: [uploadedById], references: [id])
 
-  versions        DocumentVersion[]
+  versions DocumentVersion[]
 
   @@index([documentNumber])
   @@index([categoryId])
@@ -1809,22 +1895,22 @@ model Document {
 
 // Document Version History
 model DocumentVersion {
-  id              String   @id @default(uuid())
-  documentId      String
-  version         Int
+  id         String @id @default(uuid())
+  documentId String
+  version    Int
 
-  fileName        String
-  fileType        String
-  fileSize        Int
-  filePath        String
-  checksum        String
+  fileName String
+  fileType String
+  fileSize Int
+  filePath String
+  checksum String
 
-  uploadedById    String
-  uploadedAt      DateTime @default(now())
+  uploadedById String
+  uploadedAt   DateTime @default(now())
 
-  changeNotes     String?
+  changeNotes String?
 
-  document        Document @relation(fields: [documentId], references: [id])
+  document Document @relation(fields: [documentId], references: [id])
 
   @@unique([documentId, version])
   @@index([documentId])
@@ -1844,37 +1930,37 @@ enum DocumentStatus {
 
 // Comprehensive Audit Log
 model AuditLog {
-  id              String   @id @default(uuid())
+  id String @id @default(uuid())
 
   // Who
-  userId          String?
-  userEmail       String?
-  userRole        String?
+  userId    String?
+  userEmail String?
+  userRole  String?
 
   // What
-  action          AuditAction
-  module          String
-  entityType      String
-  entityId        String?
+  action     AuditAction
+  module     String
+  entityType String
+  entityId   String?
 
   // Details
-  description     String
+  description String
 
-  oldValues       Json?    // Previous state
-  newValues       Json?    // New state
-  changedFields   String[] // List of changed fields
+  oldValues     Json? // Previous state
+  newValues     Json? // New state
+  changedFields String[] // List of changed fields
 
   // Context
-  ipAddress       String?
-  userAgent       String?
-  sessionId       String?
+  ipAddress String?
+  userAgent String?
+  sessionId String?
 
   // Additional metadata
-  metadata        Json?
+  metadata Json?
 
-  createdAt       DateTime @default(now())
+  createdAt DateTime @default(now())
 
-  user            Staff?   @relation(fields: [userId], references: [id])
+  user Staff? @relation(fields: [userId], references: [id])
 
   @@index([userId])
   @@index([module])
@@ -1901,25 +1987,25 @@ enum AuditAction {
 
 // Approval Workflow History
 model ApprovalHistory {
-  id              String   @id @default(uuid())
+  id String @id @default(uuid())
 
-  entityType      String   // LOAN, JOURNAL, DOCUMENT, etc.
-  entityId        String
+  entityType String // LOAN, JOURNAL, DOCUMENT, etc.
+  entityId   String
 
-  workflowStep    String
-  stepOrder       Int
+  workflowStep String
+  stepOrder    Int
 
-  action          ApprovalAction
-  actorId         String
-  actorRole       String
+  action    ApprovalAction
+  actorId   String
+  actorRole String
 
-  comments        String?
-  conditions      String?
+  comments   String?
+  conditions String?
 
-  previousStatus  String?
-  newStatus       String
+  previousStatus String?
+  newStatus      String
 
-  createdAt       DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@index([entityType, entityId])
   @@index([actorId])
@@ -1937,22 +2023,22 @@ enum ApprovalAction {
 
 // System Notifications
 model Notification {
-  id              String   @id @default(uuid())
+  id String @id @default(uuid())
 
-  userId          String
+  userId String
 
-  type            NotificationType
-  title           String
-  message         String
+  type    NotificationType
+  title   String
+  message String
 
-  entityType      String?
-  entityId        String?
-  actionUrl       String?
+  entityType String?
+  entityId   String?
+  actionUrl  String?
 
-  isRead          Boolean  @default(false)
-  readAt          DateTime?
+  isRead Boolean   @default(false)
+  readAt DateTime?
 
-  createdAt       DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@index([userId])
   @@index([isRead])
@@ -1972,13 +2058,916 @@ enum NotificationType {
 
 // Sequence Generator for Reference Numbers
 model Sequence {
-  id              String   @id @default(uuid())
-  code            String   @unique
-  prefix          String
-  currentValue    Int      @default(0)
-  padLength       Int      @default(6)
-  resetFrequency  String?  // DAILY, MONTHLY, YEARLY, NEVER
-  lastResetAt     DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String    @id @default(uuid())
+  code           String    @unique
+  prefix         String
+  currentValue   Int       @default(0)
+  padLength      Int       @default(6)
+  resetFrequency String? // DAILY, MONTHLY, YEARLY, NEVER
+  lastResetAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+// ============================================================================
+// HR — WORKFORCE CONFIGURATION
+// ============================================================================
+
+// Configurable leave types (replaces the free-text LeaveRequest.leaveType)
+model LeaveType {
+  id          String  @id @default(uuid())
+  code        String  @unique
+  name        String
+  description String?
+
+  defaultDays         Decimal @default(0) @db.Decimal(6, 2)
+  isPaid              Boolean @default(true)
+  requiresApproval    Boolean @default(true)
+  requiresDocument    Boolean @default(false)
+  allowHalfDay        Boolean @default(false)
+  carryForward        Boolean @default(false)
+  maxCarryForwardDays Decimal @default(0) @db.Decimal(6, 2)
+  maxConsecutiveDays  Int?
+  minServiceMonths    Int     @default(0)
+  genderRestriction   String? // MALE, FEMALE, or null for all
+  countsWeekends      Boolean @default(false)
+  colorHex            String? @default("#64748b")
+  sortOrder           Int     @default(0)
+  isActive            Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  balances LeaveBalance[]
+  requests LeaveRequest[]
+
+  @@index([isActive])
+}
+
+// Per-staff, per-year leave entitlement ledger
+model LeaveBalance {
+  id          String @id @default(uuid())
+  staffId     String
+  leaveTypeId String
+  year        Int
+
+  entitledDays       Decimal @default(0) @db.Decimal(6, 2)
+  carriedForwardDays Decimal @default(0) @db.Decimal(6, 2)
+  accruedDays        Decimal @default(0) @db.Decimal(6, 2)
+  usedDays           Decimal @default(0) @db.Decimal(6, 2)
+  pendingDays        Decimal @default(0) @db.Decimal(6, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  staff     Staff     @relation(fields: [staffId], references: [id])
+  leaveType LeaveType @relation(fields: [leaveTypeId], references: [id])
+
+  @@unique([staffId, leaveTypeId, year])
+  @@index([year])
+}
+
+// Public / company holiday calendar
+model Holiday {
+  id           String   @id @default(uuid())
+  name         String
+  date         DateTime @db.Date
+  isRecurring  Boolean  @default(false) // repeats same day/month each year
+  isWorkingDay Boolean  @default(false) // e.g. declared work-from-home day
+  description  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([name, date])
+  @@index([date])
+}
+
+// Work shifts / rosters
+model WorkShift {
+  id           String  @id @default(uuid())
+  code         String  @unique
+  name         String
+  startTime    String // "08:00"
+  endTime      String // "17:00"
+  graceMinutes Int     @default(15)
+  breakMinutes Int     @default(60)
+  workDays     Int[] // 0=Sun .. 6=Sat
+  branchId     String?
+  isDefault    Boolean @default(false)
+  isActive     Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  branch      Branch?           @relation(fields: [branchId], references: [id])
+  assignments ShiftAssignment[]
+  attendance  Attendance[]
+
+  @@index([isActive])
+}
+
+model ShiftAssignment {
+  id            String    @id @default(uuid())
+  staffId       String
+  shiftId       String
+  effectiveFrom DateTime  @db.Date
+  effectiveTo   DateTime? @db.Date
+  createdAt     DateTime  @default(now())
+
+  staff Staff     @relation(fields: [staffId], references: [id])
+  shift WorkShift @relation(fields: [shiftId], references: [id])
+
+  @@index([staffId])
+  @@index([shiftId])
+}
+
+// ============================================================================
+// HR — COMPENSATION & PAYROLL
+// ============================================================================
+
+model SalaryGrade {
+  id              String  @id @default(uuid())
+  code            String  @unique
+  name            String
+  level           Int     @default(0)
+  minGross        Decimal @default(0) @db.Decimal(18, 2)
+  maxGross        Decimal @default(0) @db.Decimal(18, 2)
+  annualLeaveDays Decimal @default(0) @db.Decimal(6, 2)
+  description     String?
+  isActive        Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  staff         Staff[]
+  compensations StaffCompensation[]
+  jobOpenings   JobOpening[]
+
+  @@index([isActive])
+}
+
+enum PayrollComponentType {
+  EARNING
+  DEDUCTION
+  EMPLOYER_CONTRIBUTION
+}
+
+enum PayrollCalculationType {
+  FIXED
+  PERCENT_OF_BASIC
+  PERCENT_OF_GROSS
+}
+
+// Reusable payroll building blocks (basic, housing, PAYE, pension, ...)
+model PayrollComponent {
+  id              String                 @id @default(uuid())
+  code            String                 @unique
+  name            String
+  type            PayrollComponentType
+  calculationType PayrollCalculationType @default(FIXED)
+  defaultValue    Decimal                @default(0) @db.Decimal(18, 4)
+  isTaxable       Boolean                @default(true)
+  isStatutory     Boolean                @default(false)
+  isPensionable   Boolean                @default(false)
+  glAccountCode   String? // maps to ChartOfAccounts.accountCode for posting
+  sortOrder       Int                    @default(0)
+  isActive        Boolean                @default(true)
+  description     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  compensationItems StaffCompensationItem[]
+
+  @@index([type])
+  @@index([isActive])
+}
+
+// A staff member's salary package. History is kept; isCurrent marks the live row.
+model StaffCompensation {
+  id      String  @id @default(uuid())
+  staffId String
+  gradeId String?
+
+  basicSalary  Decimal @db.Decimal(18, 2)
+  currency     String  @default("NGN")
+  payFrequency String  @default("MONTHLY")
+
+  effectiveFrom DateTime  @db.Date
+  effectiveTo   DateTime? @db.Date
+  isCurrent     Boolean   @default(true)
+
+  reason      String?
+  createdById String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  staff     Staff                   @relation("CompensationStaff", fields: [staffId], references: [id])
+  createdBy Staff                   @relation("CompensationCreatedBy", fields: [createdById], references: [id])
+  grade     SalaryGrade?            @relation(fields: [gradeId], references: [id])
+  items     StaffCompensationItem[]
+
+  @@index([staffId])
+  @@index([isCurrent])
+}
+
+model StaffCompensationItem {
+  id             String @id @default(uuid())
+  compensationId String
+  componentId    String
+
+  // Either a flat amount or a percentage, per the component's calculationType
+  amount     Decimal? @db.Decimal(18, 2)
+  percentage Decimal? @db.Decimal(7, 4)
+
+  compensation StaffCompensation @relation(fields: [compensationId], references: [id], onDelete: Cascade)
+  component    PayrollComponent  @relation(fields: [componentId], references: [id])
+
+  @@unique([compensationId, componentId])
+}
+
+enum PayrollStatus {
+  DRAFT
+  PROCESSING
+  PENDING_APPROVAL
+  APPROVED
+  PAID
+  CANCELLED
+}
+
+model PayrollPeriod {
+  id        String   @id @default(uuid())
+  code      String   @unique // e.g. "2026-09"
+  year      Int
+  month     Int
+  startDate DateTime @db.Date
+  endDate   DateTime @db.Date
+  payDate   DateTime @db.Date
+
+  status PayrollStatus @default(DRAFT)
+
+  staffCount        Int     @default(0)
+  totalGross        Decimal @default(0) @db.Decimal(18, 2)
+  totalDeductions   Decimal @default(0) @db.Decimal(18, 2)
+  totalNet          Decimal @default(0) @db.Decimal(18, 2)
+  totalEmployerCost Decimal @default(0) @db.Decimal(18, 2)
+
+  processedById String?
+  processedAt   DateTime?
+  approvedById  String?
+  approvedAt    DateTime?
+  paidAt        DateTime?
+
+  journalEntryId String? // GL posting for the payroll accrual
+  notes          String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  processedBy Staff?    @relation("PayrollProcessedBy", fields: [processedById], references: [id])
+  approvedBy  Staff?    @relation("PayrollApprovedBy", fields: [approvedById], references: [id])
+  payslips    Payslip[]
+
+  @@unique([year, month])
+  @@index([status])
+}
+
+model Payslip {
+  id              String @id @default(uuid())
+  payslipNumber   String @unique
+  payrollPeriodId String
+  staffId         String
+
+  basicSalary     Decimal @db.Decimal(18, 2)
+  grossEarnings   Decimal @db.Decimal(18, 2)
+  totalDeductions Decimal @db.Decimal(18, 2)
+  netPay          Decimal @db.Decimal(18, 2)
+  employerCost    Decimal @default(0) @db.Decimal(18, 2)
+
+  workingDays Int     @default(0)
+  daysPresent Int     @default(0)
+  daysAbsent  Int     @default(0)
+  lopDays     Decimal @default(0) @db.Decimal(6, 2)
+  lopAmount   Decimal @default(0) @db.Decimal(18, 2)
+
+  // Snapshot of pay details at run time
+  bankName          String?
+  bankAccountNumber String?
+  gradeName         String?
+  jobTitle          String?
+
+  createdAt DateTime @default(now())
+
+  period PayrollPeriod @relation(fields: [payrollPeriodId], references: [id], onDelete: Cascade)
+  staff  Staff         @relation(fields: [staffId], references: [id])
+  lines  PayslipLine[]
+
+  @@unique([payrollPeriodId, staffId])
+  @@index([staffId])
+}
+
+model PayslipLine {
+  id        String @id @default(uuid())
+  payslipId String
+
+  componentCode String
+  componentName String
+  type          PayrollComponentType
+  amount        Decimal              @db.Decimal(18, 2)
+  glAccountCode String?
+  sortOrder     Int                  @default(0)
+
+  payslip Payslip @relation(fields: [payslipId], references: [id], onDelete: Cascade)
+
+  @@index([payslipId])
+}
+
+// ============================================================================
+// HR — RECRUITMENT
+// ============================================================================
+
+enum JobOpeningStatus {
+  DRAFT
+  OPEN
+  ON_HOLD
+  CLOSED
+  FILLED
+  CANCELLED
+}
+
+model JobOpening {
+  id           String  @id @default(uuid())
+  code         String  @unique
+  title        String
+  departmentId String
+  branchId     String?
+  gradeId      String?
+
+  description      String
+  requirements     String?
+  responsibilities String?
+  employmentType   EmploymentType @default(FULL_TIME)
+
+  vacancies   Int @default(1)
+  filledCount Int @default(0)
+
+  minSalary Decimal? @db.Decimal(18, 2)
+  maxSalary Decimal? @db.Decimal(18, 2)
+
+  status      JobOpeningStatus @default(DRAFT)
+  openedAt    DateTime?
+  closingDate DateTime?
+  closedAt    DateTime?
+
+  hiringManagerId String?
+  createdById     String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  department    Department       @relation(fields: [departmentId], references: [id])
+  branch        Branch?          @relation(fields: [branchId], references: [id])
+  grade         SalaryGrade?     @relation(fields: [gradeId], references: [id])
+  hiringManager Staff?           @relation("HiringManager", fields: [hiringManagerId], references: [id])
+  applications  JobApplication[]
+
+  @@index([status])
+  @@index([departmentId])
+}
+
+enum ApplicationStatus {
+  APPLIED
+  SCREENING
+  SHORTLISTED
+  INTERVIEWING
+  OFFER_SENT
+  OFFER_ACCEPTED
+  HIRED
+  REJECTED
+  WITHDRAWN
+}
+
+model JobApplication {
+  id                String @id @default(uuid())
+  applicationNumber String @unique
+  openingId         String
+
+  firstName String
+  lastName  String
+  email     String
+  phone     String
+  address   String?
+
+  resumeUrl            String?
+  coverLetter          String?
+  yearsExperience      Int?
+  currentEmployer      String?
+  currentPosition      String?
+  expectedSalary       Decimal? @db.Decimal(18, 2)
+  noticePeriodDays     Int?
+  highestQualification String?
+  source               String? // REFERRAL, WEBSITE, AGENCY, WALK_IN, LINKEDIN
+
+  status          ApplicationStatus @default(APPLIED)
+  rating          Int? // 1-5 screening rating
+  screeningNotes  String?
+  rejectionReason String?
+
+  hiredStaffId String?
+  hiredAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  opening    JobOpening  @relation(fields: [openingId], references: [id], onDelete: Cascade)
+  hiredStaff Staff?      @relation("HiredStaff", fields: [hiredStaffId], references: [id])
+  interviews Interview[]
+
+  @@index([openingId])
+  @@index([status])
+  @@index([email])
+}
+
+enum InterviewStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum InterviewRecommendation {
+  STRONG_HIRE
+  HIRE
+  NEUTRAL
+  NO_HIRE
+  STRONG_NO_HIRE
+}
+
+model Interview {
+  id            String @id @default(uuid())
+  applicationId String
+
+  stage           String // SCREENING, TECHNICAL, PANEL, FINAL
+  stageOrder      Int      @default(1)
+  scheduledAt     DateTime
+  durationMinutes Int      @default(45)
+  mode            String   @default("IN_PERSON") // IN_PERSON, VIDEO, PHONE
+  location        String?
+
+  interviewerId String?
+  status        InterviewStatus @default(SCHEDULED)
+
+  score          Int? // 1-100
+  feedback       String?
+  recommendation InterviewRecommendation?
+  completedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  application JobApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  interviewer Staff?         @relation("Interviewer", fields: [interviewerId], references: [id])
+
+  @@index([applicationId])
+  @@index([scheduledAt])
+}
+
+// ============================================================================
+// HR — ONBOARDING / OFFBOARDING
+// ============================================================================
+
+enum OnboardingType {
+  ONBOARDING
+  OFFBOARDING
+}
+
+enum OnboardingStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum OnboardingTaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  SKIPPED
+  BLOCKED
+}
+
+model OnboardingTemplate {
+  id           String         @id @default(uuid())
+  name         String
+  type         OnboardingType @default(ONBOARDING)
+  departmentId String?
+  description  String?
+  isActive     Boolean        @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  department  Department?              @relation(fields: [departmentId], references: [id])
+  tasks       OnboardingTemplateTask[]
+  onboardings StaffOnboarding[]
+}
+
+model OnboardingTemplateTask {
+  id         String @id @default(uuid())
+  templateId String
+
+  title         String
+  description   String?
+  category      String  @default("GENERAL") // IT, HR, FINANCE, COMPLIANCE, TRAINING, GENERAL
+  dueDayOffset  Int     @default(0) // days from start date
+  ownerRoleCode String? // role responsible by default
+  isMandatory   Boolean @default(true)
+  sortOrder     Int     @default(0)
+
+  template OnboardingTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([templateId])
+}
+
+model StaffOnboarding {
+  id         String           @id @default(uuid())
+  staffId    String
+  templateId String?
+  type       OnboardingType   @default(ONBOARDING)
+  status     OnboardingStatus @default(NOT_STARTED)
+
+  startDate   DateTime  @db.Date
+  targetDate  DateTime? @db.Date
+  completedAt DateTime?
+  notes       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  staff    Staff               @relation("OnboardingStaff", fields: [staffId], references: [id])
+  template OnboardingTemplate? @relation(fields: [templateId], references: [id])
+  tasks    OnboardingTask[]
+
+  @@index([staffId])
+  @@index([status])
+}
+
+model OnboardingTask {
+  id           String @id @default(uuid())
+  onboardingId String
+
+  title       String
+  description String?
+  category    String    @default("GENERAL")
+  dueDate     DateTime? @db.Date
+  isMandatory Boolean   @default(true)
+  sortOrder   Int       @default(0)
+
+  status        OnboardingTaskStatus @default(PENDING)
+  assigneeId    String?
+  completedById String?
+  completedAt   DateTime?
+  notes         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  onboarding  StaffOnboarding @relation(fields: [onboardingId], references: [id], onDelete: Cascade)
+  assignee    Staff?          @relation("OnboardingAssignee", fields: [assigneeId], references: [id])
+  completedBy Staff?          @relation("OnboardingCompletedBy", fields: [completedById], references: [id])
+
+  @@index([onboardingId])
+  @@index([assigneeId])
+  @@index([status])
+}
+
+// ============================================================================
+// HR — LEARNING & DEVELOPMENT
+// ============================================================================
+
+enum TrainingStatus {
+  PLANNED
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum EnrollmentStatus {
+  NOMINATED
+  ENROLLED
+  ATTENDED
+  COMPLETED
+  FAILED
+  CANCELLED
+  NO_SHOW
+}
+
+model TrainingProgram {
+  id          String  @id @default(uuid())
+  code        String  @unique
+  title       String
+  description String?
+  category    String  @default("GENERAL") // COMPLIANCE, TECHNICAL, LEADERSHIP, ONBOARDING, SOFT_SKILLS
+  provider    String?
+  mode        String  @default("IN_PERSON") // IN_PERSON, ONLINE, HYBRID
+
+  startDate   DateTime @db.Date
+  endDate     DateTime @db.Date
+  venue       String?
+  capacity    Int?
+  costPerSeat Decimal? @db.Decimal(18, 2)
+  isMandatory Boolean  @default(false)
+  passMark    Int?     @default(50)
+
+  facilitatorId String?
+  status        TrainingStatus @default(PLANNED)
+
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  facilitator Staff?               @relation("TrainingFacilitator", fields: [facilitatorId], references: [id])
+  enrollments TrainingEnrollment[]
+
+  @@index([status])
+  @@index([startDate])
+}
+
+model TrainingEnrollment {
+  id        String @id @default(uuid())
+  programId String
+  staffId   String
+
+  status         EnrollmentStatus @default(NOMINATED)
+  attendedAt     DateTime?
+  completedAt    DateTime?
+  score          Int?
+  passed         Boolean?
+  feedback       String?
+  certificateUrl String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  program TrainingProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+  staff   Staff           @relation(fields: [staffId], references: [id])
+
+  @@unique([programId, staffId])
+  @@index([staffId])
+}
+
+// ============================================================================
+// HR — COMPANY ASSETS
+// ============================================================================
+
+enum AssetStatus {
+  AVAILABLE
+  ASSIGNED
+  MAINTENANCE
+  RETIRED
+  LOST
+  DAMAGED
+}
+
+model CompanyAsset {
+  id           String  @id @default(uuid())
+  assetTag     String  @unique
+  name         String
+  category     String  @default("IT") // IT, FURNITURE, VEHICLE, PHONE, TOOLS, OTHER
+  make         String?
+  model        String?
+  serialNumber String?
+
+  purchaseDate  DateTime? @db.Date
+  purchaseCost  Decimal?  @db.Decimal(18, 2)
+  warrantyUntil DateTime? @db.Date
+
+  condition String      @default("GOOD") // NEW, GOOD, FAIR, POOR
+  status    AssetStatus @default(AVAILABLE)
+  branchId  String?
+  notes     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  branch      Branch?           @relation(fields: [branchId], references: [id])
+  assignments AssetAssignment[]
+
+  @@index([status])
+  @@index([category])
+}
+
+model AssetAssignment {
+  id      String @id @default(uuid())
+  assetId String
+  staffId String
+
+  assignedAt     DateTime  @default(now())
+  assignedById   String
+  dueReturnAt    DateTime? @db.Date
+  acknowledgedAt DateTime?
+
+  returnedAt      DateTime?
+  returnCondition String?
+  returnNotes     String?
+  notes           String?
+
+  asset      CompanyAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  staff      Staff        @relation("AssetHolder", fields: [staffId], references: [id])
+  assignedBy Staff        @relation("AssetIssuer", fields: [assignedById], references: [id])
+
+  @@index([assetId])
+  @@index([staffId])
+}
+
+// ============================================================================
+// HR — INTERNAL COMMUNICATION
+// ============================================================================
+
+enum AnnouncementAudience {
+  ALL
+  DEPARTMENT
+  BRANCH
+  ROLE
+}
+
+model Announcement {
+  id       String @id @default(uuid())
+  title    String
+  body     String
+  category String @default("GENERAL") // POLICY, EVENT, HOLIDAY, EMERGENCY, GENERAL
+  priority String @default("NORMAL") // LOW, NORMAL, HIGH, URGENT
+
+  audienceType AnnouncementAudience @default(ALL)
+  audienceId   String? // departmentId / branchId / roleId depending on audienceType
+
+  isPublished   Boolean   @default(false)
+  publishedAt   DateTime?
+  expiresAt     DateTime?
+  requiresAck   Boolean   @default(false)
+  pinned        Boolean   @default(false)
+  attachmentUrl String?
+
+  authorId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  author           Staff             @relation("AnnouncementAuthor", fields: [authorId], references: [id])
+  acknowledgements AnnouncementAck[]
+
+  @@index([isPublished, publishedAt])
+}
+
+model AnnouncementAck {
+  id             String   @id @default(uuid())
+  announcementId String
+  staffId        String
+  acknowledgedAt DateTime @default(now())
+
+  announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  staff        Staff        @relation(fields: [staffId], references: [id])
+
+  @@unique([announcementId, staffId])
+}
+
+// ============================================================================
+// HR — EMPLOYEE LIFECYCLE
+// ============================================================================
+
+enum MovementType {
+  PROMOTION
+  DEMOTION
+  TRANSFER
+  CONFIRMATION
+  ROLE_CHANGE
+  DEPARTMENT_CHANGE
+  SALARY_REVIEW
+  SUSPENSION
+  REINSTATEMENT
+  CONTRACT_RENEWAL
+  EXIT
+}
+
+model StaffMovement {
+  id            String       @id @default(uuid())
+  staffId       String
+  type          MovementType
+  effectiveDate DateTime     @db.Date
+
+  fromRoleId       String?
+  toRoleId         String?
+  fromDepartmentId String?
+  toDepartmentId   String?
+  fromBranchId     String?
+  toBranchId       String?
+  fromGradeId      String?
+  toGradeId        String?
+  fromSalary       Decimal? @db.Decimal(18, 2)
+  toSalary         Decimal? @db.Decimal(18, 2)
+  fromJobTitle     String?
+  toJobTitle       String?
+
+  reason      String
+  remarks     String?
+  documentUrl String?
+
+  createdById String
+  createdAt   DateTime @default(now())
+
+  staff     Staff @relation("MovementStaff", fields: [staffId], references: [id])
+  createdBy Staff @relation("MovementCreatedBy", fields: [createdById], references: [id])
+
+  @@index([staffId])
+  @@index([type])
+  @@index([effectiveDate])
+}
+
+enum ExitType {
+  RESIGNATION
+  TERMINATION
+  RETIREMENT
+  CONTRACT_END
+  REDUNDANCY
+  DEATH
+  ABANDONMENT
+}
+
+enum ClearanceStatus {
+  PENDING
+  IN_PROGRESS
+  CLEARED
+  BLOCKED
+}
+
+model StaffExit {
+  id      String   @id @default(uuid())
+  staffId String   @unique
+  type    ExitType
+
+  noticeDate     DateTime @db.Date
+  lastWorkingDay DateTime @db.Date
+  reason         String
+  detailedReason String?
+
+  exitInterviewDate  DateTime?
+  exitInterviewNotes String?
+  wouldRecommend     Boolean?
+  rehireEligible     Boolean   @default(true)
+
+  clearanceStatus   ClearanceStatus @default(PENDING)
+  assetsReturned    Boolean         @default(false)
+  handoverCompleted Boolean         @default(false)
+  accessRevoked     Boolean         @default(false)
+
+  finalSettlementAmount Decimal?  @db.Decimal(18, 2)
+  settledAt             DateTime?
+
+  processedById String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  staff       Staff @relation("ExitStaff", fields: [staffId], references: [id])
+  processedBy Staff @relation("ExitProcessedBy", fields: [processedById], references: [id])
+
+  @@index([clearanceStatus])
+}
+
+enum GoalStatus {
+  DRAFT
+  ACTIVE
+  ACHIEVED
+  MISSED
+  CANCELLED
+}
+
+model StaffGoal {
+  id      String @id @default(uuid())
+  staffId String
+
+  title       String
+  description String?
+  category    String   @default("PERFORMANCE") // PERFORMANCE, DEVELOPMENT, BEHAVIOURAL, PROJECT
+  targetValue Decimal? @db.Decimal(18, 2)
+  actualValue Decimal? @db.Decimal(18, 2)
+  unit        String?
+  weight      Int      @default(10) // percentage weight in review
+
+  startDate    DateTime   @db.Date
+  dueDate      DateTime   @db.Date
+  status       GoalStatus @default(DRAFT)
+  progress     Int        @default(0) // 0-100
+  ratedScore   Int? // 1-5 at review time
+  reviewPeriod String?
+
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  staff     Staff @relation("GoalStaff", fields: [staffId], references: [id])
+  createdBy Staff @relation("GoalCreatedBy", fields: [createdById], references: [id])
+
+  @@index([staffId])
+  @@index([status])
 }
