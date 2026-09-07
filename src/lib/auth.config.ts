@@ -18,7 +18,9 @@ export const authConfig = {
   callbacks: {
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user;
-      const isAuthPage = nextUrl.pathname === '/login';
+      // Pages a signed-out visitor may reach. /signup is the public account
+      // enquiry, so it must not bounce to the login screen.
+      const isAuthPage = nextUrl.pathname === '/login' || nextUrl.pathname === '/signup';
       const isChangePasswordPage = nextUrl.pathname === '/change-password';
       const isApiAuth = nextUrl.pathname.startsWith('/api/auth');
 

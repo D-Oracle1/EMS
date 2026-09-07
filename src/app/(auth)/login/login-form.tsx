@@ -1,13 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Landmark, Eye, EyeOff } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
+import { AuthShell, FIELD_CLASS, BUTTON_CLASS } from '../auth-shell';
 
 export function LoginForm() {
   const router = useRouter();
@@ -33,9 +31,11 @@ export function LoginForm() {
       });
 
       if (result?.error) {
-        setError(result.error === 'CredentialsSignin'
-          ? 'Invalid email or password'
-          : result.error);
+        setError(
+          result.error === 'CredentialsSignin'
+            ? 'Invalid email or password'
+            : result.error
+        );
       } else {
         // With no explicit callback, hand off to '/', which resolves the
         // right home for this user server-side (HR staff open onto /hr).
@@ -50,68 +50,95 @@ export function LoginForm() {
   };
 
   return (
-    <Card className="w-full max-w-md mx-4">
-      <CardHeader className="text-center">
-        <div className="flex justify-center mb-4">
-          <div className="h-16 w-16 rounded-full bg-blue-600 flex items-center justify-center">
-            <Landmark className="h-8 w-8 text-white" />
+    <AuthShell
+      eyebrow="Welcome back"
+      title="Log in to your account"
+      lede="Access your savings, deposits and financing dashboard."
+      footer={
+        <p className="mt-8 text-center text-sm text-slate-600">
+          New to HY-LINK?{' '}
+          <Link
+            href="/signup"
+            className="font-semibold text-orange-600 hover:text-orange-700"
+          >
+            Open an account
+          </Link>
+        </p>
+      }
+    >
+      <form onSubmit={handleSubmit} className="mt-8 space-y-4" noValidate>
+        {error && (
+          <div
+            role="alert"
+            className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"
+          >
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        <div>
+          <label htmlFor="email" className="mb-2 block text-xs font-semibold text-slate-600">
+            Email address
+          </label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            disabled={loading}
+            className={FIELD_CLASS}
+            placeholder="you@example.com"
+          />
+        </div>
+
+        <div>
+          <label htmlFor="password" className="mb-2 block text-xs font-semibold text-slate-600">
+            Password
+          </label>
+          <div className="relative">
+            <input
+              id="password"
+              name="password"
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="current-password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={loading}
+              className={`${FIELD_CLASS} pr-12`}
+              placeholder="Enter your password"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              className="absolute inset-y-0 right-0 px-4 text-slate-400 transition hover:text-slate-700"
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
           </div>
         </div>
-        <CardTitle className="text-2xl">Hylink Finance</CardTitle>
-        <CardDescription>Enterprise Management System</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {error && (
-            <div className="rounded-md bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive">
-              {error}
-            </div>
+
+        <button type="submit" disabled={loading} className={`${BUTTON_CLASS} mt-2`}>
+          {loading ? (
+            <span className="flex items-center justify-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Signing in…
+            </span>
+          ) : (
+            'Log in'
           )}
+        </button>
 
-          <div className="space-y-2">
-            <Label htmlFor="email">Email Address</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="you@hylinkfinance.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoComplete="email"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <div className="relative">
-              <Input
-                id="password"
-                type={showPassword ? 'text' : 'password'}
-                placeholder="Enter your password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                autoComplete="current-password"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </div>
-          </div>
-
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? 'Signing in...' : 'Sign In'}
-          </Button>
-
-          <p className="text-xs text-center text-muted-foreground mt-4">
-            Contact your system administrator if you need access
-          </p>
-        </form>
-      </CardContent>
-    </Card>
+        <p className="pt-1 text-center text-xs text-slate-500">
+          Forgotten your password? Contact your administrator, or call us and we will reset it
+          for you.
+        </p>
+      </form>
+    </AuthShell>
   );
 }
