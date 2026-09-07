@@ -10,10 +10,14 @@ import {
   Loader2,
   AlertTriangle,
   Receipt,
+  Users,
+  Wallet,
+  TrendingUp,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { StatCard } from '@/components/ui/stat-card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -172,18 +176,19 @@ export function PayrollPeriodClient({ periodId, user }: PayrollPeriodClientProps
       {period && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {[
-            { label: 'Staff', value: String(period.staffCount) },
-            { label: 'Gross Earnings', value: formatCurrency(period.totalGross) },
-            { label: 'Deductions', value: formatCurrency(period.totalDeductions) },
-            { label: 'Net Pay', value: formatCurrency(period.totalNet) },
-            { label: 'Employer Cost', value: formatCurrency(period.totalEmployerCost) },
+            { label: 'Staff', value: String(period.staffCount), color: 'indigo' as const, icon: Users },
+            { label: 'Gross Earnings', value: formatCurrency(period.totalGross), color: 'emerald' as const, icon: Wallet },
+            { label: 'Deductions', value: formatCurrency(period.totalDeductions), color: 'amber' as const, icon: Receipt },
+            { label: 'Net Pay', value: formatCurrency(period.totalNet), color: 'teal' as const, icon: Banknote },
+            { label: 'Employer Cost', value: formatCurrency(period.totalEmployerCost), color: 'purple' as const, icon: TrendingUp },
           ].map((stat) => (
-            <Card key={stat.label}>
-              <CardContent className="pt-6">
-                <p className="text-sm text-muted-foreground">{stat.label}</p>
-                <p className="mt-1 text-xl font-bold tabular-nums">{stat.value}</p>
-              </CardContent>
-            </Card>
+            <StatCard
+              key={stat.label}
+              title={stat.label}
+              color={stat.color}
+              value={stat.value}
+              icon={stat.icon}
+            />
           ))}
         </div>
       )}

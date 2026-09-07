@@ -29,6 +29,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { StatCard } from '@/components/ui/stat-card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -242,51 +243,39 @@ export function PayrollClient({ user }: PayrollClientProps) {
       {/* Latest run summary */}
       {latest && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Card>
-            <CardContent className="pt-6">
-              <p className="text-sm text-muted-foreground">Last Run Gross</p>
-              <p className="mt-1 text-2xl font-bold tabular-nums">
-                {formatCurrency(latest.gross)}
-              </p>
-              {analytics.monthOnMonthChange !== null && (
-                <p
-                  className={`mt-1 text-xs ${
-                    analytics.monthOnMonthChange >= 0
-                      ? 'text-amber-600 dark:text-amber-400'
-                      : 'text-emerald-600 dark:text-emerald-400'
-                  }`}
-                >
-                  {analytics.monthOnMonthChange >= 0 ? '+' : ''}
-                  {analytics.monthOnMonthChange}% vs previous month
-                </p>
-              )}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <p className="text-sm text-muted-foreground">Net Paid</p>
-              <p className="mt-1 text-2xl font-bold tabular-nums">{formatCurrency(latest.net)}</p>
-              <p className="mt-1 text-xs text-muted-foreground">{latest.code}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <p className="text-sm text-muted-foreground">Cost to Company</p>
-              <p className="mt-1 text-2xl font-bold tabular-nums">
-                {formatCurrency(latest.costToCompany)}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">Gross plus employer contributions</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <p className="text-sm text-muted-foreground">Average per Head</p>
-              <p className="mt-1 text-2xl font-bold tabular-nums">
-                {formatCurrency(latest.averageCost)}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">{latest.staffCount} staff</p>
-            </CardContent>
-          </Card>
+          <StatCard
+            title="Last Run Gross"
+            color="emerald"
+            value={formatCurrency(latest.gross)}
+            icon={Wallet}
+            description={
+              analytics.monthOnMonthChange !== null
+                ? `${analytics.monthOnMonthChange >= 0 ? '+' : ''}${analytics.monthOnMonthChange}% vs previous month`
+                : latest.code
+            }
+            delta={analytics.monthOnMonthChange ?? undefined}
+          />
+          <StatCard
+            title="Net Paid"
+            color="teal"
+            value={formatCurrency(latest.net)}
+            icon={Banknote}
+            description={latest.code}
+          />
+          <StatCard
+            title="Cost to Company"
+            color="purple"
+            value={formatCurrency(latest.costToCompany)}
+            icon={TrendingUp}
+            description="Gross plus employer contributions"
+          />
+          <StatCard
+            title="Average per Head"
+            color="indigo"
+            value={formatCurrency(latest.averageCost)}
+            icon={UserCog}
+            description={`${latest.staffCount} staff`}
+          />
         </div>
       )}
 

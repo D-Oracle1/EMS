@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { StatCard } from '@/components/ui/stat-card';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -244,17 +245,18 @@ export function AssetsClient({ user }: AssetsClientProps) {
 
       <div className="grid gap-4 sm:grid-cols-4">
         {[
-          { label: 'Total Assets', value: String(assets.length) },
-          { label: 'Assigned', value: String(assets.filter((a) => a.status === 'ASSIGNED').length) },
-          { label: 'Available', value: String(assets.filter((a) => a.status === 'AVAILABLE').length) },
-          { label: 'Book Value', value: formatCurrency(totalValue) },
+          { label: 'Total Assets', value: String(assets.length), color: 'slate' as const, icon: Laptop },
+          { label: 'Assigned', value: String(assets.filter((a) => a.status === 'ASSIGNED').length), color: 'indigo' as const, icon: UserPlus },
+          { label: 'Available', value: String(assets.filter((a) => a.status === 'AVAILABLE').length), color: 'emerald' as const, icon: Undo2 },
+          { label: 'Book Value', value: formatCurrency(totalValue), color: 'purple' as const, icon: Search },
         ].map((stat) => (
-          <Card key={stat.label}>
-            <CardContent className="pt-6">
-              <p className="text-sm text-muted-foreground">{stat.label}</p>
-              <p className="mt-1 text-2xl font-bold tabular-nums">{stat.value}</p>
-            </CardContent>
-          </Card>
+          <StatCard
+            key={stat.label}
+            title={stat.label}
+            color={stat.color}
+            value={stat.value}
+            icon={stat.icon}
+          />
         ))}
       </div>
 

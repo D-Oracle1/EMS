@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { StatCard } from '@/components/ui/stat-card';
 import { Badge } from '@/components/ui/badge';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -147,30 +148,22 @@ export function FixedSavingsAccountsClient({ user }: Props) {
       {/* Stats */}
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="pt-6">
-              <p className="text-2xl font-bold">{stats.activeAccounts}</p>
-              <p className="text-xs text-muted-foreground">Active Accounts</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <p className="text-2xl font-bold text-blue-600">{formatCurrency(stats.totalDeposits)}</p>
-              <p className="text-xs text-muted-foreground">Total Deposits</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <p className="text-2xl font-bold text-green-600">{formatCurrency(stats.totalAccruedInterest)}</p>
-              <p className="text-xs text-muted-foreground">Accrued Interest</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <p className="text-2xl font-bold text-orange-600">{stats.pendingTerminations}</p>
-              <p className="text-xs text-muted-foreground">Pending Terminations</p>
-            </CardContent>
-          </Card>
+          <StatCard title="Active Accounts" color="emerald" value={stats.activeAccounts} />
+          <StatCard
+            title="Total Deposits"
+            color="sky"
+            value={formatCurrency(stats.totalDeposits)}
+          />
+          <StatCard
+            title="Accrued Interest"
+            color="teal"
+            value={formatCurrency(stats.totalAccruedInterest)}
+          />
+          <StatCard
+            title="Pending Terminations"
+            color="amber"
+            value={stats.pendingTerminations}
+          />
         </div>
       )}
 

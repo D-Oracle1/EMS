@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { StatCard } from '@/components/ui/stat-card';
 import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
@@ -209,30 +210,22 @@ export function SavingsProductsClient({ user }: SavingsProductsClientProps) {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-2xl font-bold">{products.length}</p>
-            <p className="text-xs text-muted-foreground">Total Products</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-2xl font-bold text-green-600">{products.filter((p) => p.isActive).length}</p>
-            <p className="text-xs text-muted-foreground">Active</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-2xl font-bold text-yellow-600">{products.filter((p) => !p.isActive).length}</p>
-            <p className="text-xs text-muted-foreground">Inactive</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-2xl font-bold">{products.reduce((s, p) => s + p.usageCount, 0)}</p>
-            <p className="text-xs text-muted-foreground">Total Accounts</p>
-          </CardContent>
-        </Card>
+        <StatCard title="Total Products" color="slate" value={products.length} />
+        <StatCard
+          title="Active"
+          color="emerald"
+          value={products.filter((p) => p.isActive).length}
+        />
+        <StatCard
+          title="Inactive"
+          color="amber"
+          value={products.filter((p) => !p.isActive).length}
+        />
+        <StatCard
+          title="Total Accounts"
+          color="sky"
+          value={products.reduce((s, p) => s + p.usageCount, 0)}
+        />
       </div>
 
       {/* Products Table */}

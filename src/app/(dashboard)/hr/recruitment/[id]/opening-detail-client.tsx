@@ -3,12 +3,16 @@
 import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Plus, CalendarPlus, Loader2, Star, UserCheck } from 'lucide-react';
+import {
+  ArrowLeft, Plus, CalendarPlus, Loader2, Star, UserCheck,
+  Briefcase, Users, Wallet,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { StatCard } from '@/components/ui/stat-card';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
@@ -209,36 +213,38 @@ export function OpeningDetailClient({ opening, user }: OpeningDetailClientProps)
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">Status</p>
-            <Badge className="mt-2">{opening.status.replace('_', ' ')}</Badge>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">Vacancies</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums">
-              {opening.filledCount}/{opening.vacancies}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">Applicants</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums">{opening.applications.length}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">Salary Range</p>
-            <p className="mt-1 text-sm font-semibold tabular-nums">
-              {opening.minSalary != null && opening.maxSalary != null
-                ? `${formatCurrency(opening.minSalary)} – ${formatCurrency(opening.maxSalary)}`
-                : 'Not disclosed'}
-            </p>
-          </CardContent>
-        </Card>
+        <StatCard
+          title="Status"
+          color="cyan"
+          value={opening.status.replace('_', ' ')}
+          icon={Briefcase}
+        />
+        <StatCard
+          title="Vacancies"
+          color="indigo"
+          value={opening.filledCount}
+          secondaryValue={opening.vacancies}
+          icon={UserCheck}
+          progress={
+            opening.vacancies > 0 ? (opening.filledCount / opening.vacancies) * 100 : 0
+          }
+        />
+        <StatCard
+          title="Applicants"
+          color="sky"
+          value={opening.applications.length}
+          icon={Users}
+        />
+        <StatCard
+          title="Salary Range"
+          color="emerald"
+          value={
+            opening.minSalary != null && opening.maxSalary != null
+              ? `${formatCurrency(opening.minSalary)} – ${formatCurrency(opening.maxSalary)}`
+              : 'Not disclosed'
+          }
+          icon={Wallet}
+        />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">

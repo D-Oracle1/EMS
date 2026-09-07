@@ -42,6 +42,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
+import { StatCard } from '@/components/ui/stat-card';
 import {
   getHROverview,
   getHeadcountTrend,
@@ -77,46 +78,6 @@ const HR_SECTIONS: HRLink[] = [
   { href: '/hr/leave', title: 'Leave', description: 'Requests, approvals and entitlement balances.', icon: CalendarCheck },
   { href: '/hr/settings', title: 'HR Configuration', description: 'Leave types, holidays, shifts, grades, pay components.', icon: Settings2, permissions: ['HR:CONFIG_MANAGE', 'SYSTEM:CONFIG_MANAGE'] },
 ];
-
-function StatCard({
-  label,
-  value,
-  hint,
-  icon: Icon,
-  tone = 'default',
-}: {
-  label: string;
-  value: string | number;
-  hint?: string;
-  icon: React.ElementType;
-  tone?: 'default' | 'positive' | 'negative' | 'warning';
-}) {
-  const toneClass =
-    tone === 'positive'
-      ? 'text-emerald-600 dark:text-emerald-400'
-      : tone === 'negative'
-        ? 'text-red-600 dark:text-red-400'
-        : tone === 'warning'
-          ? 'text-amber-600 dark:text-amber-400'
-          : '';
-
-  return (
-    <Card>
-      <CardContent className="pt-6">
-        <div className="flex items-start justify-between">
-          <div className="min-w-0">
-            <p className="text-sm text-muted-foreground">{label}</p>
-            <p className={`mt-1 text-2xl font-bold tabular-nums ${toneClass}`}>{value}</p>
-            {hint && <p className="mt-1 truncate text-xs text-muted-foreground">{hint}</p>}
-          </div>
-          <span className="rounded-lg bg-muted p-2 text-muted-foreground">
-            <Icon className="h-4 w-4" />
-          </span>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
 
 function initials(name: string): string {
   return name
@@ -190,31 +151,34 @@ export function HRHubClient({ user }: HRHubClientProps) {
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard
-              label="Headcount"
+              title="Headcount"
+              color="indigo"
               value={overview.headcount}
-              hint={`${overview.hiresThisYear} hired · ${overview.exitsThisYear} exited this year`}
+              description={`${overview.hiresThisYear} hired · ${overview.exitsThisYear} exited this year`}
               icon={Users}
             />
             <StatCard
-              label="Net Growth (YTD)"
+              title="Net Growth (YTD)"
+              color={overview.netGrowth >= 0 ? 'emerald' : 'rose'}
               value={overview.netGrowth > 0 ? `+${overview.netGrowth}` : overview.netGrowth}
-              hint="Hires minus exits"
+              description="Hires minus exits"
               icon={overview.netGrowth >= 0 ? UserPlus : UserMinus}
-              tone={overview.netGrowth >= 0 ? 'positive' : 'negative'}
             />
             <StatCard
-              label="Attrition Rate"
+              title="Attrition Rate"
+              color={overview.attritionRate > 15 ? 'amber' : 'violet'}
               value={`${overview.attritionRate}%`}
-              hint="Annualised, against average headcount"
+              description="Annualised, against average headcount"
               icon={TrendingDown}
-              tone={overview.attritionRate > 15 ? 'warning' : 'default'}
             />
             <StatCard
-              label="Present Today"
-              value={`${overview.attendanceToday.attendanceRate}%`}
-              hint={`${overview.attendanceToday.present} present · ${overview.attendanceToday.late} late · ${overview.attendanceToday.onLeave} on leave`}
+              title="Present Today"
+              color={overview.attendanceToday.attendanceRate < 80 ? 'amber' : 'teal'}
+              value={`${overview.attendanceToday.present}`}
+              secondaryValue={overview.headcount}
+              description={`${overview.attendanceToday.late} late · ${overview.attendanceToday.onLeave} on leave`}
               icon={Clock}
-              tone={overview.attendanceToday.attendanceRate < 80 ? 'warning' : 'positive'}
+              progress={overview.attendanceToday.attendanceRate}
             />
           </div>
 

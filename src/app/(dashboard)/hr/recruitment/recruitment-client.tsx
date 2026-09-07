@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { StatCard } from '@/components/ui/stat-card';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
@@ -293,31 +294,25 @@ export function RecruitmentClient({ user }: RecruitmentClientProps) {
       {pipeline && (
         <>
           <div className="grid gap-4 sm:grid-cols-3">
-            <Card>
-              <CardContent className="pt-6">
-                <p className="text-sm text-muted-foreground">Open Roles</p>
-                <p className="mt-1 text-2xl font-bold tabular-nums">{pipeline.openOpenings}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {pipeline.openVacancies} vacancies to fill
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-6">
-                <p className="text-sm text-muted-foreground">Upcoming Interviews</p>
-                <p className="mt-1 text-2xl font-bold tabular-nums">
-                  {pipeline.upcomingInterviews}
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-6">
-                <p className="text-sm text-muted-foreground">Rejected / Withdrawn</p>
-                <p className="mt-1 text-2xl font-bold tabular-nums">
-                  {pipeline.rejected + pipeline.withdrawn}
-                </p>
-              </CardContent>
-            </Card>
+            <StatCard
+              title="Open Roles"
+              color="cyan"
+              value={pipeline.openOpenings}
+              icon={Briefcase}
+              description={`${pipeline.openVacancies} vacancies to fill`}
+            />
+            <StatCard
+              title="Upcoming Interviews"
+              color="sky"
+              value={pipeline.upcomingInterviews}
+              icon={CalendarClock}
+            />
+            <StatCard
+              title="Rejected / Withdrawn"
+              color="rose"
+              value={pipeline.rejected + pipeline.withdrawn}
+              icon={Users}
+            />
           </div>
 
           <Card>

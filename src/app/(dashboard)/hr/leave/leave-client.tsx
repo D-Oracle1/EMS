@@ -17,7 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
+import { StatCard, type StatColor } from '@/components/ui/stat-card';
 import {
   Table,
   TableBody,
@@ -59,6 +59,34 @@ const leaveStatusVariant: Record<string, 'success' | 'error' | 'warning' | 'seco
   REJECTED: 'error',
   CANCELLED: 'secondary',
 };
+
+/**
+ * Leave types carry a free-form `colorHex` in the database, which cannot drive
+ * the token-based card. The standard codes get a deliberate palette colour and
+ * anything custom falls back to violet.
+ */
+function leaveTypeColor(code: string): StatColor {
+  switch (code) {
+    case 'ANNUAL':
+      return 'sky';
+    case 'SICK':
+      return 'rose';
+    case 'CASUAL':
+      return 'amber';
+    case 'MATERNITY':
+      return 'pink';
+    case 'PATERNITY':
+      return 'indigo';
+    case 'COMPASSIONATE':
+      return 'slate';
+    case 'STUDY':
+      return 'teal';
+    case 'UNPAID':
+      return 'slate';
+    default:
+      return 'violet';
+  }
+}
 
 interface LeaveClientProps {
   user: SessionUser;
@@ -186,29 +214,21 @@ export function LeaveClient({ user }: LeaveClientProps) {
             const percent = total > 0 ? Math.min((consumed / total) * 100, 100) : 0;
 
             return (
-              <Card key={balance.leaveTypeId}>
-                <CardContent className="pt-6">
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-2 text-sm font-medium">
-                      <span
-                        className="h-2.5 w-2.5 rounded-full"
-                        style={{ backgroundColor: balance.colorHex ?? '#64748b' }}
-                        aria-hidden
-                      />
-                      {balance.leaveTypeName}
-                    </span>
-                    <span className="text-2xl font-bold tabular-nums">
-                      {balance.availableDays}
-                    </span>
-                  </div>
-                  <Progress value={percent} className="mt-3 h-1.5" />
-                  <div className="mt-2 flex justify-between text-xs text-muted-foreground">
-                    <span>{balance.usedDays} used</span>
-                    {balance.pendingDays > 0 && <span>{balance.pendingDays} pending</span>}
-                    <span>of {total} days</span>
-                  </div>
-                </CardContent>
-              </Card>
+              <StatCard
+                key={balance.leaveTypeId}
+                title={balance.leaveTypeName}
+                color={leaveTypeColor(balance.leaveTypeCode)}
+                value={balance.availableDays}
+                secondaryValue={total}
+                icon={CalendarOff}
+                // The ring reads as the share of the entitlement already spent.
+                progress={percent}
+                description={
+                  balance.pendingDays > 0
+                    ? `${balance.usedDays} used · ${balance.pendingDays} pending · of ${total} days`
+                    : `${balance.usedDays} used · of ${total} days`
+                }
+              />
             );
           })}
         </div>

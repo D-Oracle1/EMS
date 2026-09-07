@@ -6,6 +6,7 @@ import { Network, ChevronRight, ChevronDown, Users, Search, Layers } from 'lucid
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { StatCard } from '@/components/ui/stat-card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getOrgChart } from '@/actions/hr-analytics.actions';
@@ -222,28 +223,19 @@ export function OrgChartClient({ user }: OrgChartClientProps) {
       {chart && (
         <div className="grid gap-4 sm:grid-cols-4">
           {[
-            { label: 'Staff in Chart', value: chart.totalStaff, icon: Users },
-            { label: 'Top-level Nodes', value: chart.roots.length, icon: Network },
-            { label: 'Depth', value: chart.maxDepth + 1, icon: Layers },
-            { label: 'No Supervisor', value: chart.unassigned, icon: Users },
-          ].map((stat) => {
-            const Icon = stat.icon;
-            return (
-              <Card key={stat.label}>
-                <CardContent className="pt-6">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">{stat.label}</p>
-                      <p className="mt-1 text-2xl font-bold tabular-nums">{stat.value}</p>
-                    </div>
-                    <span className="rounded-lg bg-muted p-2 text-muted-foreground">
-                      <Icon className="h-4 w-4" />
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+            { label: 'Staff in Chart', value: chart.totalStaff, icon: Users, color: 'indigo' as const },
+            { label: 'Top-level Nodes', value: chart.roots.length, icon: Network, color: 'blue' as const },
+            { label: 'Depth', value: chart.maxDepth + 1, icon: Layers, color: 'violet' as const },
+            { label: 'No Supervisor', value: chart.unassigned, icon: Users, color: chart.unassigned > 1 ? ('amber' as const) : ('slate' as const) },
+          ].map((stat) => (
+            <StatCard
+              key={stat.label}
+              title={stat.label}
+              color={stat.color}
+              value={stat.value}
+              icon={stat.icon}
+            />
+          ))}
         </div>
       )}
 

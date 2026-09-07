@@ -6,6 +6,7 @@ import { Receipt, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { StatCard } from '@/components/ui/stat-card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import {
@@ -75,24 +76,19 @@ export function MyPayslipsClient({ user }: MyPayslipsClientProps) {
 
       {payslips.length > 0 && (
         <div className="grid gap-4 sm:grid-cols-3">
-          <Card>
-            <CardContent className="pt-6">
-              <p className="text-sm text-muted-foreground">Payslips</p>
-              <p className="mt-1 text-2xl font-bold tabular-nums">{payslips.length}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <p className="text-sm text-muted-foreground">Total Gross</p>
-              <p className="mt-1 text-2xl font-bold tabular-nums">{formatCurrency(ytdGross)}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <p className="text-sm text-muted-foreground">Total Net Received</p>
-              <p className="mt-1 text-2xl font-bold tabular-nums">{formatCurrency(ytdNet)}</p>
-            </CardContent>
-          </Card>
+          <StatCard title="Payslips" color="slate" value={payslips.length} icon={Receipt} />
+          <StatCard
+            title="Total Gross"
+            color="sky"
+            value={formatCurrency(ytdGross)}
+            icon={FileText}
+          />
+          <StatCard
+            title="Total Net Received"
+            color="emerald"
+            value={formatCurrency(ytdNet)}
+            icon={Receipt}
+          />
         </div>
       )}
 
