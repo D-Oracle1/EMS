@@ -1,4 +1,5 @@
 import type { NextAuthConfig } from 'next-auth';
+import { resolveLandingPath } from './landing';
 
 /**
  * Auth config that can be used in Edge runtime (middleware).
@@ -24,7 +25,8 @@ export const authConfig = {
       if (isApiAuth) return true;
 
       const userType = (auth?.user as any)?.userType ?? 'staff';
-      const home = userType === 'customer' ? '/portal' : '/dashboard';
+      // HR-only staff open onto the HR overview rather than the generic dashboard.
+      const home = resolveLandingPath(auth?.user as any);
 
       if (isAuthPage) {
         if (isLoggedIn) {
@@ -48,7 +50,7 @@ export const authConfig = {
           return Response.redirect(new URL('/portal', nextUrl));
         }
       } else if (isPortal) {
-        return Response.redirect(new URL('/dashboard', nextUrl));
+        return Response.redirect(new URL(home, nextUrl));
       }
 
       return true;

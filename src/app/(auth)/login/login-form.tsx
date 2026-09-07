@@ -12,7 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get('callbackUrl') || '/dashboard';
+  const callbackUrl = searchParams.get('callbackUrl');
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -37,7 +37,9 @@ export function LoginForm() {
           ? 'Invalid email or password'
           : result.error);
       } else {
-        router.push(callbackUrl);
+        // With no explicit callback, hand off to '/', which resolves the
+        // right home for this user server-side (HR staff open onto /hr).
+        router.push(callbackUrl || '/');
         router.refresh();
       }
     } catch {
