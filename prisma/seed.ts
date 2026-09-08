@@ -8,23 +8,24 @@ async function main() {
 
   // ── Sequences ──────────────────────────────────────────────────────
   const sequences = [
-    { code: 'CUSTOMER', prefix: 'CUS', padLength: 6 },
-    { code: 'LOAN', prefix: 'LN', padLength: 6 },
-    { code: 'RECEIPT', prefix: 'RCP', padLength: 6 },
-    { code: 'SAVINGS_ACCOUNT', prefix: 'SAV', padLength: 6 },
-    { code: 'SAVINGS_TXN', prefix: 'STX', padLength: 6 },
-    { code: 'FIXED_DEPOSIT', prefix: 'FD', padLength: 6 },
-    { code: 'JOURNAL', prefix: 'JNL', padLength: 6 },
-    { code: 'EMPLOYEE', prefix: 'EMP', padLength: 5 },
-    { code: 'DOCUMENT', prefix: 'DOC', padLength: 6 },
-    { code: 'RESTRUCTURING', prefix: 'RST', padLength: 6 },
-    { code: 'WITHDRAWAL_REQ', prefix: 'WDR', padLength: 6 },
+    { code: 'CUSTOMER', prefix: 'CUS', padLength: 4 },
+    { code: 'LOAN', prefix: 'LN', padLength: 4 },
+    { code: 'RECEIPT', prefix: 'RCP', padLength: 4 },
+    { code: 'SAVINGS_ACCOUNT', prefix: 'SAV', padLength: 4 },
+    { code: 'SAVINGS_TXN', prefix: 'STX', padLength: 4 },
+    { code: 'FIXED_DEPOSIT', prefix: 'FD', padLength: 4 },
+    { code: 'JOURNAL', prefix: 'JNL', padLength: 4 },
+    { code: 'EMPLOYEE', prefix: 'EMP', padLength: 4 },
+    { code: 'DOCUMENT', prefix: 'DOC', padLength: 4 },
+    { code: 'RESTRUCTURING', prefix: 'RST', padLength: 4 },
+    { code: 'WITHDRAWAL_REQ', prefix: 'WDR', padLength: 4 },
   ];
 
   for (const seq of sequences) {
     await prisma.sequence.upsert({
       where: { code: seq.code },
-      update: {},
+      // Keep the running value, but let the prefix and width be corrected.
+      update: { prefix: seq.prefix, padLength: seq.padLength },
       create: { code: seq.code, prefix: seq.prefix, padLength: seq.padLength, currentValue: 0, resetFrequency: 'NEVER' },
     });
     console.log(`  Sequence: ${seq.code} (${seq.prefix})`);

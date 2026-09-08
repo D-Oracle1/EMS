@@ -21,7 +21,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import {
-  getFixedSavingsAccounts,
+  getSavingsAccountsList,
   getFixedSavingsProducts,
   getFixedSavingsDashboard,
   fixedSavingsDeposit,
@@ -48,6 +48,7 @@ export function FixedSavingsAccountsClient({ user }: Props) {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [productId, setProductId] = useState('');
+  const [kind, setKind] = useState<'ALL' | 'FIXED' | 'ORDINARY'>('ALL');
   const [isPending, startTransition] = useTransition();
 
   // Deposit dialog
@@ -62,7 +63,7 @@ export function FixedSavingsAccountsClient({ user }: Props) {
     startTransition(async () => {
       try {
         const [accs, prods, dash] = await Promise.all([
-          getFixedSavingsAccounts({ search: search || undefined, status: status || undefined, productId: productId || undefined, page, limit: 20 }),
+          getSavingsAccountsList({ search: search || undefined, status: status || undefined, productId: productId || undefined, kind, page, limit: 20 }),
           getFixedSavingsProducts(),
           getFixedSavingsDashboard(),
         ]);
@@ -196,6 +197,16 @@ export function FixedSavingsAccountsClient({ user }: Props) {
                 {products.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
               </SelectContent>
             </Select>
+            <Select value={kind} onValueChange={(v) => setKind(v as 'ALL' | 'FIXED' | 'ORDINARY')}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="All types" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All types</SelectItem>
+                <SelectItem value="FIXED">Fixed-term</SelectItem>
+                <SelectItem value="ORDINARY">Ordinary savings</SelectItem>
+              </SelectContent>
+            </Select>
             <Button variant="outline" onClick={() => loadData(1)} disabled={isPending}>
               <RefreshCw className={`mr-2 h-4 w-4 ${isPending ? 'animate-spin' : ''}`} />
               Search
@@ -210,6 +221,7 @@ export function FixedSavingsAccountsClient({ user }: Props) {
                   <TableHead>Account #</TableHead>
                   <TableHead>Customer</TableHead>
                   <TableHead>Plan</TableHead>
+                  <TableHead className="text-right">Balance</TableHead>
                   <TableHead className="text-right">Total Deposits</TableHead>
                   <TableHead className="text-right">Eligible Bal.</TableHead>
                   <TableHead className="text-right">Pending Dep.</TableHead>
@@ -221,8 +233,8 @@ export function FixedSavingsAccountsClient({ user }: Props) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isPending && <TableRow><TableCell colSpan={11} className="text-center py-8"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></TableCell></TableRow>}
-                {!isPending && accounts.length === 0 && <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-8">No accounts found</TableCell></TableRow>}
+                {isPending && <TableRow><TableCell colSpan={12} className="text-center py-8"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></TableCell></TableRow>}
+                {!isPending && accounts.length === 0 && <TableRow><TableCell colSpan={12} className="text-center text-muted-foreground py-8">No accounts found</TableCell></TableRow>}
                 {accounts.map((a) => (
                   <TableRow key={a.id}>
                     <TableCell>
@@ -234,10 +246,21 @@ export function FixedSavingsAccountsClient({ user }: Props) {
                     </TableCell>
                     <TableCell>
                       <p className="text-sm">{a.product.name}</p>
-                      <p className="text-xs text-muted-foreground">{a.product.durationMonths}m @ {parseFloat(a.product.totalInterestRate ?? 0).toFixed(1)}%</p>
+                      {a.maturityDate ? (
+                        <p className="text-xs text-muted-foreground">
+                          {a.product.durationMonths}m @ {parseFloat(a.product.totalInterestRate ?? 0).toFixed(1)}%
+                        </p>
+                      ) : (
+                        <Badge variant="secondary" className="mt-0.5 text-[10px]">Ordinary savings</Badge>
+                      )}
                     </TableCell>
-                    <TableCell className="text-right font-medium">{formatCurrency(a.totalDeposits)}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(a.eligibleBalance)}</TableCell>
+                    <TableCell className="text-right font-medium">{formatCurrency(a.currentBalance)}</TableCell>
+                    <TableCell className="text-right">
+                      {a.maturityDate ? formatCurrency(a.totalDeposits) : '—'}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {a.maturityDate ? formatCurrency(a.eligibleBalance) : '—'}
+                    </TableCell>
                     <TableCell className="text-right text-orange-600">{a.pendingDeposits > 0 ? formatCurrency(a.pendingDeposits) : '—'}</TableCell>
                     <TableCell className="text-right text-green-600">{formatCurrency(a.interestAccrued)}</TableCell>
                     <TableCell className="text-center text-sm">{a.maturityDate ? formatDate(a.maturityDate) : '—'}</TableCell>

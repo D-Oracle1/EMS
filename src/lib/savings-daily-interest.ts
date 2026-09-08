@@ -174,9 +174,17 @@ export async function runDailySavingsInterest(opts?: {
   systemUserId?: string;
   /** Skip customer notifications, for backfills. */
   notify?: boolean;
+  /**
+   * Skip the per-day journal entry. Only for a backfill replaying many days at
+   * once, which then posts a single consolidated entry for the period — one
+   * GL transaction per day over a slow connection is what makes a long replay
+   * fall over. The interest itself is still credited and ledgered.
+   */
+  postGl?: boolean;
 }): Promise<DailyRunResult> {
   const asOf = atMidnight(opts?.asOf ?? new Date());
   const notify = opts?.notify !== false;
+  const postGl = opts?.postGl !== false;
 
   const systemUserId =
     opts?.systemUserId ??
@@ -322,7 +330,7 @@ export async function runDailySavingsInterest(opts?: {
       throw err;
     }
 
-    if (interestExpAcc && savingsLiabAcc) {
+    if (postGl && interestExpAcc && savingsLiabAcc) {
       await createJournalEntry({
         entryDate: asOf,
         entryType: 'ACCRUAL',

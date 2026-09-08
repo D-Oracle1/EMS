@@ -623,11 +623,20 @@ export async function fixedSavingsDeposit(data: {
   }
 }
 
-export async function getFixedSavingsAccounts(filters?: {
+/**
+ * Savings accounts for the accounts console.
+ *
+ * `kind` defaults to every savings account. It used to be hard-filtered to
+ * `maturityDate != null`, which silently hid every ordinary savings account
+ * from the only page that lists them — an account could be opened and then
+ * never appear anywhere.
+ */
+export async function getSavingsAccountsList(filters?: {
   customerId?: string;
   productId?: string;
   status?: string;
   search?: string;
+  kind?: 'ALL' | 'FIXED' | 'ORDINARY';
   page?: number;
   limit?: number;
 }) {
@@ -637,7 +646,9 @@ export async function getFixedSavingsAccounts(filters?: {
   const limit = filters?.limit || 20;
   const skip = (page - 1) * limit;
 
-  const where: any = { maturityDate: { not: null } };
+  const where: any = { isDeleted: false };
+  if (filters?.kind === 'FIXED') where.maturityDate = { not: null };
+  if (filters?.kind === 'ORDINARY') where.maturityDate = null;
   if (filters?.customerId) where.customerId = filters.customerId;
   if (filters?.productId) where.productId = filters.productId;
   if (filters?.status) where.status = filters.status;
