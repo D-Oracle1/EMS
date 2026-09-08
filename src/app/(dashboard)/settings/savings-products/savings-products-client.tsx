@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useTransition } from 'react';
-import { PlusCircle, Settings, Edit2, PowerOff, Loader2, CheckCircle, XCircle, Database } from 'lucide-react';
+import { PlusCircle, Settings, Edit2, PowerOff, Power, Trash2, Sparkles, Loader2, CheckCircle, XCircle, Database } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,6 +38,8 @@ import {
   createFixedSavingsProduct,
   updateFixedSavingsProduct,
   deactivateFixedSavingsProduct,
+  reactivateFixedSavingsProduct,
+  deleteFixedSavingsProduct,
   seedFixedSavingsProducts,
 } from '@/actions/fixed-savings.actions';
 import type { SessionUser } from '@/types';
@@ -57,7 +59,19 @@ const emptyForm = {
   interestEligibilityDelayMonths: '0',
   allowEarlyTermination: false,
   defaultTerminationPenaltyRate: '',
+  promoActive: false,
+  promoName: '',
+  promoTotalInterestRate: '',
+  promoStartsAt: '',
+  promoEndsAt: '',
 };
+
+/** Date input wants yyyy-mm-dd; the server hands back an ISO timestamp. */
+function toDateInput(value: string | Date | null | undefined): string {
+  if (!value) return '';
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? '' : d.toISOString().split('T')[0];
+}
 
 const INTEREST_METHODS = [
   { value: 'MATURITY_ONLY', label: 'Maturity Only', hint: 'Accrue monthly, pay lump sum at maturity' },
@@ -94,6 +108,11 @@ export function SavingsProductsClient({ user }: SavingsProductsClientProps) {
       ? (parseFloat(form.totalInterestRate) / parseFloat(form.durationMonths)).toFixed(4)
       : null;
 
+  const promoMonthlyRate =
+    form.promoTotalInterestRate && form.durationMonths
+      ? (parseFloat(form.promoTotalInterestRate) / parseFloat(form.durationMonths)).toFixed(4)
+      : null;
+
   function openCreate() {
     setForm(emptyForm);
     setEditingId(null);
@@ -101,10 +120,6 @@ export function SavingsProductsClient({ user }: SavingsProductsClientProps) {
   }
 
   function openEdit(product: any) {
-    if (product.usageCount > 0) {
-      toast.warning('This product is in use and cannot be edited');
-      return;
-    }
     setForm({
       name: product.name,
       description: product.description ?? '',
@@ -116,6 +131,11 @@ export function SavingsProductsClient({ user }: SavingsProductsClientProps) {
       interestEligibilityDelayMonths: String(product.interestEligibilityDelayMonths ?? 0),
       allowEarlyTermination: product.allowEarlyTermination ?? false,
       defaultTerminationPenaltyRate: String(product.defaultTerminationPenaltyRate ?? ''),
+      promoActive: product.promoActive ?? false,
+      promoName: product.promoName ?? '',
+      promoTotalInterestRate: String(product.promoTotalInterestRate ?? ''),
+      promoStartsAt: toDateInput(product.promoStartsAt),
+      promoEndsAt: toDateInput(product.promoEndsAt),
     });
     setEditingId(product.id);
     setDialogOpen(true);
@@ -140,6 +160,11 @@ export function SavingsProductsClient({ user }: SavingsProductsClientProps) {
         interestEligibilityDelayMonths: parseInt(form.interestEligibilityDelayMonths) || 0,
         allowEarlyTermination: form.allowEarlyTermination,
         defaultTerminationPenaltyRate: form.defaultTerminationPenaltyRate ? parseFloat(form.defaultTerminationPenaltyRate) : undefined,
+        promoActive: form.promoActive,
+        promoName: form.promoName.trim() || undefined,
+        promoTotalInterestRate: form.promoTotalInterestRate ? parseFloat(form.promoTotalInterestRate) : undefined,
+        promoStartsAt: form.promoStartsAt || undefined,
+        promoEndsAt: form.promoEndsAt || undefined,
       };
 
       const result = editingId
@@ -165,6 +190,27 @@ export function SavingsProductsClient({ user }: SavingsProductsClientProps) {
     setLoading(id);
     try {
       const result = await deactivateFixedSavingsProduct(id);
+      if (result.success) { toast.success(result.message); loadProducts(); }
+      else toast.error(result.error);
+    } catch (e: any) { toast.error(e.message); }
+    finally { setLoading(null); }
+  }
+
+  async function handleReactivate(id: string, name: string) {
+    setLoading(id);
+    try {
+      const result = await reactivateFixedSavingsProduct(id);
+      if (result.success) { toast.success(result.message); loadProducts(); }
+      else toast.error(result.error);
+    } catch (e: any) { toast.error(e.message); }
+    finally { setLoading(null); }
+  }
+
+  async function handleDelete(id: string, name: string) {
+    if (!confirm(`Delete "${name}" permanently? This is only possible because no account has been opened on it.`)) return;
+    setLoading(id);
+    try {
+      const result = await deleteFixedSavingsProduct(id);
       if (result.success) { toast.success(result.message); loadProducts(); }
       else toast.error(result.error);
     } catch (e: any) { toast.error(e.message); }
@@ -212,6 +258,11 @@ export function SavingsProductsClient({ user }: SavingsProductsClientProps) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard title="Total Products" color="slate" value={products.length} />
         <StatCard
+          title="Total Accounts"
+          color="sky"
+          value={products.reduce((s, p) => s + p.usageCount, 0)}
+        />
+        <StatCard
           title="Active"
           color="emerald"
           value={products.filter((p) => p.isActive).length}
@@ -222,9 +273,10 @@ export function SavingsProductsClient({ user }: SavingsProductsClientProps) {
           value={products.filter((p) => !p.isActive).length}
         />
         <StatCard
-          title="Total Accounts"
-          color="sky"
-          value={products.reduce((s, p) => s + p.usageCount, 0)}
+          title="Promos Running"
+          color="fuchsia"
+          value={products.filter((p) => p.promoRunning).length}
+          icon={Sparkles}
         />
       </div>
 
@@ -241,6 +293,7 @@ export function SavingsProductsClient({ user }: SavingsProductsClientProps) {
                   <TableHead>Plan Name</TableHead>
                   <TableHead className="text-center">Duration</TableHead>
                   <TableHead className="text-center">Total Rate</TableHead>
+                  <TableHead className="text-center">Promo</TableHead>
                   <TableHead className="text-center">Monthly Rate</TableHead>
                   <TableHead className="text-right">Min Deposit</TableHead>
                   <TableHead className="text-right">Max Deposit</TableHead>
@@ -254,14 +307,14 @@ export function SavingsProductsClient({ user }: SavingsProductsClientProps) {
               <TableBody>
                 {isPending && (
                   <TableRow>
-                    <TableCell colSpan={11} className="text-center py-8">
+                    <TableCell colSpan={12} className="text-center py-8">
                       <Loader2 className="h-5 w-5 animate-spin mx-auto" />
                     </TableCell>
                   </TableRow>
                 )}
                 {!isPending && products.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={12} className="text-center text-muted-foreground py-8">
                       No fixed savings products configured. Click &quot;New Product&quot; or &quot;Seed Defaults&quot;.
                     </TableCell>
                   </TableRow>
@@ -274,6 +327,21 @@ export function SavingsProductsClient({ user }: SavingsProductsClientProps) {
                     </TableCell>
                     <TableCell className="text-center">{p.durationMonths} months</TableCell>
                     <TableCell className="text-center font-semibold text-green-700">{p.totalInterestRate}%</TableCell>
+                    <TableCell className="text-center">
+                      {p.promoTotalInterestRate ? (
+                        <div className="flex flex-col items-center gap-0.5">
+                          <Badge variant={p.promoRunning ? 'success' : 'secondary'} className="gap-1">
+                            <Sparkles className="h-3 w-3" />
+                            {p.promoTotalInterestRate}%
+                          </Badge>
+                          <span className="text-[10px] text-muted-foreground">
+                            {p.promoRunning ? p.promoWindow : p.promoActive ? `scheduled · ${p.promoWindow}` : 'off'}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-center text-sm">{parseFloat(p.monthlyInterestRate ?? 0).toFixed(4)}%</TableCell>
                     <TableCell className="text-right">₦{Number(p.minDeposit ?? 0).toLocaleString()}</TableCell>
                     <TableCell className="text-right">{p.maxBalance ? `₦${Number(p.maxBalance).toLocaleString()}` : '—'}</TableCell>
@@ -296,20 +364,47 @@ export function SavingsProductsClient({ user }: SavingsProductsClientProps) {
                             variant="ghost"
                             size="sm"
                             onClick={() => openEdit(p)}
-                            disabled={!p.isActive || p.usageCount > 0 || loading !== null}
-                            title={p.usageCount > 0 ? 'Cannot edit: product in use' : 'Edit product'}
+                            disabled={loading !== null}
+                            title={
+                              p.usageCount > 0
+                                ? 'Edit — existing savers keep the terms they were opened on'
+                                : 'Edit product'
+                            }
                           >
                             <Edit2 className="h-3.5 w-3.5" />
                           </Button>
-                          {p.isActive && (
+                          {p.isActive ? (
                             <Button
                               variant="ghost"
                               size="sm"
                               className="text-destructive hover:text-destructive"
                               onClick={() => handleDeactivate(p.id, p.name)}
                               disabled={loading !== null}
+                              title="Deactivate — stops appearing when opening new accounts"
                             >
                               {loading === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PowerOff className="h-3.5 w-3.5" />}
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleReactivate(p.id, p.name)}
+                              disabled={loading !== null}
+                              title="Make available again"
+                            >
+                              {loading === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Power className="h-3.5 w-3.5" />}
+                            </Button>
+                          )}
+                          {p.usageCount === 0 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive hover:text-destructive"
+                              onClick={() => handleDelete(p.id, p.name)}
+                              disabled={loading !== null}
+                              title="Delete — only possible while unused"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
                             </Button>
                           )}
                         </div>
@@ -505,6 +600,88 @@ export function SavingsProductsClient({ user }: SavingsProductsClientProps) {
                 <p className="text-xs text-muted-foreground">Admin can override per request. Used as a guide only.</p>
               </div>
             )}
+
+            <Separator />
+
+            {/* ── Promotional rate ────────────────────────────────────────── */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-fuchsia-600" />
+                    Promotional rate
+                  </Label>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    A better rate for savers who open an account inside the window.
+                  </p>
+                </div>
+                <Switch
+                  checked={form.promoActive}
+                  onCheckedChange={(v) => setForm((f) => ({ ...f, promoActive: v }))}
+                />
+              </div>
+
+              {form.promoActive && (
+                <div className="space-y-3 rounded-lg border border-fuchsia-200 bg-fuchsia-50/50 p-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label>Promo name</Label>
+                      <Input
+                        placeholder="e.g. Independence Offer"
+                        value={form.promoName}
+                        onChange={(e) => setForm((f) => ({ ...f, promoName: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Promo total rate (%) <span className="text-destructive">*</span></Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={100}
+                        step={0.1}
+                        placeholder={form.totalInterestRate ? `higher than ${form.totalInterestRate}` : 'e.g. 20'}
+                        value={form.promoTotalInterestRate}
+                        onChange={(e) => setForm((f) => ({ ...f, promoTotalInterestRate: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label>Starts</Label>
+                      <Input
+                        type="date"
+                        value={form.promoStartsAt}
+                        onChange={(e) => setForm((f) => ({ ...f, promoStartsAt: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Ends <span className="text-destructive">*</span></Label>
+                      <Input
+                        type="date"
+                        value={form.promoEndsAt}
+                        onChange={(e) => setForm((f) => ({ ...f, promoEndsAt: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+
+                  {promoMonthlyRate && (
+                    <p className="text-xs text-fuchsia-900">
+                      Promo monthly rate: <span className="font-semibold">{promoMonthlyRate}%</span>
+                      <span className="text-muted-foreground ml-2">
+                        (= {form.promoTotalInterestRate}% ÷ {form.durationMonths} months)
+                      </span>
+                    </p>
+                  )}
+
+                  <p className="text-xs text-muted-foreground">
+                    Savers who open an account between these dates are locked in at the
+                    promo rate for their whole term. Ending the promo, or changing the
+                    plan later, does not affect anyone who has already joined.
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
 
           <DialogFooter>

@@ -14,6 +14,9 @@
  *    `pendingDeposits` and only roll into the interest-earning `eligibleBalance`
  *    on the next monthly run.
  *  - Every interest posting produces an immutable `SavingsInterest` ledger row.
+ *  - Interest uses the rate the account was OPENED on, not the product's
+ *    current rate. Editing a product, or ending a promo, therefore cannot
+ *    change what an existing saver earns.
  */
 
 import Decimal from 'decimal.js';
@@ -21,6 +24,7 @@ import type { InterestCalculationMethod, PrismaClient } from '@prisma/client';
 import { prisma, withTransaction } from '@/lib/prisma';
 import { createJournalEntry, getAccountByCode } from '@/lib/accounting-engine';
 import { generateReference } from '@/lib/utils';
+import { effectiveMonthlyRate } from '@/lib/savings-promo';
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
 
@@ -113,7 +117,10 @@ export async function runMonthlySavingsInterest(opts?: {
       continue;
     }
 
-    const monthlyRate = account.product.monthlyInterestRate?.toNumber();
+    // The rate this saver signed up for. Accounts opened before contracted
+    // terms existed fall back to the product, which is what they have always
+    // been paid at.
+    const monthlyRate = effectiveMonthlyRate(account);
     if (!monthlyRate) {
       skipped++;
       continue;
@@ -133,7 +140,7 @@ export async function runMonthlySavingsInterest(opts?: {
 
     const { monthsCompleted, monthsRemaining } = computeMaturityProgress(
       account.startDate,
-      account.product.durationMonths,
+      account.contractedDurationMonths ?? account.product.durationMonths,
       asOf
     );
 
@@ -180,7 +187,7 @@ export async function runMonthlySavingsInterest(opts?: {
               balanceBefore: balBefore.toNumber(),
               balanceAfter: balAfter.toNumber(),
               paymentMode: 'BANK_TRANSFER',
-              narration: `Monthly interest ${creditsToBalance ? 'credit' : 'accrual'} @ ${monthlyRate}% on eligible balance ${eligibleBal.toFixed(2)} for ${year}-${String(month).padStart(2, '0')}`,
+              narration: `Monthly interest ${creditsToBalance ? 'credit' : 'accrual'} @ ${monthlyRate}%${account.isPromoRate ? ` (${account.promoName ?? 'promo rate'})` : ''} on eligible balance ${eligibleBal.toFixed(2)} for ${year}-${String(month).padStart(2, '0')}`,
               processedById: systemUserId,
             },
           });
@@ -307,7 +314,8 @@ export async function processMaturedAccounts(opts?: {
           status: 'COMPLETED',
           currentBalance: 0,
           availableBalance: 0,
-          monthsCompleted: account.product.durationMonths ?? account.monthsCompleted,
+          monthsCompleted:
+            account.contractedDurationMonths ?? account.product.durationMonths ?? account.monthsCompleted,
           monthsRemaining: 0,
           closedAt: asOf,
         },
@@ -366,7 +374,7 @@ export async function refreshMaturityProgress(asOf: Date = new Date()): Promise<
   for (const account of accounts) {
     const { monthsCompleted, monthsRemaining } = computeMaturityProgress(
       account.startDate,
-      account.product.durationMonths,
+      account.contractedDurationMonths ?? account.product.durationMonths,
       asOf
     );
     await prisma.savingsAccount.update({

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { PiggyBank, Loader2, ArrowLeft } from 'lucide-react';
+import { PiggyBank, Loader2, ArrowLeft, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,7 @@ import {
   toActionCustomer,
   type CustomerSelection,
 } from '@/components/customer-picker';
+import { resolveContractedTerms } from '@/lib/savings-promo';
 import type { SessionUser } from '@/types';
 
 interface Props { user: SessionUser; }
@@ -40,8 +41,15 @@ export function CreateFixedSavingsClient({ user }: Props) {
       })()
     : null;
 
-  const projectedInterest = selectedProduct && initialDeposit && parseFloat(initialDeposit) > 0
-    ? (parseFloat(initialDeposit) * selectedProduct.totalInterestRate / 100)
+  // The rate this saver would actually be locked in at. Resolved with the same
+  // function the server uses, against the chosen start date, so the projection
+  // shown here is what the account is really opened on.
+  const terms = selectedProduct
+    ? resolveContractedTerms(selectedProduct, startDate ? new Date(startDate) : new Date())
+    : null;
+
+  const projectedInterest = terms && initialDeposit && parseFloat(initialDeposit) > 0
+    ? (parseFloat(initialDeposit) * terms.totalRate / 100)
     : null;
 
   useEffect(() => {
@@ -131,7 +139,22 @@ export function CreateFixedSavingsClient({ user }: Props) {
                   }`}
                 >
                   <p className="font-semibold">{p.name}</p>
-                  <p className="text-2xl font-bold text-green-600 mt-1">{p.totalInterestRate}%</p>
+                  {p.promoRunning ? (
+                    <>
+                      <p className="text-2xl font-bold text-fuchsia-600 mt-1">
+                        {p.promoTotalInterestRate}%
+                        <span className="ml-2 text-sm font-normal text-muted-foreground line-through">
+                          {p.totalInterestRate}%
+                        </span>
+                      </p>
+                      <p className="flex items-center gap-1 text-xs font-medium text-fuchsia-700">
+                        <Sparkles className="h-3 w-3" />
+                        {p.promoName ?? 'Promo rate'} · {p.promoWindow}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-2xl font-bold text-green-600 mt-1">{p.totalInterestRate}%</p>
+                  )}
                   <p className="text-sm text-muted-foreground">{p.durationMonths} months</p>
                   <Separator className="my-2" />
                   <div className="space-y-0.5 text-xs text-muted-foreground">
@@ -191,7 +214,9 @@ export function CreateFixedSavingsClient({ user }: Props) {
                 </span>
                 <span className="text-muted-foreground">Principal Deposited:</span>
                 <span>₦{Number(initialDeposit).toLocaleString()}</span>
-                <span className="text-muted-foreground">Total Interest ({selectedProduct.totalInterestRate}%):</span>
+                <span className="text-muted-foreground">
+                  Total Interest ({terms?.totalRate ?? selectedProduct.totalInterestRate}%):
+                </span>
                 <span className="text-green-600">+₦{projectedInterest ? projectedInterest.toLocaleString() : '0'}</span>
                 <span className="text-muted-foreground font-semibold">Expected Maturity Value:</span>
                 <span className="font-bold text-green-700 text-base">
@@ -200,6 +225,15 @@ export function CreateFixedSavingsClient({ user }: Props) {
                     : Number(initialDeposit).toLocaleString()}
                 </span>
               </div>
+              {terms?.isPromo && (
+                <p className="mt-2 flex items-start gap-1.5 text-xs font-medium text-fuchsia-700">
+                  <Sparkles className="mt-0.5 h-3 w-3 shrink-0" />
+                  <span>
+                    {terms.promoName}: locked in at {terms.totalRate}% for the full term.
+                    The rate stays with this account even after the promo ends.
+                  </span>
+                </p>
+              )}
               <p className="text-xs text-muted-foreground mt-2">
                 Opening balance rule: the initial deposit earns interest from the first monthly roll.
               </p>

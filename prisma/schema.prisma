@@ -1070,12 +1070,23 @@ model SavingsProduct {
   // Fixed-Term Savings Engine Configuration
   durationMonths                 Int?
   totalInterestRate              Decimal?                  @db.Decimal(5, 2) // Total rate for full term
-  monthlyInterestRate            Decimal?                  @db.Decimal(5, 2) // Auto: totalInterestRate / durationMonths
+  monthlyInterestRate            Decimal?                  @db.Decimal(9, 6) // Auto: totalInterestRate / durationMonths
   interestCalculationMethod      InterestCalculationMethod @default(MATURITY_ONLY)
   interestEligibilityDelayMonths Int                       @default(0) // Months before deposits earn interest
   allowEarlyTermination          Boolean                   @default(false)
   defaultTerminationPenaltyRate  Decimal?                  @db.Decimal(5, 2) // % penalty on approved interest
   createdById                    String?
+
+  // ── Promotional rate ──────────────────────────────────────────────────────
+  /// A promo lifts the rate for savers who OPEN an account inside the window.
+  /// The rate is stamped onto the account at opening (SavingsAccount.contracted*),
+  /// so a saver keeps the promo rate for their whole term and ending the promo
+  /// never touches anyone who already joined.
+  promoName              String?
+  promoTotalInterestRate Decimal?  @db.Decimal(5, 2) // Total rate for the full term
+  promoStartsAt          DateTime?
+  promoEndsAt            DateTime?
+  promoActive            Boolean   @default(false)
 
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -1143,6 +1154,18 @@ model SavingsAccount {
   monthsRemaining Int? // Months left until maturity
   createdById     String?
 
+  // ── Terms contracted at opening ───────────────────────────────────────────
+  /// What this saver actually signed up for. Interest is computed from these,
+  /// never from the live product, so editing or replacing a product cannot
+  /// rewrite what an existing saver earns. Null on accounts opened before this
+  /// existed; the engine falls back to the product for those.
+  contractedTotalRate      Decimal? @db.Decimal(5, 2)
+  contractedMonthlyRate    Decimal? @db.Decimal(9, 6)
+  contractedDurationMonths Int?
+  /// Set when the account was opened inside a promo window.
+  isPromoRate              Boolean  @default(false)
+  promoName                String?
+
   status AccountStatus @default(ACTIVE)
 
   openedAt          DateTime  @default(now())
@@ -1183,7 +1206,7 @@ model SavingsInterest {
   month     Int // 1-12
 
   eligibleBalance Decimal @db.Decimal(18, 2) // Base the interest was computed on
-  interestRate    Decimal @db.Decimal(5, 2) // Monthly rate applied
+  interestRate    Decimal @db.Decimal(9, 6) // Monthly rate applied
   interestAmount  Decimal @db.Decimal(18, 2)
 
   calculationMethod InterestCalculationMethod @default(MATURITY_ONLY)

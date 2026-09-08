@@ -418,9 +418,21 @@ export async function processWithdrawal(data: {
   }
 }
 
+/**
+ * Active products for opening an ordinary savings account.
+ *
+ * Fixed-term plans are excluded: they are opened through the fixed savings
+ * flow, which stamps a maturity date and contracted rate onto the account.
+ * Offering one here produced an account with neither.
+ *
+ * The list is whatever an administrator has configured under Savings Products,
+ * so replacing the starter plans there changes what officers can open.
+ */
 export async function getSavingsProducts() {
+  await requireAnyPermission(['SAVINGS:READ', 'SAVINGS:CREATE', 'SETTINGS:READ']);
+
   const products = await prisma.savingsProduct.findMany({
-    where: { isActive: true },
+    where: { isActive: true, durationMonths: null },
     orderBy: { name: 'asc' },
   });
 

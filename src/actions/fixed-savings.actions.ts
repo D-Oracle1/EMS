@@ -9,6 +9,12 @@ import Decimal from 'decimal.js';
 import { prisma, withTransaction } from '@/lib/prisma';
 import { requirePermission, requireAnyPermission } from '@/lib/auth-utils';
 import { auditLog } from '@/lib/audit';
+import {
+  validatePromo,
+  isPromoRunning,
+  describePromoWindow,
+  resolveContractedTerms,
+} from '@/lib/savings-promo';
 import { createNotification } from '@/lib/notifications';
 import { generateReference } from '@/lib/utils';
 import { createJournalEntry, getAccountByCode } from '@/lib/accounting-engine';
@@ -60,6 +66,16 @@ export async function getFixedSavingsProducts(includeInactive = false) {
     monthlyInterestRate: p.monthlyInterestRate?.toNumber() ?? null,
     defaultTerminationPenaltyRate: p.defaultTerminationPenaltyRate?.toNumber() ?? null,
     usageCount: p._count.accounts,
+    promoName: p.promoName ?? null,
+    promoTotalInterestRate: p.promoTotalInterestRate?.toNumber() ?? null,
+    promoStartsAt: p.promoStartsAt ?? null,
+    promoEndsAt: p.promoEndsAt ?? null,
+    promoActive: p.promoActive ?? false,
+    /// Whether the promo is live right now, so the UI does not have to
+    /// re-derive the window rule and risk disagreeing with the engine.
+    promoRunning: isPromoRunning(p),
+    promoWindow: describePromoWindow(p),
+    effectiveTotalRate: resolveContractedTerms(p).totalRate,
   }));
 }
 
@@ -74,6 +90,11 @@ export async function createFixedSavingsProduct(data: {
   interestEligibilityDelayMonths?: number;
   allowEarlyTermination?: boolean;
   defaultTerminationPenaltyRate?: number;
+  promoName?: string;
+  promoTotalInterestRate?: number;
+  promoStartsAt?: string;
+  promoEndsAt?: string;
+  promoActive?: boolean;
 }): Promise<ActionResult<{ id: string }>> {
   try {
     const user = await requirePermission('SETTINGS:MANAGE');
@@ -90,6 +111,15 @@ export async function createFixedSavingsProduct(data: {
     if (data.maximumDeposit !== undefined && data.maximumDeposit < data.minimumDeposit) {
       return { success: false, error: 'Maximum deposit must be greater than minimum deposit' };
     }
+
+    const promoError = validatePromo({
+      promoActive: data.promoActive ?? false,
+      promoTotalInterestRate: data.promoTotalInterestRate,
+      promoStartsAt: data.promoStartsAt,
+      promoEndsAt: data.promoEndsAt,
+      standardTotalRate: data.totalInterestRate,
+    });
+    if (promoError) return { success: false, error: promoError };
 
     const monthlyInterestRate = new Decimal(data.totalInterestRate)
       .div(data.durationMonths)
@@ -118,6 +148,11 @@ export async function createFixedSavingsProduct(data: {
         allowWithdrawal: false,
         isActive: true,
         createdById: user.id,
+        promoName: data.promoName?.trim() || null,
+        promoTotalInterestRate: data.promoTotalInterestRate ?? null,
+        promoStartsAt: data.promoStartsAt ? new Date(data.promoStartsAt) : null,
+        promoEndsAt: data.promoEndsAt ? new Date(data.promoEndsAt) : null,
+        promoActive: data.promoActive ?? false,
       },
     });
 
@@ -149,6 +184,11 @@ export async function updateFixedSavingsProduct(
     interestEligibilityDelayMonths?: number;
     allowEarlyTermination?: boolean;
     defaultTerminationPenaltyRate?: number;
+    promoName?: string;
+    promoTotalInterestRate?: number;
+    promoStartsAt?: string;
+    promoEndsAt?: string;
+    promoActive?: boolean;
   }
 ): Promise<ActionResult> {
   try {
@@ -159,9 +199,23 @@ export async function updateFixedSavingsProduct(
       include: { _count: { select: { accounts: true } } },
     });
     if (!product) return { success: false, error: 'Product not found' };
-    if (product._count.accounts > 0) {
-      return { success: false, error: 'Cannot edit a product that is in use by existing accounts' };
-    }
+
+    // Editing a product in use used to be forbidden, because the engine read
+    // the live product rate and an edit would silently reprice every existing
+    // saver. Accounts now carry the terms they were opened on, so an edit only
+    // shapes accounts opened from here on and is safe to allow.
+    const inUse: number = product._count.accounts;
+
+    const promoError = validatePromo({
+      promoActive: data.promoActive ?? product.promoActive ?? false,
+      promoTotalInterestRate:
+        data.promoTotalInterestRate ?? product.promoTotalInterestRate,
+      promoStartsAt: data.promoStartsAt ?? product.promoStartsAt,
+      promoEndsAt: data.promoEndsAt ?? product.promoEndsAt,
+      standardTotalRate:
+        data.totalInterestRate ?? product.totalInterestRate,
+    });
+    if (promoError) return { success: false, error: promoError };
 
     const updates: Record<string, unknown> = {};
     if (data.name !== undefined) updates.name = data.name;
@@ -172,6 +226,11 @@ export async function updateFixedSavingsProduct(
     if (data.defaultTerminationPenaltyRate !== undefined) updates.defaultTerminationPenaltyRate = data.defaultTerminationPenaltyRate;
     if (data.minimumDeposit !== undefined) { updates.minDeposit = data.minimumDeposit; updates.minBalance = data.minimumDeposit; }
     if (data.maximumDeposit !== undefined) updates.maxBalance = data.maximumDeposit;
+    if (data.promoName !== undefined) updates.promoName = data.promoName.trim() || null;
+    if (data.promoTotalInterestRate !== undefined) updates.promoTotalInterestRate = data.promoTotalInterestRate;
+    if (data.promoStartsAt !== undefined) updates.promoStartsAt = data.promoStartsAt ? new Date(data.promoStartsAt) : null;
+    if (data.promoEndsAt !== undefined) updates.promoEndsAt = data.promoEndsAt ? new Date(data.promoEndsAt) : null;
+    if (data.promoActive !== undefined) updates.promoActive = data.promoActive;
 
     const newDuration = data.durationMonths ?? product.durationMonths;
     const newTotal = data.totalInterestRate ?? product.totalInterestRate?.toNumber();
@@ -191,7 +250,12 @@ export async function updateFixedSavingsProduct(
       description: `Updated fixed savings product: ${product.name}`,
     });
 
-    return { success: true, message: 'Product updated successfully' };
+    return {
+      success: true,
+      message: inUse > 0
+        ? `Product updated. ${inUse} existing account${inUse === 1 ? '' : 's'} keep the terms they were opened on; the new terms apply to accounts opened from now on.`
+        : 'Product updated successfully',
+    };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
@@ -213,6 +277,65 @@ export async function deactivateFixedSavingsProduct(id: string): Promise<ActionR
     });
 
     return { success: true, message: `Product "${product.name}" deactivated` };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function reactivateFixedSavingsProduct(id: string): Promise<ActionResult> {
+  try {
+    const user = await requirePermission('SETTINGS:MANAGE');
+
+    const product = await prisma.savingsProduct.findUnique({ where: { id } });
+    if (!product) return { success: false, error: 'Product not found' };
+    if (product.isActive) return { success: false, error: 'Product is already active' };
+
+    await prisma.savingsProduct.update({ where: { id }, data: { isActive: true } });
+
+    await auditLog({
+      userId: user.id, action: 'UPDATE', module: 'SETTINGS', entityType: 'SAVINGS_PRODUCT', entityId: id,
+      description: `Reactivated savings product: ${product.name}`,
+    });
+
+    return { success: true, message: `Product "${product.name}" is available again` };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Delete a product outright.
+ *
+ * Only ever permitted while no account has been opened on it — a product with
+ * accounts is the record of what those savers agreed to, and deleting it would
+ * orphan their history. Deactivate those instead: they disappear from the
+ * opening form but their accounts keep running.
+ */
+export async function deleteFixedSavingsProduct(id: string): Promise<ActionResult> {
+  try {
+    const user = await requirePermission('SETTINGS:MANAGE');
+
+    const product = await prisma.savingsProduct.findUnique({
+      where: { id },
+      include: { _count: { select: { accounts: true } } },
+    });
+    if (!product) return { success: false, error: 'Product not found' };
+
+    if (product._count.accounts > 0) {
+      return {
+        success: false,
+        error: `"${product.name}" has ${product._count.accounts} account${product._count.accounts === 1 ? '' : 's'} opened on it and cannot be deleted. Deactivate it instead — it stops appearing when opening new accounts, and existing savers are unaffected.`,
+      };
+    }
+
+    await prisma.savingsProduct.delete({ where: { id } });
+
+    await auditLog({
+      userId: user.id, action: 'DELETE', module: 'SETTINGS', entityType: 'SAVINGS_PRODUCT', entityId: id,
+      description: `Deleted unused savings product: ${product.name} (${product.code})`,
+    });
+
+    return { success: true, message: `Product "${product.name}" deleted` };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
@@ -264,6 +387,12 @@ export async function createFixedSavingsAccount(data: {
     if (maxDep && data.initialDeposit > maxDep) return { success: false, error: `Maximum deposit is ₦${maxDep.toLocaleString()}` };
 
     const startDate = data.startDate ? new Date(data.startDate) : new Date();
+
+    // Resolve the rate ONCE, against the start date, and stamp it on the
+    // account below. A promo is earned by opening inside its window, so a
+    // backdated start outside the window correctly gets the standard rate.
+    const terms = resolveContractedTerms(product, startDate);
+
     const maturityDate = new Date(startDate);
     maturityDate.setMonth(maturityDate.getMonth() + product.durationMonths);
 
@@ -296,6 +425,11 @@ export async function createFixedSavingsAccount(data: {
           maturityDate,
           monthsCompleted: 0,
           monthsRemaining: product.durationMonths,
+          contractedTotalRate: terms.totalRate,
+          contractedMonthlyRate: terms.monthlyRate,
+          contractedDurationMonths: terms.durationMonths,
+          isPromoRate: terms.isPromo,
+          promoName: terms.promoName,
           status: 'ACTIVE',
           createdById: user.id,
         },
@@ -347,13 +481,13 @@ export async function createFixedSavingsAccount(data: {
 
     await auditLog({
       userId: user.id, action: 'CREATE', module: 'SAVINGS', entityType: 'SAVINGS_ACCOUNT', entityId: account.id,
-      description: `Created fixed savings account ${accountNumber} for ${customerName}, matures ${maturityDate.toDateString()}`,
+      description: `Created fixed savings account ${accountNumber} for ${customerName} at ${terms.totalRate}% for the term${terms.isPromo ? ` under promo "${terms.promoName}"` : ''}, matures ${maturityDate.toDateString()}`,
     });
 
     await notifyCustomerByEmail(
       customerId,
       `Fixed savings account ${accountNumber} opened`,
-      `Your fixed savings account ${accountNumber} has been opened with an initial deposit of ${Number(data.initialDeposit).toLocaleString('en-NG', { style: 'currency', currency: 'NGN' })}. It matures on ${maturityDate.toLocaleDateString('en-NG', { year: 'numeric', month: 'long', day: 'numeric' })}.`
+      `Your fixed savings account ${accountNumber} has been opened with an initial deposit of ${Number(data.initialDeposit).toLocaleString('en-NG', { style: 'currency', currency: 'NGN' })}, earning ${terms.totalRate}% over the term${terms.isPromo ? ` under our ${terms.promoName} offer` : ''}. It matures on ${maturityDate.toLocaleDateString('en-NG', { year: 'numeric', month: 'long', day: 'numeric' })}.`
     );
 
     return {
