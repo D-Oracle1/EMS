@@ -112,6 +112,13 @@ export async function getSavingsAccount(id: string) {
     holdAmount: account.holdAmount.toNumber(),
     targetAmount: account.targetAmount?.toNumber() ?? null,
     interestAccrued: account.interestAccrued.toNumber(),
+    eligibleBalance: account.eligibleBalance.toNumber(),
+    pendingDeposits: account.pendingDeposits.toNumber(),
+    totalDeposits: account.totalDeposits.toNumber(),
+    // The terms this saver was opened on. Decimals do not survive the trip to
+    // a client component, so they are converted here alongside the balances.
+    contractedTotalRate: account.contractedTotalRate?.toNumber() ?? null,
+    contractedMonthlyRate: account.contractedMonthlyRate?.toNumber() ?? null,
     customer: { ...account.customer, monthlyIncome: account.customer.monthlyIncome?.toNumber() || 0 },
     product: {
       ...account.product,
@@ -122,6 +129,10 @@ export async function getSavingsAccount(id: string) {
       interestRate: account.product.interestRate.toNumber(),
       monthlyFee: account.product.monthlyFee.toNumber(),
       transactionFee: account.product.transactionFee.toNumber(),
+      totalInterestRate: account.product.totalInterestRate?.toNumber() ?? null,
+      monthlyInterestRate: account.product.monthlyInterestRate?.toNumber() ?? null,
+      defaultTerminationPenaltyRate: account.product.defaultTerminationPenaltyRate?.toNumber() ?? null,
+      promoTotalInterestRate: account.product.promoTotalInterestRate?.toNumber() ?? null,
     },
     transactions: account.transactions.map((t) => ({
       ...t,

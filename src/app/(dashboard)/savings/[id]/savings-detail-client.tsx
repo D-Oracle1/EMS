@@ -47,6 +47,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { projectSchedule } from '@/lib/savings-projection';
+import { InterestSchedule } from '@/components/savings/interest-schedule';
 import { formatCurrency, formatDateTime } from '@/lib/utils';
 import { processDeposit, requestWithdrawal, processWithdrawalRequest } from '@/actions/savings.actions';
 import type { SessionUser } from '@/types';
@@ -90,6 +92,21 @@ export function SavingsDetailClient({ user, account }: SavingsDetailClientProps)
   );
   const canWithdraw = user.permissions.includes('SAVINGS:WITHDRAW');
   const canApprove = user.permissions.includes('SAVINGS:APPROVE');
+
+  // Fixed-term accounts get a full schedule, built from the rate the account
+  // was actually opened on rather than the product's current rate.
+  const monthlyRate = account.contractedMonthlyRate ?? account.product.monthlyInterestRate ?? 0;
+  const duration = account.contractedDurationMonths ?? account.product.durationMonths ?? 0;
+  const projection = duration > 0 && monthlyRate > 0
+    ? projectSchedule({
+        principal: account.totalDeposits || account.currentBalance,
+        monthlyRate,
+        durationMonths: duration,
+        method: account.product.interestCalculationMethod ?? 'MATURITY_ONLY',
+        startDate: account.startDate ?? null,
+        headlineRate: account.contractedTotalRate ?? account.product.totalInterestRate ?? null,
+      })
+    : null;
 
   const pendingRequests = account.withdrawalRequests?.filter(
     (wr: any) => wr.status === 'PENDING'
@@ -210,6 +227,17 @@ export function SavingsDetailClient({ user, account }: SavingsDetailClientProps)
           </CardContent>
         </Card>
       </div>
+
+      {projection && (
+        <InterestSchedule
+          projection={projection}
+          title={
+            account.isPromoRate
+              ? `What this account earns — ${account.promoName ?? 'promo rate'} at ${account.contractedTotalRate}%`
+              : 'What this account earns'
+          }
+        />
+      )}
 
       {/* Pending Withdrawal Requests */}
       {pendingRequests.length > 0 && (

@@ -287,11 +287,25 @@ export async function processMaturedAccounts(opts?: {
   let matured = 0;
 
   for (const account of maturedAccounts) {
-    const principal = new Decimal(
-      account.totalDeposits?.toString() ?? account.currentBalance.toString()
+    // Pay out everything the account holds, whichever side the interest sits
+    // on. MONTHLY_ALLOCATION and COMPOUND credit interest straight into the
+    // balance and leave interestAccrued at zero; the old formula
+    // (totalDeposits + interestAccrued) therefore paid those savers their
+    // principal and nothing else, then zeroed the balance their interest was
+    // sitting in. Accrual methods keep interest in interestAccrued with the
+    // balance still equal to deposits, so both are covered by adding the two.
+    const heldInBalance = new Decimal(account.currentBalance.toString());
+    const heldAsAccrued = new Decimal(account.interestAccrued.toString());
+    const payout = heldInBalance.plus(heldAsAccrued).toDecimalPlaces(2);
+
+    const deposits = new Decimal(
+      account.totalDeposits?.toString() ?? heldInBalance.toString()
     );
-    const interest = new Decimal(account.interestAccrued.toString());
-    const payout = principal.plus(interest).toDecimalPlaces(2);
+    // What the saver earned, however it was booked.
+    const interest = payout.minus(deposits).toDecimalPlaces(2);
+    // The liability actually carried for this account, which is what the GL
+    // entry below must clear.
+    const principal = heldInBalance;
     const transactionRef = await generateReference('SAVINGS_TXN');
 
     await withTransaction(async (tx) => {
@@ -304,7 +318,7 @@ export async function processMaturedAccounts(opts?: {
           balanceBefore: account.currentBalance.toNumber(),
           balanceAfter: 0,
           paymentMode: 'BANK_TRANSFER',
-          narration: `Maturity payout: Principal ${principal.toFixed(2)} + Interest ${interest.toFixed(2)}`,
+          narration: `Maturity payout: Deposits ${deposits.toFixed(2)} + Interest ${interest.toFixed(2)}`,
           processedById: systemUserId,
         },
       });
@@ -323,18 +337,23 @@ export async function processMaturedAccounts(opts?: {
     });
 
     if (cashAcc && savingsLiab) {
+      // Clear each account for exactly what it is carrying. Balance-crediting
+      // methods parked the interest in the savings liability month by month, so
+      // it comes out of there; accrual methods parked it in interest payable.
+      // Debiting `interest` here regardless would double-count it and leave the
+      // entry unbalanced.
       const lines: Array<Record<string, unknown>> = [
         {
           accountId: savingsLiab.id,
           debitAmount: principal.toNumber(),
-          description: `Maturity principal - ${account.accountNumber}`,
+          description: `Maturity balance - ${account.accountNumber}`,
           customerId: account.customerId,
         },
       ];
-      if (interestPayAcc && interest.gt(0)) {
+      if (interestPayAcc && heldAsAccrued.gt(0)) {
         lines.push({
           accountId: interestPayAcc.id,
-          debitAmount: interest.toNumber(),
+          debitAmount: heldAsAccrued.toNumber(),
           description: `Maturity interest - ${account.accountNumber}`,
           customerId: account.customerId,
         });

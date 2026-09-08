@@ -16,13 +16,65 @@ import {
   Loader2,
   ArrowUpRight,
   ChevronRight,
+  Users,
+  Sparkles,
   type LucideIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@/lib/utils';
 import { getSavingsDashboard, type SavingsDashboard } from '@/actions/savings-dashboard.actions';
+import {
+  ResponsiveContainer,
+  ComposedChart,
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  PieChart,
+  Pie,
+  Cell,
+  ReferenceLine,
+} from 'recharts';
 import type { SessionUser } from '@/types';
+
+/** Sidebar palette, so charts read as part of the same system. */
+const CHART_COLORS = ['#059669', '#0891b2', '#6366f1', '#d946ef', '#f59e0b', '#ef4444'];
+
+const AXIS = { fontSize: 11, fill: 'currentColor', opacity: 0.65 } as const;
+
+function ChartPanel({
+  title,
+  subtitle,
+  icon,
+  tint,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  icon: React.ReactNode;
+  tint: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="premium-card p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <div className={`icon-tile icon-tile-sm icon-tile-${tint}`}>{icon}</div>
+        <div>
+          <h2 className="font-semibold leading-tight">{title}</h2>
+          <p className="text-xs text-muted-foreground">{subtitle}</p>
+        </div>
+      </div>
+      {children}
+    </div>
+  );
+}
 
 interface Props {
   user: SessionUser;
@@ -231,6 +283,39 @@ export function SavingsDashboardClient({ user: _user }: Props) {
             />
           </div>
 
+          {/* Promo take-up, only once a promo has actually been run */}
+          {(data.promo.accounts > 0 || data.promo.activeProducts > 0) && (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <StatTile
+                icon={Sparkles}
+                tint="fuchsia"
+                label="Promo Accounts"
+                value={String(data.promo.accounts)}
+                sub="Locked in at a promo rate"
+              />
+              <StatTile
+                icon={Coins}
+                tint="fuchsia"
+                label="Promo Balances"
+                value={compact(data.promo.balance)}
+              />
+              <StatTile
+                icon={Percent}
+                tint="fuchsia"
+                label="Promos Running"
+                value={String(data.promo.activeProducts)}
+                sub="Products with a live offer"
+              />
+              <StatTile
+                icon={Clock}
+                tint="slate"
+                label="Pending Deposits"
+                value={compact(data.portfolio.totalPendingDeposits)}
+                sub="Not yet earning"
+              />
+            </div>
+          )}
+
           {/* Composition donut + breakdown */}
           <div className="premium-card p-5">
             <div className="flex items-center justify-between mb-4">
@@ -340,33 +425,164 @@ export function SavingsDashboardClient({ user: _user }: Props) {
               )}
             </div>
 
-            {/* Deposits by month */}
-            <div className="premium-card p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="icon-tile icon-tile-sm icon-tile-blue">
-                  <TrendingUp className="h-4 w-4" />
-                </div>
-                <div>
-                  <h2 className="font-semibold leading-tight">Deposits Trend</h2>
-                  <p className="text-xs text-muted-foreground">Last 6 months</p>
-                </div>
-              </div>
-              <div className="space-y-3">
-                {data.depositsByMonth.map((m) => (
-                  <div key={m.label} className="flex items-center gap-3">
-                    <span className="w-9 text-xs text-muted-foreground shrink-0">{m.label}</span>
-                    <div className="flex-1 h-6 rounded-lg bg-muted overflow-hidden">
-                      <div
-                        className="h-full rounded-lg bg-gradient-to-r from-blue-600 to-blue-400"
-                        style={{ width: `${(m.amount / maxMonth) * 100}%` }}
-                      />
-                    </div>
-                    <span className="w-20 text-right text-xs font-medium shrink-0">{compact(m.amount)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+            {/* Deposits against withdrawals */}
+            <ChartPanel
+              title="Deposits vs Withdrawals"
+              subtitle="Last 6 months, with net movement"
+              icon={<TrendingUp className="h-4 w-4" />}
+              tint="blue"
+            >
+              <ResponsiveContainer width="100%" height={240}>
+                <ComposedChart data={data.flowByMonth} margin={{ top: 5, right: 5, left: -12, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.25} />
+                  <XAxis dataKey="label" tick={AXIS} tickLine={false} axisLine={false} />
+                  <YAxis tick={AXIS} tickLine={false} axisLine={false} tickFormatter={compact} width={56} />
+                  <Tooltip
+                    formatter={(v: number, name: string) => [compact(v), name]}
+                    contentStyle={{ borderRadius: 12, fontSize: 12, border: '1px solid hsl(var(--border))' }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <ReferenceLine y={0} stroke="currentColor" opacity={0.3} />
+                  <Bar dataKey="deposits" name="Deposits" fill="#059669" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="withdrawals" name="Withdrawals" fill="#f43f5e" radius={[4, 4, 0, 0]} />
+                  <Line
+                    type="monotone"
+                    dataKey="net"
+                    name="Net"
+                    stroke="#6366f1"
+                    strokeWidth={2}
+                    dot={{ r: 3 }}
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </ChartPanel>
           </div>
+
+          {/* Interest paid + money falling due */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <ChartPanel
+              title="Interest Paid to Savers"
+              subtitle="Last 6 months"
+              icon={<Percent className="h-4 w-4" />}
+              tint="emerald"
+            >
+              <ResponsiveContainer width="100%" height={220}>
+                <AreaChart data={data.interestByMonth} margin={{ top: 5, right: 5, left: -12, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="interestFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#059669" stopOpacity={0.35} />
+                      <stop offset="100%" stopColor="#059669" stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.25} />
+                  <XAxis dataKey="label" tick={AXIS} tickLine={false} axisLine={false} />
+                  <YAxis tick={AXIS} tickLine={false} axisLine={false} tickFormatter={compact} width={56} />
+                  <Tooltip
+                    formatter={(v: number) => [compact(v), 'Interest']}
+                    contentStyle={{ borderRadius: 12, fontSize: 12, border: '1px solid hsl(var(--border))' }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="amount"
+                    stroke="#059669"
+                    strokeWidth={2}
+                    fill="url(#interestFill)"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </ChartPanel>
+
+            <ChartPanel
+              title="Money Falling Due"
+              subtitle="Maturities over the next 6 months"
+              icon={<CalendarClock className="h-4 w-4" />}
+              tint="amber"
+            >
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={data.maturitySchedule} margin={{ top: 5, right: 5, left: -12, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.25} />
+                  <XAxis dataKey="label" tick={AXIS} tickLine={false} axisLine={false} />
+                  <YAxis tick={AXIS} tickLine={false} axisLine={false} tickFormatter={compact} width={56} />
+                  <Tooltip
+                    formatter={(v: number, _n: string, item: any) => [
+                      `${compact(v)} - ${item?.payload?.count ?? 0} account(s)`,
+                      'Due',
+                    ]}
+                    contentStyle={{ borderRadius: 12, fontSize: 12, border: '1px solid hsl(var(--border))' }}
+                  />
+                  <Bar dataKey="amount" fill="#f59e0b" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+              <p className="mt-2 text-xs text-muted-foreground">
+                What must be paid out, so the cash is there when it is needed.
+              </p>
+            </ChartPanel>
+          </div>
+
+          {/* Portfolio mix */}
+          {segments.length > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <ChartPanel
+                title="Portfolio by Product"
+                subtitle="Share of balances held"
+                icon={<PiggyBank className="h-4 w-4" />}
+                tint="indigo"
+              >
+                <ResponsiveContainer width="100%" height={240}>
+                  <PieChart>
+                    <Pie
+                      data={segments}
+                      dataKey="totalBalance"
+                      nameKey="name"
+                      innerRadius={55}
+                      outerRadius={90}
+                      paddingAngle={2}
+                    >
+                      {segments.map((seg, i) => (
+                        <Cell key={seg.productId} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(v: number, n: string) => [compact(v), n]}
+                      contentStyle={{ borderRadius: 12, fontSize: 12, border: '1px solid hsl(var(--border))' }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </ChartPanel>
+
+              <ChartPanel
+                title="Accounts by Product"
+                subtitle="How many savers on each plan"
+                icon={<Users className="h-4 w-4" />}
+                tint="cyan"
+              >
+                <ResponsiveContainer width="100%" height={240}>
+                  <BarChart
+                    data={data.productBreakdown}
+                    layout="vertical"
+                    margin={{ top: 5, right: 16, left: 8, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} opacity={0.25} />
+                    <XAxis type="number" tick={AXIS} tickLine={false} axisLine={false} allowDecimals={false} />
+                    <YAxis
+                      type="category"
+                      dataKey="name"
+                      tick={AXIS}
+                      tickLine={false}
+                      axisLine={false}
+                      width={110}
+                    />
+                    <Tooltip
+                      formatter={(v: number) => [v, 'Accounts']}
+                      contentStyle={{ borderRadius: 12, fontSize: 12, border: '1px solid hsl(var(--border))' }}
+                    />
+                    <Bar dataKey="accountCount" fill="#0891b2" radius={[0, 6, 6, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </ChartPanel>
+            </div>
+          )}
 
           {/* Status chips */}
           {Object.keys(data.statusCounts).length > 0 && (

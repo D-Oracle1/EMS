@@ -18,6 +18,8 @@ import {
   type CustomerSelection,
 } from '@/components/customer-picker';
 import { resolveContractedTerms } from '@/lib/savings-promo';
+import { projectSchedule } from '@/lib/savings-projection';
+import { InterestSchedule } from '@/components/savings/interest-schedule';
 import type { SessionUser } from '@/types';
 
 interface Props { user: SessionUser; }
@@ -48,9 +50,22 @@ export function CreateFixedSavingsClient({ user }: Props) {
     ? resolveContractedTerms(selectedProduct, startDate ? new Date(startDate) : new Date())
     : null;
 
-  const projectedInterest = terms && initialDeposit && parseFloat(initialDeposit) > 0
-    ? (parseFloat(initialDeposit) * terms.totalRate / 100)
+  // Simulate the actual term rather than applying the headline rate in one
+  // step: the opening deposit is dormant for its first month, and the method
+  // decides whether interest compounds. The old one-line calculation quoted a
+  // figure the engine would never pay.
+  const projection = terms && selectedProduct && initialDeposit && parseFloat(initialDeposit) > 0
+    ? projectSchedule({
+        principal: parseFloat(initialDeposit),
+        monthlyRate: terms.monthlyRate,
+        durationMonths: selectedProduct.durationMonths,
+        method: selectedProduct.interestCalculationMethod ?? 'MATURITY_ONLY',
+        startDate: startDate || null,
+        headlineRate: terms.totalRate,
+      })
     : null;
+
+  const projectedInterest = projection ? projection.totalInterest : null;
 
   useEffect(() => {
     getFixedSavingsProducts()
@@ -204,29 +219,17 @@ export function CreateFixedSavingsClient({ user }: Props) {
             </div>
           </div>
 
-          {selectedProduct && initialDeposit && parseFloat(initialDeposit) > 0 && maturityDate && (
-            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md p-4">
-              <p className="font-semibold text-green-800 dark:text-green-200 mb-3">Projection</p>
-              <div className="grid grid-cols-2 gap-y-1.5 text-sm">
-                <span className="text-muted-foreground">Maturity Date:</span>
-                <span className="font-medium">
+          {projection && maturityDate && (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm">
+                <span className="text-muted-foreground">Matures on</span>
+                <span className="font-semibold">
                   {maturityDate.toLocaleDateString('en-NG', { year: 'numeric', month: 'long', day: 'numeric' })}
                 </span>
-                <span className="text-muted-foreground">Principal Deposited:</span>
-                <span>₦{Number(initialDeposit).toLocaleString()}</span>
-                <span className="text-muted-foreground">
-                  Total Interest ({terms?.totalRate ?? selectedProduct.totalInterestRate}%):
-                </span>
-                <span className="text-green-600">+₦{projectedInterest ? projectedInterest.toLocaleString() : '0'}</span>
-                <span className="text-muted-foreground font-semibold">Expected Maturity Value:</span>
-                <span className="font-bold text-green-700 text-base">
-                  ₦{projectedInterest
-                    ? (parseFloat(initialDeposit) + projectedInterest).toLocaleString()
-                    : Number(initialDeposit).toLocaleString()}
-                </span>
               </div>
+
               {terms?.isPromo && (
-                <p className="mt-2 flex items-start gap-1.5 text-xs font-medium text-fuchsia-700">
+                <p className="flex items-start gap-1.5 rounded-md border border-fuchsia-200 bg-fuchsia-50/60 p-2.5 text-xs font-medium text-fuchsia-800">
                   <Sparkles className="mt-0.5 h-3 w-3 shrink-0" />
                   <span>
                     {terms.promoName}: locked in at {terms.totalRate}% for the full term.
@@ -234,9 +237,12 @@ export function CreateFixedSavingsClient({ user }: Props) {
                   </span>
                 </p>
               )}
-              <p className="text-xs text-muted-foreground mt-2">
-                Opening balance rule: the initial deposit earns interest from the first monthly roll.
-              </p>
+
+              <InterestSchedule
+                projection={projection}
+                title="What this saver will be paid"
+                defaultOpen
+              />
             </div>
           )}
         </div>

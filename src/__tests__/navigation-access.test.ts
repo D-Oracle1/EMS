@@ -30,7 +30,6 @@ const ROLES = {
     'CUSTOMERS:READ',
     'SAVINGS:READ', 'SAVINGS:CREATE', 'SAVINGS:TRANSACT',
     'SAVINGS:DEPOSIT', 'SAVINGS:WITHDRAW',
-    'FIXED_DEPOSITS:READ', 'FIXED_DEPOSITS:CREATE', 'FIXED_DEPOSITS:LIQUIDATE',
     'DOCUMENTS:READ',
   ],
   LOAN_OFFICER: [
@@ -118,11 +117,18 @@ describe('nav structure', () => {
 describe('savings officer', () => {
   const hrefs = hrefsFor('SAVINGS_OFFICER');
 
-  it('sees savings and fixed deposits', () => {
+  it('sees the savings module', () => {
     expect(hrefs).toContain('/savings');
     expect(hrefs).toContain('/savings/accounts');
     expect(hrefs).toContain('/savings/withdrawals');
-    expect(hrefs).toContain('/fixed-deposits');
+    expect(visibleSections(viewer('SAVINGS_OFFICER'))).toContain('Savings');
+  });
+
+  it('never sees fixed deposits, which are a separate product line', () => {
+    // Fixed-term SAVINGS plans are still theirs — those live under /savings.
+    expect(hrefs).not.toContain('/fixed-deposits');
+    expect(hrefs).not.toContain('/fixed-deposits/new');
+    expect(visibleSections(viewer('SAVINGS_OFFICER'))).not.toContain('Fixed Deposits');
   });
 
   it('never sees lending', () => {

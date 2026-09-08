@@ -53,6 +53,14 @@ export interface SavingsDashboard {
   productBreakdown: Array<{ productId: string; name: string; accountCount: number; totalBalance: number }>;
   mostPopularProduct: { name: string; accountCount: number } | null;
   depositsByMonth: Array<{ label: string; amount: number }>;
+  /** Deposits against withdrawals per month, with the net movement. */
+  flowByMonth: Array<{ label: string; deposits: number; withdrawals: number; net: number }>;
+  /** Interest posted to savers each month. */
+  interestByMonth: Array<{ label: string; amount: number }>;
+  /** Money falling due over the coming months, for cash planning. */
+  maturitySchedule: Array<{ label: string; count: number; amount: number }>;
+  /** Take-up of promotional rates. */
+  promo: { accounts: number; balance: number; activeProducts: number };
 }
 
 export async function getSavingsDashboard(): Promise<SavingsDashboard> {
@@ -179,6 +187,51 @@ export async function getSavingsDashboard(): Promise<SavingsDashboard> {
   const statusCounts: Record<string, number> = {};
   for (const g of statusGroups) statusCounts[g.status] = g._count;
 
+  // Six months back for the trend charts, six months forward for the cash
+  // planning one. Kept in a second batch so the windows stay readable.
+  const forwardWindows = Array.from({ length: 6 }, (_, i) => {
+    const from = startOfMonth(i);
+    const to = startOfMonth(i + 1);
+    return { label: from.toLocaleDateString('en-NG', { month: 'short', year: '2-digit' }), from, to };
+  });
+
+  const [promoAgg, promoProducts, ...rest] = await Promise.all([
+    prisma.savingsAccount.aggregate({
+      where: { isPromoRate: true, isDeleted: false },
+      _count: true,
+      _sum: { currentBalance: true },
+    }),
+    prisma.savingsProduct.count({ where: { promoActive: true, isActive: true } }),
+    ...monthWindows.map((w) =>
+      prisma.savingsTransaction.aggregate({
+        where: { transactionType: 'WITHDRAWAL', processedAt: { gte: w.from, lt: w.to } },
+        _sum: { amount: true },
+      })
+    ),
+    ...monthWindows.map((w) =>
+      prisma.savingsInterest.aggregate({
+        where: { generatedAt: { gte: w.from, lt: w.to } },
+        _sum: { interestAmount: true },
+      })
+    ),
+    ...forwardWindows.map((w) =>
+      prisma.savingsAccount.aggregate({
+        where: {
+          status: 'ACTIVE',
+          isDeleted: false,
+          maturityDate: { gte: w.from, lt: w.to },
+        },
+        _count: true,
+        _sum: { currentBalance: true, interestAccrued: true },
+      })
+    ),
+  ]);
+
+  const n = monthWindows.length;
+  const monthWithdrawals = rest.slice(0, n) as any[];
+  const monthInterest = rest.slice(n, n * 2) as any[];
+  const monthMaturities = rest.slice(n * 2) as any[];
+
   const now = today.getTime();
   const upcomingMaturities = maturingAccounts.map((a) => {
     const maturity = a.maturityDate as Date;
@@ -199,6 +252,25 @@ export async function getSavingsDashboard(): Promise<SavingsDashboard> {
   const depositsByMonth = monthWindows.map((w, i) => ({
     label: w.label,
     amount: monthDeposits[i]?._sum.amount?.toNumber() ?? 0,
+  }));
+
+  const flowByMonth = monthWindows.map((w, i) => {
+    const deposits = monthDeposits[i]?._sum.amount?.toNumber() ?? 0;
+    const withdrawals = monthWithdrawals[i]?._sum.amount?.toNumber() ?? 0;
+    return { label: w.label, deposits, withdrawals, net: deposits - withdrawals };
+  });
+
+  const interestByMonth = monthWindows.map((w, i) => ({
+    label: w.label,
+    amount: monthInterest[i]?._sum.interestAmount?.toNumber() ?? 0,
+  }));
+
+  const maturitySchedule = forwardWindows.map((w, i) => ({
+    label: w.label,
+    count: monthMaturities[i]?._count ?? 0,
+    amount:
+      (monthMaturities[i]?._sum.currentBalance?.toNumber() ?? 0) +
+      (monthMaturities[i]?._sum.interestAccrued?.toNumber() ?? 0),
   }));
 
   return {
@@ -225,6 +297,14 @@ export async function getSavingsDashboard(): Promise<SavingsDashboard> {
       totalPaidOut: completedPayoutAgg._sum.amount?.toNumber() ?? 0,
     },
     upcomingMaturities,
+    flowByMonth,
+    interestByMonth,
+    maturitySchedule,
+    promo: {
+      accounts: promoAgg._count,
+      balance: promoAgg._sum.currentBalance?.toNumber() ?? 0,
+      activeProducts: promoProducts,
+    },
     productBreakdown,
     mostPopularProduct: productBreakdown.length
       ? { name: productBreakdown[0].name, accountCount: productBreakdown[0].accountCount }

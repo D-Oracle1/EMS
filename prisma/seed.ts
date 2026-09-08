@@ -209,11 +209,12 @@ async function main() {
       code: 'SAVINGS_OFFICER',
       level: 40,
       perms: [
-        // Savings-only scope — no loan access
+        // Savings only — no loans, and no fixed deposits either. Fixed-term
+        // SAVINGS plans are still theirs; the FIXED_DEPOSITS module is a
+        // separate product line and belongs to its own officers.
         'CUSTOMERS:READ',
         'SAVINGS:READ', 'SAVINGS:CREATE', 'SAVINGS:TRANSACT',
         'SAVINGS:DEPOSIT', 'SAVINGS:WITHDRAW',
-        'FIXED_DEPOSITS:READ', 'FIXED_DEPOSITS:CREATE', 'FIXED_DEPOSITS:LIQUIDATE',
         'DOCUMENTS:READ',
       ],
     },
