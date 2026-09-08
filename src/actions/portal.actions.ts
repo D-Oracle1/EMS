@@ -262,3 +262,58 @@ export async function applyForLoan(data: {
     return { success: false, error: error.message || 'Failed to submit application' };
   }
 }
+
+// ---------------------------------------------------------------------------
+// Notifications
+// ---------------------------------------------------------------------------
+
+/**
+ * The saver's own notifications — chiefly the daily interest credits.
+ *
+ * Scoped to the signed-in customer by `requireCustomer`, so one saver can never
+ * read another's.
+ */
+export async function getMyNotifications(limit = 30) {
+  const customerId = await requireCustomer();
+
+  const [items, unread] = await Promise.all([
+    prisma.customerNotification.findMany({
+      where: { customerId },
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(Math.max(limit, 1), 100),
+    }),
+    prisma.customerNotification.count({ where: { customerId, isRead: false } }),
+  ]);
+
+  return {
+    unread,
+    items: items.map((n) => ({
+      id: n.id,
+      type: n.type,
+      title: n.title,
+      message: n.message,
+      entityType: n.entityType,
+      entityId: n.entityId,
+      isRead: n.isRead,
+      createdAt: n.createdAt.toISOString(),
+    })),
+  };
+}
+
+/** Mark one notification, or all of them, as read. */
+export async function markMyNotificationsRead(id?: string): Promise<ActionResult> {
+  try {
+    const customerId = await requireCustomer();
+
+    await prisma.customerNotification.updateMany({
+      // The customerId in the filter is what stops a crafted id from marking
+      // somebody else's notification.
+      where: { customerId, isRead: false, ...(id ? { id } : {}) },
+      data: { isRead: true, readAt: new Date() },
+    });
+
+    return { success: true, message: id ? 'Marked as read' : 'All caught up' };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}

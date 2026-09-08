@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import {
-  runMonthlySavingsInterest,
   processMaturedAccounts,
   getSystemUserId,
 } from '@/lib/savings-interest-engine';
@@ -47,7 +46,10 @@ export async function GET(request: Request) {
     results.period = `${year}-${month.toString().padStart(2, '0')} ensured OPEN`;
 
     // 2. Monthly savings interest (idempotent — safe on retry/redeploy)
-    results.savingsInterest = await runMonthlySavingsInterest({ asOf: today, systemUserId });
+    // Savings interest is credited daily now (see /api/cron/daily). Running
+    // the monthly accrual as well would pay every saver twice, so it is gone
+    // from here deliberately rather than by omission.
+    results.savingsInterest = 'credited daily — see /api/cron/daily';
 
     // 3. Maturity processing
     results.maturityProcessing = await processMaturedAccounts({ asOf: today, systemUserId });

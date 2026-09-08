@@ -19,12 +19,8 @@ import {
 import { formatCurrency } from '@/lib/utils';
 import { explainProjection, type Projection } from '@/lib/savings-projection';
 
-const METHOD_LABEL: Record<string, string> = {
-  MATURITY_ONLY: 'Interest accrues monthly and is paid as a lump sum at maturity',
-  MONTHLY_ALLOCATION: 'Interest is credited to the balance each month',
-  FLAT: 'Interest accrues monthly and is paid at maturity',
-  COMPOUND: 'Interest compounds into the balance each month',
-};
+const naira = (n: number) =>
+  n.toLocaleString('en-NG', { style: 'currency', currency: 'NGN' });
 
 interface Props {
   projection: Projection;
@@ -49,7 +45,7 @@ export function InterestSchedule({ projection, title = 'What this earns', defaul
             {title}
           </p>
           <Badge variant="secondary" className="text-[11px] font-normal">
-            {METHOD_LABEL[projection.method] ?? projection.method}
+            Credited daily · {naira(projection.dailyAmount)} a day
           </Badge>
         </div>
 
@@ -67,13 +63,9 @@ export function InterestSchedule({ projection, title = 'What this earns', defaul
             emphasis
           />
           <Figure
-            label="Effective return"
+            label="Rate for the term"
             value={`${projection.effectiveRate}%`}
-            hint={
-              projection.headlineRate !== null && projection.headlineRate !== projection.effectiveRate
-                ? `headline ${projection.headlineRate}%`
-                : undefined
-            }
+            hint={`${projection.dailyRate}% a day over ${projection.earningDays} days`}
           />
         </div>
 
@@ -93,7 +85,8 @@ export function InterestSchedule({ projection, title = 'What this earns', defaul
         <span>
           {open ? 'Hide' : 'Show'} the month-by-month breakdown
           <span className="ml-2 font-normal text-muted-foreground">
-            ({projection.rows.length} months, {projection.earningMonths} earning)
+            ({projection.rows.length} months, {projection.earningMonths} earning
+            {projection.earningStartDate ? ` from ${projection.earningStartDate}` : ''})
           </span>
         </span>
         {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -105,7 +98,8 @@ export function InterestSchedule({ projection, title = 'What this earns', defaul
             <TableHeader>
               <TableRow>
                 <TableHead className="w-14">Month</TableHead>
-                {projection.rows[0].date && <TableHead>Date</TableHead>}
+                {projection.rows[0].date && <TableHead>Up to</TableHead>}
+                <TableHead className="text-center">Earning days</TableHead>
                 <TableHead className="text-right">Earning balance</TableHead>
                 <TableHead className="text-right">Interest</TableHead>
                 <TableHead className="text-right">Interest to date</TableHead>
@@ -120,12 +114,13 @@ export function InterestSchedule({ projection, title = 'What this earns', defaul
                 >
                   <TableCell className="font-medium">{row.month}</TableCell>
                   {row.date && <TableCell className="text-sm">{row.date}</TableCell>}
+                  <TableCell className="text-center text-sm">{row.earningDays}</TableCell>
                   <TableCell className="text-right text-sm">
                     {formatCurrency(row.openingEligible)}
                   </TableCell>
                   <TableCell className="text-right text-sm">
                     {row.interest === 0 ? (
-                      <span title="Deposits do not earn in the month they are made">—</span>
+                      <span title="Interest starts counting the month after the deposit">—</span>
                     ) : (
                       <span className="font-medium text-emerald-700">
                         +{formatCurrency(row.interest)}

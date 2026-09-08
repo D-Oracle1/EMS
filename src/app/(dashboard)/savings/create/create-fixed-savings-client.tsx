@@ -57,11 +57,9 @@ export function CreateFixedSavingsClient({ user }: Props) {
   const projection = terms && selectedProduct && initialDeposit && parseFloat(initialDeposit) > 0
     ? projectSchedule({
         principal: parseFloat(initialDeposit),
-        monthlyRate: terms.monthlyRate,
+        totalRate: terms.totalRate,
         durationMonths: selectedProduct.durationMonths,
-        method: selectedProduct.interestCalculationMethod ?? 'MATURITY_ONLY',
         startDate: startDate || null,
-        headlineRate: terms.totalRate,
       })
     : null;
 

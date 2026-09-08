@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import {
-  Wallet, Landmark, PiggyBank, Loader2, Plus, ArrowDownCircle, User, TrendingUp,
+  Wallet, Landmark, PiggyBank, Loader2, Plus, ArrowDownCircle, User, TrendingUp, Bell,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -15,7 +15,8 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, formatDateTime } from '@/lib/utils';
+import { getMyNotifications, markMyNotificationsRead } from '@/actions/portal.actions';
 import {
   getMyPortalData, updateMyProfile, requestMyWithdrawal, getPortalLoanProducts, applyForLoan,
 } from '@/actions/portal.actions';
@@ -32,10 +33,13 @@ const statusVariant: Record<string, 'success' | 'warning' | 'error' | 'secondary
 export function PortalClient() {
   const [data, setData] = useState<PortalData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [notices, setNotices] = useState<{ unread: number; items: any[] }>({ unread: 0, items: [] });
 
   const load = () => {
     setLoading(true);
     getMyPortalData().then(setData).catch((e) => toast.error(e.message)).finally(() => setLoading(false));
+    // A failure here must not stop the accounts rendering.
+    getMyNotifications(20).then(setNotices).catch(() => undefined);
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
 
@@ -72,6 +76,47 @@ export function PortalClient() {
         <LoanApplyDialog onDone={load} />
         <ProfileDialog data={data} onDone={load} />
       </div>
+
+      {/* What your money has been doing */}
+      {notices.items.length > 0 && (
+        <section className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold flex items-center gap-2">
+              <Bell className="h-4 w-4 text-emerald-600" /> Activity
+              {notices.unread > 0 && (
+                <Badge variant="success" className="text-[10px]">{notices.unread} new</Badge>
+              )}
+            </h2>
+            {notices.unread > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs"
+                onClick={async () => {
+                  await markMyNotificationsRead();
+                  getMyNotifications(20).then(setNotices).catch(() => undefined);
+                }}
+              >
+                Mark all read
+              </Button>
+            )}
+          </div>
+
+          <div className="premium-card divide-y">
+            {notices.items.slice(0, 8).map((n) => (
+              <div key={n.id} className={`p-3 ${n.isRead ? '' : 'bg-emerald-50/50'}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-sm font-medium">{n.title}</p>
+                  <span className="shrink-0 text-[11px] text-muted-foreground">
+                    {formatDateTime(n.createdAt)}
+                  </span>
+                </div>
+                <p className="mt-0.5 text-xs text-muted-foreground">{n.message}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Savings */}
       <section className="space-y-2">

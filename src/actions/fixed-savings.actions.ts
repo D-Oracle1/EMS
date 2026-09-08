@@ -15,6 +15,7 @@ import {
   describePromoWindow,
   resolveContractedTerms,
 } from '@/lib/savings-promo';
+import { deriveEarningTerms, interestTargetFor } from '@/lib/savings-daily-interest';
 import { createNotification } from '@/lib/notifications';
 import { generateReference } from '@/lib/utils';
 import { createJournalEntry, getAccountByCode } from '@/lib/accounting-engine';
@@ -393,8 +394,16 @@ export async function createFixedSavingsAccount(data: {
     // backdated start outside the window correctly gets the standard rate.
     const terms = resolveContractedTerms(product, startDate);
 
-    const maturityDate = new Date(startDate);
-    maturityDate.setMonth(maturityDate.getMonth() + product.durationMonths);
+    // The daily earning contract. Interest starts a month after the deposit
+    // and the whole contracted rate is spread across the days between then and
+    // maturity, so the term lands on exactly that rate.
+    const earning = deriveEarningTerms({
+      startDate,
+      durationMonths: product.durationMonths,
+      totalRate: terms.totalRate,
+    });
+    const maturityDate = earning.maturityDate;
+    const interestTarget = interestTargetFor(data.initialDeposit, terms.totalRate);
 
     const accountNumber = await generateReference('SAVINGS_ACCOUNT');
     const transactionRef = await generateReference('SAVINGS_TXN');
@@ -430,6 +439,14 @@ export async function createFixedSavingsAccount(data: {
           contractedDurationMonths: terms.durationMonths,
           isPromoRate: terms.isPromo,
           promoName: terms.promoName,
+          earningStartDate: earning.earningStartDate,
+          earningDays: earning.earningDays,
+          contractedDailyRate: earning.dailyRate,
+          interestTargetTotal: interestTarget,
+          interestPaidToDate: 0,
+          // The opening deposit is dormant from today; it starts earning a
+          // month from now.
+          pendingSince: startDate,
           status: 'ACTIVE',
           createdById: user.id,
         },
@@ -487,7 +504,7 @@ export async function createFixedSavingsAccount(data: {
     await notifyCustomerByEmail(
       customerId,
       `Fixed savings account ${accountNumber} opened`,
-      `Your fixed savings account ${accountNumber} has been opened with an initial deposit of ${Number(data.initialDeposit).toLocaleString('en-NG', { style: 'currency', currency: 'NGN' })}, earning ${terms.totalRate}% over the term${terms.isPromo ? ` under our ${terms.promoName} offer` : ''}. It matures on ${maturityDate.toLocaleDateString('en-NG', { year: 'numeric', month: 'long', day: 'numeric' })}.`
+      `Your fixed savings account ${accountNumber} has been opened with an initial deposit of ${Number(data.initialDeposit).toLocaleString('en-NG', { style: 'currency', currency: 'NGN' })}, earning ${terms.totalRate}% over the term (${interestTarget.toLocaleString('en-NG', { style: 'currency', currency: 'NGN' })} of interest)${terms.isPromo ? ` under our ${terms.promoName} offer` : ''}. Interest is credited daily from ${earning.earningStartDate.toLocaleDateString('en-NG', { year: 'numeric', month: 'long', day: 'numeric' })}. It matures on ${maturityDate.toLocaleDateString('en-NG', { year: 'numeric', month: 'long', day: 'numeric' })}.`
     );
 
     return {
@@ -552,7 +569,16 @@ export async function fixedSavingsDeposit(data: {
         },
       });
 
-      // Opening Balance Rule: deposits go to pendingDeposits only
+      // Opening Balance Rule: deposits go to pendingDeposits only, and start
+      // their own dormant month from today. The extra interest this deposit
+      // will earn is added to the target so the daily job — which pays down to
+      // that target — knows to include it.
+      const topUpTarget = new Decimal(data.amount)
+        .times(account.contractedTotalRate ?? 0)
+        .div(100)
+        .toDecimalPlaces(2)
+        .toNumber();
+
       await tx.savingsAccount.update({
         where: { id: data.accountId },
         data: {
@@ -560,6 +586,8 @@ export async function fixedSavingsDeposit(data: {
           availableBalance: balanceAfter,
           pendingDeposits: { increment: data.amount },
           totalDeposits: { increment: data.amount },
+          pendingSince: new Date(),
+          interestTargetTotal: { increment: topUpTarget },
           lastTransactionAt: new Date(),
         },
       });

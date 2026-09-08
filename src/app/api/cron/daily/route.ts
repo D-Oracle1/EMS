@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import Decimal from 'decimal.js';
 import { flagDormantAccounts } from '@/lib/savings-maintenance';
 import { refreshMaturityProgress } from '@/lib/savings-interest-engine';
+import { runDailySavingsInterest } from '@/lib/savings-daily-interest';
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
 
@@ -96,6 +97,14 @@ export async function GET(request: Request) {
     // 5. Refresh fixed-term maturity progress (months completed / remaining)
     const refreshed = await refreshMaturityProgress(new Date());
     results.maturityProgress = `${refreshed} fixed-term accounts refreshed`;
+
+    // 6. Credit today's savings interest and tell each saver.
+    //    Idempotent on (accountId, date), so a retry cannot pay anyone twice.
+    const interest = await runDailySavingsInterest({ asOf: new Date() });
+    results.savingsInterest =
+      `${interest.processed} accounts credited ` +
+      `${interest.totalInterest.toFixed(2)}, ${interest.notified} savers notified, ` +
+      `${interest.skipped} skipped`;
 
     return NextResponse.json({ success: true, results, timestamp: new Date().toISOString() });
   } catch (error: any) {

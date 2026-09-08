@@ -2,48 +2,45 @@
  * Fixed-term savings projection.
  * Hylink Finance Limited EMS
  *
- * Produces the month-by-month schedule a saver will actually be paid, so the
- * officer opening the account — and the customer — can see exactly what lands
- * at maturity rather than a headline percentage.
+ * The month-by-month view of what a saver will be paid, mirroring
+ * `savings-daily-interest.ts` so the figure quoted when the account is opened
+ * is the figure that lands.
  *
- * This deliberately mirrors `savings-interest-engine.ts` step for step,
- * including the two rules that make the real figure differ from the headline:
+ * The model in one paragraph: interest starts counting the month AFTER the
+ * deposit, and the whole contracted rate is then spread evenly across the days
+ * between that point and maturity. A 12-month plan at 17% starting 8 September
+ * earns from 8 October to 8 September — 335 days — at 17/335 = 0.050746269% a
+ * day. Interest is credited to the account daily. The final earning day posts
+ * whatever rounding is outstanding, so the term lands on exactly 17%.
  *
- *   1. The opening balance rule. A deposit does not earn in the month it is
- *      made: it sits in `pendingDeposits` and only rolls into the interest-
- *      earning `eligibleBalance` on the next monthly run. So the first run of a
- *      12-month plan posts nothing, and interest is earned over 11 months.
- *
- *   2. The calculation method. COMPOUND folds each month's interest back into
- *      the earning base; MONTHLY_ALLOCATION credits it to the balance without
- *      compounding; MATURITY_ONLY and FLAT accrue it to one side until
- *      maturity.
- *
- * Together those mean a "17% over 12 months" plan does not pay exactly 17%.
- * The schedule below is the honest answer, and the UI shows the effective rate
- * next to the headline one.
+ * The rows below are monthly buckets of those daily credits: a 335-row table
+ * is not something anyone can read, but the daily rate and the per-day amount
+ * are shown alongside it.
  */
 
 import Decimal from 'decimal.js';
+import {
+  deriveEarningTerms,
+  interestTargetFor,
+  atMidnight,
+  daysBetween,
+  addMonthsClamped,
+} from '@/lib/savings-daily-interest';
 
-Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
-
-export type CalculationMethod =
-  | 'MATURITY_ONLY'
-  | 'MONTHLY_ALLOCATION'
-  | 'FLAT'
-  | 'COMPOUND';
+Decimal.set({ precision: 28, rounding: Decimal.ROUND_HALF_UP });
 
 export interface ProjectionRow {
   /** 1-based month of the term. */
   month: number;
-  /** Date this run would post, if a start date was supplied. */
+  /** Date this month's window closes, when a start date was supplied. */
   date: string | null;
-  /** Balance that earns interest this month. */
+  /** Days inside this month that actually earn. */
+  earningDays: number;
+  /** Balance earning interest through this month. */
   openingEligible: number;
-  /** Interest earned in this month alone. */
+  /** Interest credited across this month. */
   interest: number;
-  /** Interest earned so far, including this month. */
+  /** Interest credited so far, including this month. */
   cumulativeInterest: number;
   /** What the account is worth at the end of this month. */
   closingValue: number;
@@ -54,90 +51,96 @@ export interface Projection {
   principal: number;
   totalInterest: number;
   maturityValue: number;
-  /** Interest as a percentage of the principal — what the saver really earns. */
+  /** Interest as a percentage of the deposit — what the saver really earns. */
   effectiveRate: number;
-  /** The product's advertised total rate, for comparison. */
+  /** The rate the account was contracted at. */
   headlineRate: number | null;
-  /** Months that actually carry interest (the first is always dormant). */
+  /** Months that carry interest (the first is always dormant). */
   earningMonths: number;
-  monthlyRate: number;
-  method: CalculationMethod;
-}
-
-const CREDITS_TO_BALANCE: CalculationMethod[] = ['MONTHLY_ALLOCATION', 'COMPOUND'];
-
-function addMonths(start: Date, months: number): Date {
-  const d = new Date(start.getTime());
-  d.setMonth(d.getMonth() + months);
-  return d;
+  /** Days across which the rate is spread. */
+  earningDays: number;
+  /** Percent per day per naira. */
+  dailyRate: number;
+  /** Naira credited on a typical day. */
+  dailyAmount: number;
+  /** When interest starts, as an ISO date. */
+  earningStartDate: string | null;
 }
 
 /**
- * Simulate the term.
+ * Project a term.
  *
- * `monthlyRate` is a percentage (1.416667 means 1.416667%), matching how the
- * engine and the product both store it.
+ * `totalRate` is the rate for the whole term (17 means 17%).
  */
 export function projectSchedule(input: {
   principal: number;
-  monthlyRate: number;
+  totalRate: number;
   durationMonths: number;
-  method?: CalculationMethod;
   startDate?: Date | string | null;
-  headlineRate?: number | null;
 }): Projection {
-  const method: CalculationMethod = input.method ?? 'MATURITY_ONLY';
-  const creditsToBalance = CREDITS_TO_BALANCE.includes(method);
-  const compounds = method === 'COMPOUND';
-
   const principal = new Decimal(input.principal || 0);
-  const rate = new Decimal(input.monthlyRate || 0);
+  const totalRate = Number(input.totalRate || 0);
   const duration = Math.max(0, Math.floor(input.durationMonths || 0));
 
-  const start = input.startDate ? new Date(input.startDate) : null;
-  const validStart = start && !Number.isNaN(start.getTime()) ? start : null;
+  const parsed = input.startDate ? new Date(input.startDate) : null;
+  const hasStart = parsed !== null && !Number.isNaN(parsed.getTime());
+  // Without a real start date the shape of the schedule is the same; only the
+  // dates against each row are unknown.
+  const start = atMidnight(hasStart ? (parsed as Date) : new Date());
 
-  // Opening state, exactly as createFixedSavingsAccount writes it: the whole
-  // deposit is pending, nothing is earning yet.
-  let eligible = new Decimal(0);
-  let pending = principal;
-  let balance = principal;
-  let accrued = new Decimal(0);
-  let cumulative = new Decimal(0);
+  const terms = deriveEarningTerms({ startDate: start, durationMonths: duration, totalRate });
+  const target = interestTargetFor(principal.toNumber(), totalRate);
+
+  const perDay = principal
+    .times(terms.dailyRate)
+    .div(100)
+    .toDecimalPlaces(2);
 
   const rows: ProjectionRow[] = [];
+  let cumulative = new Decimal(0);
   let earningMonths = 0;
 
   for (let month = 1; month <= duration; month++) {
-    const openingEligible = eligible;
-    const interest = eligible.times(rate).div(100).toDecimalPlaces(2);
+    const windowStart = addMonthsClamped(start, month - 1);
+    const windowEnd = addMonthsClamped(start, month);
 
-    // Roll pending deposits in; compounding also folds this month's interest
-    // into the base that earns next month.
-    eligible = eligible.plus(pending);
-    if (compounds) eligible = eligible.plus(interest);
-    eligible = eligible.toDecimalPlaces(2);
-    pending = new Decimal(0);
+    // Only the part of this month that falls inside the earning window pays.
+    const from =
+      windowStart.getTime() < terms.earningStartDate.getTime()
+        ? terms.earningStartDate
+        : windowStart;
+    const to =
+      windowEnd.getTime() > terms.maturityDate.getTime() ? terms.maturityDate : windowEnd;
+    const days = Math.max(0, daysBetween(from, to));
 
-    if (creditsToBalance) balance = balance.plus(interest);
-    else accrued = accrued.plus(interest);
+    const isFinalMonth = month === duration;
+    let interest: Decimal;
+
+    if (isFinalMonth) {
+      // The last month absorbs the term's rounding, exactly as the engine does
+      // on the final earning day.
+      interest = new Decimal(target).minus(cumulative).toDecimalPlaces(2);
+      if (interest.lt(0)) interest = new Decimal(0);
+    } else {
+      interest = perDay.times(days).toDecimalPlaces(2);
+    }
 
     cumulative = cumulative.plus(interest);
-    if (interest.gt(0)) earningMonths++;
+    if (days > 0) earningMonths++;
 
     rows.push({
       month,
-      date: validStart ? addMonths(validStart, month).toISOString().split('T')[0] : null,
-      openingEligible: openingEligible.toNumber(),
+      date: hasStart ? windowEnd.toISOString().split('T')[0] : null,
+      earningDays: days,
+      openingEligible: days > 0 ? principal.toNumber() : 0,
       interest: interest.toNumber(),
       cumulativeInterest: cumulative.toNumber(),
-      closingValue: balance.plus(accrued).toDecimalPlaces(2).toNumber(),
+      closingValue: principal.plus(cumulative).toDecimalPlaces(2).toNumber(),
     });
   }
 
-  // Maturity pays out everything the account holds, whichever side it sits on.
-  const maturityValue = balance.plus(accrued).toDecimalPlaces(2);
-  const totalInterest = maturityValue.minus(principal).toDecimalPlaces(2);
+  const totalInterest = cumulative.toDecimalPlaces(2);
+  const maturityValue = principal.plus(totalInterest).toDecimalPlaces(2);
 
   return {
     rows,
@@ -147,30 +150,31 @@ export function projectSchedule(input: {
     effectiveRate: principal.gt(0)
       ? totalInterest.div(principal).times(100).toDecimalPlaces(4).toNumber()
       : 0,
-    headlineRate: input.headlineRate ?? null,
+    headlineRate: totalRate,
     earningMonths,
-    monthlyRate: rate.toNumber(),
-    method,
+    earningDays: terms.earningDays,
+    dailyRate: terms.dailyRate,
+    dailyAmount: perDay.toNumber(),
+    earningStartDate: hasStart ? terms.earningStartDate.toISOString().split('T')[0] : null,
   };
 }
 
-/** Plain-language note on why the effective rate differs from the headline. */
+/** How the schedule works, in a sentence the saver can check. */
 export function explainProjection(p: Projection): string | null {
-  if (p.headlineRate === null) return null;
-  const diff = new Decimal(p.effectiveRate).minus(p.headlineRate).toDecimalPlaces(2).toNumber();
-  if (Math.abs(diff) < 0.01) return null;
+  if (p.rows.length === 0 || p.headlineRate === null) return null;
 
   const dormant = p.rows.length - p.earningMonths;
   const parts: string[] = [];
+
   if (dormant > 0) {
     parts.push(
-      `the opening deposit does not earn in its first month, so interest runs for ${p.earningMonths} of ${p.rows.length} months`
+      `Interest starts the month after the deposit${p.earningStartDate ? ` (from ${p.earningStartDate})` : ''}`
     );
   }
-  if (p.method === 'COMPOUND') {
-    parts.push('interest compounds into the earning balance each month');
-  }
+  parts.push(
+    `the ${p.headlineRate}% is spread across the ${p.earningDays} earning days at ${p.dailyRate}% a day`
+  );
+  parts.push('and is credited to the account daily');
 
-  const direction = diff > 0 ? 'above' : 'below';
-  return `Works out at ${p.effectiveRate}% of the deposit, ${Math.abs(diff)}% ${direction} the headline ${p.headlineRate}% — ${parts.join(', and ')}.`;
+  return `${parts.join(', ')}. The final day tops up any rounding, so the plan pays exactly ${p.headlineRate}%.`;
 }

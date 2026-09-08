@@ -95,16 +95,14 @@ export function SavingsDetailClient({ user, account }: SavingsDetailClientProps)
 
   // Fixed-term accounts get a full schedule, built from the rate the account
   // was actually opened on rather than the product's current rate.
-  const monthlyRate = account.contractedMonthlyRate ?? account.product.monthlyInterestRate ?? 0;
+  const totalRate = account.contractedTotalRate ?? account.product.totalInterestRate ?? 0;
   const duration = account.contractedDurationMonths ?? account.product.durationMonths ?? 0;
-  const projection = duration > 0 && monthlyRate > 0
+  const projection = duration > 0 && totalRate > 0
     ? projectSchedule({
         principal: account.totalDeposits || account.currentBalance,
-        monthlyRate,
+        totalRate,
         durationMonths: duration,
-        method: account.product.interestCalculationMethod ?? 'MATURITY_ONLY',
         startDate: account.startDate ?? null,
-        headlineRate: account.contractedTotalRate ?? account.product.totalInterestRate ?? null,
       })
     : null;
 
