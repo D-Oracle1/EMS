@@ -26,8 +26,13 @@ export const authConfig = {
       // The public CMS feed the marketing site reads. Published content only,
       // no session — it must not be bounced to the login screen.
       const isPublicApi = nextUrl.pathname.startsWith('/api/public');
+      // Scheduled jobs. Vercel Cron calls these with no session, so bouncing
+      // them to the login screen silently stops every scheduled job in the
+      // system — which is exactly what was happening. They authorise
+      // themselves against CRON_SECRET inside the route instead.
+      const isCronApi = nextUrl.pathname.startsWith('/api/cron');
 
-      if (isApiAuth || isPublicApi) return true;
+      if (isApiAuth || isPublicApi || isCronApi) return true;
 
       const userType = (auth?.user as any)?.userType ?? 'staff';
       // HR-only staff open onto the HR overview rather than the generic dashboard.

@@ -11,9 +11,18 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
-  // Verify cron secret in production
+  // These routes are reachable without a session so the scheduler can call
+  // them, so the secret is the only thing standing in front of jobs that move
+  // money. Fail closed: a missing secret refuses the request rather than
+  // leaving the endpoint open to anyone who knows the path.
   const authHeader = request.headers.get('authorization');
-  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!process.env.CRON_SECRET) {
+    return NextResponse.json(
+      { error: 'CRON_SECRET is not configured; refusing to run.' },
+      { status: 503 }
+    );
+  }
+  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
