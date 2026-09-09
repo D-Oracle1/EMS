@@ -49,7 +49,6 @@ import {
   getUpcomingMilestones,
 } from '@/actions/hr-analytics.actions';
 import type { SessionUser } from '@/types';
-import { WorkspaceHeader } from '@/components/workspace-header';
 
 interface HRHubClientProps {
   user: SessionUser;
@@ -122,7 +121,6 @@ export function HRHubClient({ user }: HRHubClientProps) {
 
   return (
     <div className="space-y-6">
-      <WorkspaceHeader name={user?.firstName} />
 
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Human Resources</h1>

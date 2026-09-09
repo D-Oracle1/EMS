@@ -15,28 +15,13 @@
 import { useEffect, useState } from 'react';
 
 interface WorkspaceHeaderProps {
-  /** First name, used in the greeting. */
-  name?: string;
   /** Shown under the clock in place of the date, e.g. a branch name. */
   subtitle?: string;
-  /** Anything to sit on the right — a theme toggle, quick actions. */
-  actions?: React.ReactNode;
   /** Seconds are distracting on a dashboard; on by default only for a wall clock. */
   showSeconds?: boolean;
 }
 
-function greetingFor(hour: number): string {
-  if (hour < 12) return 'Good morning';
-  if (hour < 17) return 'Good afternoon';
-  return 'Good evening';
-}
-
-export function WorkspaceHeader({
-  name,
-  subtitle,
-  actions,
-  showSeconds = false,
-}: WorkspaceHeaderProps) {
+export function WorkspaceHeader({ subtitle, showSeconds = false }: WorkspaceHeaderProps) {
   const [now, setNow] = useState<Date | null>(null);
 
   useEffect(() => {
@@ -68,17 +53,6 @@ export function WorkspaceHeader({
 
   return (
     <div className="relative">
-      <div className="flex items-start justify-between gap-3">
-        <div className="greeting-pill">
-          <span aria-hidden>👋</span>
-          <span>
-            {now ? greetingFor(now.getHours()) : 'Welcome'}
-            {name ? `, ${name}` : ''}
-          </span>
-        </div>
-        {actions && <div className="flex items-center gap-2">{actions}</div>}
-      </div>
-
       <div className="py-6 text-center sm:py-8">
         {/* Reserve the height so the surrounding layout does not jump when the
             clock appears on mount. */}

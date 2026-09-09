@@ -28,7 +28,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { StatCard } from '@/components/ui/stat-card';
-import { WorkspaceHeader } from '@/components/workspace-header';
+import { WorkspaceWidgets } from '@/components/layout/workspace-widgets';
 import type { SessionUser, DashboardData } from '@/types';
 import {
   BarChart,
@@ -100,7 +100,8 @@ export function DashboardClient({ user, data }: DashboardClientProps) {
 
   return (
     <div className="space-y-5 animate-rise">
-      <WorkspaceHeader name={user.firstName} />
+
+      <WorkspaceWidgets />
 
       {/* Hero welcome */}
       <div className="hero-card p-5 sm:p-6">

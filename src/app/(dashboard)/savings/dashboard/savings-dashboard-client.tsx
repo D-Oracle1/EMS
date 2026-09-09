@@ -42,7 +42,6 @@ import {
   Cell,
   ReferenceLine,
 } from 'recharts';
-import { WorkspaceHeader } from '@/components/workspace-header';
 import type { SessionUser } from '@/types';
 
 /** Sidebar palette, so charts read as part of the same system. */
@@ -156,7 +155,6 @@ export function SavingsDashboardClient({ user }: Props) {
 
   return (
     <div className="space-y-5 animate-rise">
-      <WorkspaceHeader name={user?.firstName} />
 
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
