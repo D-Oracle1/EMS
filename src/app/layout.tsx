@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { Toaster } from 'sonner';
+import { ThemeProvider, themeScript } from '@/components/theme';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -31,13 +32,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
+        {/* Applies the saved theme before first paint, so the page never
+            flashes light and then snaps to dark. */}
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body className={inter.className}>
-        {children}
-        <Toaster position="top-right" richColors />
+        <ThemeProvider>
+          {children}
+          <Toaster position="top-right" richColors theme="system" />
+        </ThemeProvider>
       </body>
     </html>
   );

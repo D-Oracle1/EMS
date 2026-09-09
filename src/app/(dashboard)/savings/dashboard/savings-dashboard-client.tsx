@@ -42,12 +42,23 @@ import {
   Cell,
   ReferenceLine,
 } from 'recharts';
+import { WorkspaceHeader } from '@/components/workspace-header';
 import type { SessionUser } from '@/types';
 
 /** Sidebar palette, so charts read as part of the same system. */
 const CHART_COLORS = ['#059669', '#0891b2', '#6366f1', '#d946ef', '#f59e0b', '#ef4444'];
 
 const AXIS = { fontSize: 11, fill: 'currentColor', opacity: 0.65 } as const;
+
+/** Follows the theme; recharts would otherwise draw a white panel in dark mode. */
+const TOOLTIP_STYLE = {
+  borderRadius: 12,
+  fontSize: 12,
+  background: 'hsl(var(--popover))',
+  color: 'hsl(var(--popover-foreground))',
+  border: '1px solid hsl(var(--border))',
+  boxShadow: '0 12px 32px -12px hsla(220, 43%, 11%, 0.35)',
+} as const;
 
 function ChartPanel({
   title,
@@ -89,7 +100,6 @@ const savingsNav = [
   { label: 'Reports', href: '/savings/reports' },
 ];
 
-const SEGMENT_COLORS = ['#1d4ed8', '#f97316', '#059669', '#7c3aed', '#0891b2', '#d97706', '#e11d48', '#0284c7'];
 const TILE_TINTS = ['blue', 'orange', 'emerald', 'violet', 'cyan', 'amber', 'rose', 'sky'] as const;
 
 function compact(n: number): string {
@@ -124,7 +134,7 @@ function StatTile({
   );
 }
 
-export function SavingsDashboardClient({ user: _user }: Props) {
+export function SavingsDashboardClient({ user }: Props) {
   const [data, setData] = useState<SavingsDashboard | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -141,28 +151,13 @@ export function SavingsDashboardClient({ user: _user }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const maxMonth = data ? Math.max(1, ...data.depositsByMonth.map((m) => m.amount)) : 1;
-
-  // Donut segments from product balances
+  // Products with money in them, for the portfolio charts.
   const segments = (data?.productBreakdown ?? []).filter((p) => p.totalBalance > 0);
-  const segTotal = segments.reduce((s, p) => s + p.totalBalance, 0) || 1;
-  let acc = 0;
-  const gradientStops = segments
-    .map((p, i) => {
-      const start = (acc / segTotal) * 100;
-      acc += p.totalBalance;
-      const end = (acc / segTotal) * 100;
-      return `${SEGMENT_COLORS[i % SEGMENT_COLORS.length]} ${start}% ${end}%`;
-    })
-    .join(', ');
-  const donutBg = segments.length
-    ? `conic-gradient(${gradientStops})`
-    : 'conic-gradient(#e2e8f0 0% 100%)';
-
-  const maxProduct = Math.max(1, ...segments.map((p) => p.totalBalance));
 
   return (
     <div className="space-y-5 animate-rise">
+      <WorkspaceHeader name={user?.firstName} />
+
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -316,71 +311,6 @@ export function SavingsDashboardClient({ user: _user }: Props) {
             </div>
           )}
 
-          {/* Composition donut + breakdown */}
-          <div className="premium-card p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold">Portfolio Composition</h2>
-              {data.mostPopularProduct && (
-                <span className="text-xs text-muted-foreground">
-                  Top: {data.mostPopularProduct.name}
-                </span>
-              )}
-            </div>
-
-            <div className="flex flex-col sm:flex-row items-center gap-6">
-              {/* Donut */}
-              <div className="relative shrink-0" style={{ width: 160, height: 160 }}>
-                <div className="h-40 w-40 rounded-full" style={{ background: donutBg }} />
-                <div className="absolute inset-0 m-auto h-[104px] w-[104px] rounded-full bg-card flex flex-col items-center justify-center shadow-inner">
-                  <span className="text-lg font-bold leading-none">
-                    {compact(data.portfolio.totalPortfolio)}
-                  </span>
-                  <span className="text-[11px] text-muted-foreground mt-0.5">Total</span>
-                </div>
-              </div>
-
-              {/* Breakdown list */}
-              <div className="flex-1 w-full space-y-3">
-                {segments.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-6">
-                    No active balances yet.
-                  </p>
-                ) : (
-                  segments.slice(0, 5).map((p, i) => {
-                    const color = SEGMENT_COLORS[i % SEGMENT_COLORS.length];
-                    const pct = Math.round((p.totalBalance / segTotal) * 100);
-                    return (
-                      <div key={p.productId}>
-                        <div className="flex items-center justify-between text-sm">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span
-                              className="h-2.5 w-2.5 rounded-full shrink-0"
-                              style={{ background: color }}
-                            />
-                            <span className="font-medium truncate">{p.name}</span>
-                            <span className="text-xs text-muted-foreground shrink-0">
-                              {p.accountCount} acct
-                            </span>
-                          </div>
-                          <span className="font-semibold shrink-0 ml-2">
-                            {compact(p.totalBalance)}
-                          </span>
-                        </div>
-                        <div className="progress-track mt-1.5">
-                          <div
-                            className="progress-fill"
-                            style={{ width: `${(p.totalBalance / maxProduct) * 100}%`, background: color }}
-                          />
-                        </div>
-                        <div className="text-right text-[11px] text-muted-foreground mt-0.5">{pct}%</div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-          </div>
-
           {/* Maturities + deposits */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Upcoming maturities */}
@@ -391,7 +321,7 @@ export function SavingsDashboardClient({ user: _user }: Props) {
                 </div>
                 <div>
                   <h2 className="font-semibold leading-tight">Upcoming Maturities</h2>
-                  <p className="text-xs text-muted-foreground">Within 60 days</p>
+                  <p className="text-xs text-muted-foreground">Next 6 months</p>
                 </div>
               </div>
               {data.upcomingMaturities.length === 0 ? (
@@ -439,7 +369,7 @@ export function SavingsDashboardClient({ user: _user }: Props) {
                   <YAxis tick={AXIS} tickLine={false} axisLine={false} tickFormatter={compact} width={56} />
                   <Tooltip
                     formatter={(v: number, name: string) => [compact(v), name]}
-                    contentStyle={{ borderRadius: 12, fontSize: 12, border: '1px solid hsl(var(--border))' }}
+                    contentStyle={TOOLTIP_STYLE}
                   />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
                   <ReferenceLine y={0} stroke="currentColor" opacity={0.3} />
@@ -479,7 +409,7 @@ export function SavingsDashboardClient({ user: _user }: Props) {
                   <YAxis tick={AXIS} tickLine={false} axisLine={false} tickFormatter={compact} width={56} />
                   <Tooltip
                     formatter={(v: number) => [compact(v), 'Interest']}
-                    contentStyle={{ borderRadius: 12, fontSize: 12, border: '1px solid hsl(var(--border))' }}
+                    contentStyle={TOOLTIP_STYLE}
                   />
                   <Area
                     type="monotone"
@@ -494,7 +424,7 @@ export function SavingsDashboardClient({ user: _user }: Props) {
 
             <ChartPanel
               title="Money Falling Due"
-              subtitle="Maturities over the next 6 months"
+              subtitle="Maturities over the next 12 months"
               icon={<CalendarClock className="h-4 w-4" />}
               tint="amber"
             >
@@ -508,7 +438,7 @@ export function SavingsDashboardClient({ user: _user }: Props) {
                       `${compact(v)} - ${item?.payload?.count ?? 0} account(s)`,
                       'Due',
                     ]}
-                    contentStyle={{ borderRadius: 12, fontSize: 12, border: '1px solid hsl(var(--border))' }}
+                    contentStyle={TOOLTIP_STYLE}
                   />
                   <Bar dataKey="amount" fill="#f59e0b" radius={[6, 6, 0, 0]} />
                 </BarChart>
@@ -544,7 +474,7 @@ export function SavingsDashboardClient({ user: _user }: Props) {
                     </Pie>
                     <Tooltip
                       formatter={(v: number, n: string) => [compact(v), n]}
-                      contentStyle={{ borderRadius: 12, fontSize: 12, border: '1px solid hsl(var(--border))' }}
+                      contentStyle={TOOLTIP_STYLE}
                     />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
                   </PieChart>
@@ -575,7 +505,7 @@ export function SavingsDashboardClient({ user: _user }: Props) {
                     />
                     <Tooltip
                       formatter={(v: number) => [v, 'Accounts']}
-                      contentStyle={{ borderRadius: 12, fontSize: 12, border: '1px solid hsl(var(--border))' }}
+                      contentStyle={TOOLTIP_STYLE}
                     />
                     <Bar dataKey="accountCount" fill="#0891b2" radius={[0, 6, 6, 0]} />
                   </BarChart>

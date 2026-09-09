@@ -68,8 +68,8 @@ export async function getSavingsDashboard(): Promise<SavingsDashboard> {
 
   const today = startOfToday();
   const monthStart = startOfMonth();
-  const in60Days = new Date();
-  in60Days.setDate(in60Days.getDate() + 60);
+  const maturityHorizon = new Date();
+  maturityHorizon.setDate(maturityHorizon.getDate() + 180);
 
   // Build the last 6 month windows (oldest → newest)
   const monthWindows = Array.from({ length: 6 }, (_, i) => {
@@ -111,14 +111,17 @@ export async function getSavingsDashboard(): Promise<SavingsDashboard> {
       where: { status: 'ACTIVE', isDeleted: false },
       _sum: { eligibleBalance: true },
     }),
-    prisma.savingsInterest.aggregate({ _sum: { interestAmount: true } }),
+    prisma.savingsDailyInterest.aggregate({ _sum: { amount: true } }),
+    // What is still owed to savers. Daily interest is credited straight to the
+    // balance, so interestAccrued sits at zero and the liability is the gap
+    // between what each account was promised and what it has been paid.
     prisma.savingsAccount.aggregate({
-      where: { status: 'ACTIVE', isDeleted: false },
-      _sum: { interestAccrued: true },
+      where: { status: 'ACTIVE', isDeleted: false, maturityDate: { not: null } },
+      _sum: { interestTargetTotal: true, interestPaidToDate: true },
     }),
-    prisma.savingsInterest.aggregate({
-      where: { generatedAt: { gte: monthStart } },
-      _sum: { interestAmount: true },
+    prisma.savingsDailyInterest.aggregate({
+      where: { date: { gte: monthStart } },
+      _sum: { amount: true },
     }),
     prisma.savingsTransaction.aggregate({
       where: { transactionType: 'DEPOSIT', processedAt: { gte: today } },
@@ -144,7 +147,7 @@ export async function getSavingsDashboard(): Promise<SavingsDashboard> {
       where: {
         status: 'ACTIVE',
         isDeleted: false,
-        maturityDate: { not: null, lte: in60Days, gte: today },
+        maturityDate: { not: null, lte: maturityHorizon, gte: today },
       },
       include: {
         customer: { select: { firstName: true, lastName: true } },
@@ -189,7 +192,7 @@ export async function getSavingsDashboard(): Promise<SavingsDashboard> {
 
   // Six months back for the trend charts, six months forward for the cash
   // planning one. Kept in a second batch so the windows stay readable.
-  const forwardWindows = Array.from({ length: 6 }, (_, i) => {
+  const forwardWindows = Array.from({ length: 12 }, (_, i) => {
     const from = startOfMonth(i);
     const to = startOfMonth(i + 1);
     return { label: from.toLocaleDateString('en-NG', { month: 'short', year: '2-digit' }), from, to };
@@ -209,9 +212,9 @@ export async function getSavingsDashboard(): Promise<SavingsDashboard> {
       })
     ),
     ...monthWindows.map((w) =>
-      prisma.savingsInterest.aggregate({
-        where: { generatedAt: { gte: w.from, lt: w.to } },
-        _sum: { interestAmount: true },
+      prisma.savingsDailyInterest.aggregate({
+        where: { date: { gte: w.from, lt: w.to } },
+        _sum: { amount: true },
       })
     ),
     ...forwardWindows.map((w) =>
@@ -262,7 +265,7 @@ export async function getSavingsDashboard(): Promise<SavingsDashboard> {
 
   const interestByMonth = monthWindows.map((w, i) => ({
     label: w.label,
-    amount: monthInterest[i]?._sum.interestAmount?.toNumber() ?? 0,
+    amount: monthInterest[i]?._sum.amount?.toNumber() ?? 0,
   }));
 
   const maturitySchedule = forwardWindows.map((w, i) => ({
@@ -281,9 +284,13 @@ export async function getSavingsDashboard(): Promise<SavingsDashboard> {
       totalEligibleBalance: eligibleAgg._sum.eligibleBalance?.toNumber() ?? 0,
     },
     interest: {
-      totalAllocated: interestAllocatedAgg._sum.interestAmount?.toNumber() ?? 0,
-      outstandingLiability: outstandingLiabilityAgg._sum.interestAccrued?.toNumber() ?? 0,
-      thisMonth: interestThisMonthAgg._sum.interestAmount?.toNumber() ?? 0,
+      totalAllocated: interestAllocatedAgg._sum.amount?.toNumber() ?? 0,
+      outstandingLiability: Math.max(
+        0,
+        (outstandingLiabilityAgg._sum.interestTargetTotal?.toNumber() ?? 0) -
+          (outstandingLiabilityAgg._sum.interestPaidToDate?.toNumber() ?? 0)
+      ),
+      thisMonth: interestThisMonthAgg._sum.amount?.toNumber() ?? 0,
     },
     deposits: {
       todayCount: todayDepositsAgg._count,

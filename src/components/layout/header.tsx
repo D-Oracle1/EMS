@@ -15,6 +15,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { getUnreadCount, getNotifications } from '@/actions/notification.actions';
+import { ThemeToggle } from '@/components/theme';
 import { PwaInstallPrompt } from './pwa-install';
 import type { SessionUser } from '@/types';
 
@@ -112,7 +113,7 @@ export function Header({ onMenuToggle }: HeaderProps) {
   const avatarGrad = getAvatarGradient(user.firstName?.[0] ?? 'A');
 
   return (
-    <header className="header-rainbow-border sticky top-0 z-30 flex h-16 items-center gap-4 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-4 lg:px-6 shadow-sm">
+    <header className="header-rainbow-border sticky top-0 z-30 flex h-16 items-center gap-4 bg-background/80 backdrop-blur-xl border-b border-border/70 px-4 lg:px-6 shadow-sm">
       {/* Mobile menu button */}
       <Button
         variant="ghost"
@@ -126,8 +127,8 @@ export function Header({ onMenuToggle }: HeaderProps) {
       {/* Left side context */}
       <div className="flex-1 min-w-0">
         <p className="text-sm text-muted-foreground truncate">
-          <span className="font-medium text-indigo-600/80">{user.department}</span>
-          <span className="mx-1 text-slate-300">&middot;</span>
+          <span className="font-medium text-indigo-500">{user.department}</span>
+          <span className="mx-1 text-muted-foreground/50">&middot;</span>
           {user.branchName || 'Head Office'}
         </p>
       </div>
@@ -135,6 +136,7 @@ export function Header({ onMenuToggle }: HeaderProps) {
       {/* Right side actions */}
       <div className="flex items-center gap-1.5 sm:gap-2">
         <PwaInstallPrompt />
+        <ThemeToggle />
 
         {/* Notifications bell */}
         <Link href="/notifications">

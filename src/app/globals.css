@@ -29,6 +29,41 @@
     --brand-blue: 224 76% 48%;      /* deep blue */
     --brand-blue-deep: 226 71% 33%; /* darker blue for hero gradients */
     --brand-orange: 24 95% 53%;     /* vibrant orange accent */
+
+    /* Frosted surfaces */
+    --glass-bg: 0 0% 100%;
+    --glass-alpha: 0.72;
+    --glass-border: 0 0% 100%;
+    --glass-border-alpha: 0.7;
+    --glass-shadow: 220 43% 11%;
+  }
+
+  .dark {
+    --background: 244 34% 8%;
+    --foreground: 220 20% 96%;
+    --card: 245 30% 12%;
+    --card-foreground: 220 20% 96%;
+    --popover: 245 30% 12%;
+    --popover-foreground: 220 20% 96%;
+    --primary: 231 91% 71%;
+    --primary-foreground: 244 34% 8%;
+    --secondary: 245 25% 17%;
+    --secondary-foreground: 220 14% 78%;
+    --muted: 245 25% 17%;
+    --muted-foreground: 220 12% 65%;
+    --accent: 24 95% 58%;
+    --accent-foreground: 244 34% 8%;
+    --destructive: 0 72% 58%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 245 20% 24%;
+    --input: 245 20% 24%;
+    --ring: 231 91% 71%;
+
+    --glass-bg: 245 40% 70%;
+    --glass-alpha: 0.07;
+    --glass-border: 245 40% 80%;
+    --glass-border-alpha: 0.14;
+    --glass-shadow: 244 60% 2%;
   }
 }
 
@@ -42,9 +77,17 @@
   body {
     @apply bg-background text-foreground;
     background-image:
-      radial-gradient(ellipse at 0% 0%, hsla(224, 76%, 48%, 0.07) 0%, transparent 50%),
-      radial-gradient(ellipse at 100% 100%, hsla(24, 95%, 53%, 0.06) 0%, transparent 55%);
+      radial-gradient(ellipse 80% 60% at 15% -10%, hsla(224, 76%, 58%, 0.12) 0%, transparent 60%),
+      radial-gradient(ellipse 70% 50% at 100% 0%, hsla(199, 89%, 60%, 0.10) 0%, transparent 55%),
+      radial-gradient(ellipse 80% 60% at 85% 110%, hsla(24, 95%, 53%, 0.08) 0%, transparent 60%);
     background-attachment: fixed;
+    transition: background-color 200ms ease, color 200ms ease;
+  }
+  .dark body {
+    background-image:
+      radial-gradient(ellipse 80% 60% at 15% -10%, hsla(245, 70%, 55%, 0.30) 0%, transparent 60%),
+      radial-gradient(ellipse 70% 50% at 100% 0%, hsla(268, 60%, 50%, 0.22) 0%, transparent 55%),
+      radial-gradient(ellipse 80% 60% at 85% 110%, hsla(24, 95%, 45%, 0.12) 0%, transparent 60%);
   }
 
   /* Gradient scrollbar */
@@ -167,17 +210,53 @@
     pointer-events: none;
   }
 
-  /* Elevated white card */
-  .premium-card {
-    @apply bg-card rounded-2xl border border-border/60;
-    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 12px 28px -14px rgba(16, 24, 40, 0.14);
+  /* Frosted surface. Every dashboard card uses this, so the whole system
+     picks up the same calm, translucent look in both themes. */
+  .premium-card,
+  .glass-panel {
+    border-radius: 1.5rem;
+    background: hsla(var(--glass-bg) / var(--glass-alpha));
+    border: 1px solid hsla(var(--glass-border) / var(--glass-border-alpha));
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    box-shadow:
+      0 1px 2px hsla(var(--glass-shadow) / 0.04),
+      0 16px 40px -20px hsla(var(--glass-shadow) / 0.18);
+    transition: background 200ms ease, border-color 200ms ease, box-shadow 200ms ease;
   }
   .premium-card-hover {
     @apply transition-all duration-300;
   }
   .premium-card-hover:hover {
     @apply -translate-y-0.5;
-    box-shadow: 0 2px 4px rgba(16, 24, 40, 0.05), 0 18px 36px -16px rgba(29, 78, 216, 0.28);
+    box-shadow:
+      0 2px 6px hsla(var(--glass-shadow) / 0.06),
+      0 24px 48px -20px hsla(224, 76%, 40%, 0.30);
+  }
+
+  /* A softer inner surface for rows and wells inside a frosted card. */
+  .glass-inset {
+    border-radius: 1rem;
+    background: hsla(var(--glass-bg) / calc(var(--glass-alpha) * 0.55));
+    border: 1px solid hsla(var(--glass-border) / calc(var(--glass-border-alpha) * 0.6));
+  }
+
+  /* ─── Workspace clock ─────────────────────────────────────────── */
+  .clock-time {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.04em;
+    line-height: 0.95;
+    background: linear-gradient(180deg, hsl(var(--foreground)) 0%, hsla(var(--foreground) / 0.62) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .greeting-pill {
+    @apply inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium;
+    background: hsla(var(--glass-bg) / calc(var(--glass-alpha) * 0.9));
+    border: 1px solid hsla(var(--glass-border) / var(--glass-border-alpha));
+    backdrop-filter: blur(16px) saturate(140%);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
   }
 
   /* Rounded gradient icon tiles */
@@ -197,6 +276,17 @@
   .icon-tile-sky    { background: linear-gradient(135deg, #e0f2fe, #bae6fd); color: #0284c7; }
   .icon-tile-indigo { background: linear-gradient(135deg, #e0e7ff, #c7d2fe); color: #4f46e5; }
   .icon-tile-slate  { background: linear-gradient(135deg, #f1f5f9, #e2e8f0); color: #475569; }
+
+  .dark .icon-tile-blue   { background: hsla(224, 76%, 58%, 0.18); color: #93b4fd; }
+  .dark .icon-tile-orange { background: hsla(24, 95%, 53%, 0.18);  color: #fdba74; }
+  .dark .icon-tile-emerald{ background: hsla(160, 84%, 39%, 0.18); color: #6ee7b7; }
+  .dark .icon-tile-violet { background: hsla(258, 90%, 66%, 0.18); color: #c4b5fd; }
+  .dark .icon-tile-cyan   { background: hsla(189, 94%, 43%, 0.18); color: #67e8f9; }
+  .dark .icon-tile-amber  { background: hsla(38, 92%, 50%, 0.18);  color: #fcd34d; }
+  .dark .icon-tile-rose   { background: hsla(347, 77%, 50%, 0.18); color: #fda4af; }
+  .dark .icon-tile-sky    { background: hsla(199, 89%, 48%, 0.18); color: #7dd3fc; }
+  .dark .icon-tile-indigo { background: hsla(239, 84%, 67%, 0.18); color: #a5b4fc; }
+  .dark .icon-tile-slate  { background: hsla(215, 20%, 65%, 0.16); color: #cbd5e1; }
 
 
   /* ==========================================================================

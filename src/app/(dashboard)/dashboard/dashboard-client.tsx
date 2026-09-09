@@ -28,6 +28,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { StatCard } from '@/components/ui/stat-card';
+import { WorkspaceHeader } from '@/components/workspace-header';
 import type { SessionUser, DashboardData } from '@/types';
 import {
   BarChart,
@@ -99,6 +100,8 @@ export function DashboardClient({ user, data }: DashboardClientProps) {
 
   return (
     <div className="space-y-5 animate-rise">
+      <WorkspaceHeader name={user.firstName} />
+
       {/* Hero welcome */}
       <div className="hero-card p-5 sm:p-6">
         <div className="relative z-10 flex flex-wrap items-start justify-between gap-4">
