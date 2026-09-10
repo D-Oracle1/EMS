@@ -13,15 +13,27 @@
  */
 
 import { useEffect, useState } from 'react';
+import { Clock } from 'lucide-react';
 
 interface WorkspaceHeaderProps {
   /** Shown under the clock in place of the date, e.g. a branch name. */
   subtitle?: string;
   /** Seconds are distracting on a dashboard; on by default only for a wall clock. */
   showSeconds?: boolean;
+  /**
+   * 'full' is the centrepiece from the reference design, reserved for the
+   * dashboards. 'mini' is a clock-iconned chip that rides in the icon cluster
+   * on the right, for working pages where 180px of clock above a table only
+   * gets in the way.
+   */
+  variant?: 'full' | 'mini';
 }
 
-export function WorkspaceHeader({ subtitle, showSeconds = false }: WorkspaceHeaderProps) {
+export function WorkspaceHeader({
+  subtitle,
+  showSeconds = false,
+  variant = 'full',
+}: WorkspaceHeaderProps) {
   const [now, setNow] = useState<Date | null>(null);
 
   useEffect(() => {
@@ -50,6 +62,22 @@ export function WorkspaceHeader({ subtitle, showSeconds = false }: WorkspaceHead
         year: 'numeric',
       })
     : null;
+
+  // The chip in the right-hand icon cluster: a clock face and the time, no
+  // larger than the icons it sits beside. The full date rides along as a
+  // tooltip so nothing is actually lost by shrinking it.
+  if (variant === 'mini') {
+    return (
+      <span
+        className="inline-flex h-10 items-center gap-1.5 rounded-full px-3 text-xs font-semibold tabular-nums tracking-tight text-muted-foreground"
+        title={subtitle ?? date ?? undefined}
+        suppressHydrationWarning
+      >
+        <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden />
+        {time ?? '--:--'}
+      </span>
+    );
+  }
 
   return (
     <div className="relative">

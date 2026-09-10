@@ -53,7 +53,18 @@ function greetingFor(hour: number): string {
   return 'Good evening';
 }
 
-export function WorkspaceBar({ onMenuToggle }: { onMenuToggle?: () => void }) {
+export function WorkspaceBar({
+  onMenuToggle,
+  clock,
+}: {
+  onMenuToggle?: () => void;
+  /**
+   * The mini clock, on pages that do not carry the full one. It rides at the
+   * head of the icon cluster rather than beside the greeting, so the time is
+   * always in the same corner whichever page you are on.
+   */
+  clock?: React.ReactNode;
+}) {
   const { data: session } = useSession();
   const user = session?.user as SessionUser | undefined;
   const [unread, setUnread] = useState(0);
@@ -115,7 +126,7 @@ export function WorkspaceBar({ onMenuToggle }: { onMenuToggle?: () => void }) {
   return (
     <div className="flex items-start justify-between gap-3">
       {/* Greeting */}
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <button
           onClick={onMenuToggle}
           className="greeting-pill lg:hidden"
@@ -133,6 +144,8 @@ export function WorkspaceBar({ onMenuToggle }: { onMenuToggle?: () => void }) {
 
       {/* Icon cluster */}
       <div className="glass-panel flex items-center gap-0.5 rounded-full p-1">
+        {clock}
+
         <PwaInstallPrompt />
 
         <Link href="/notifications" className={`relative ${pill}`} aria-label="Notifications">

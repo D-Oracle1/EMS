@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { Sidebar } from './sidebar';
 import { WorkspaceBar } from './workspace-bar';
@@ -12,12 +13,24 @@ import type { SessionUser } from '@/types';
 const PIN_KEY = 'hylink-sidebar-pinned';
 
 /**
+ * The dashboards, and only the dashboards, carry the full clock as their
+ * centrepiece. Everywhere else is a working page — a table, a form, a report —
+ * where the clock shrinks to a chip in the icon cluster rather than pushing the
+ * work itself below the fold.
+ */
+const DASHBOARD_PATHS = ['/dashboard', '/savings/dashboard'];
+
+/**
  * The workspace frame, built to the reference design.
  *
  * Every page opens the same way: greeting pill and icon cluster floating at the
- * top, the clock and date beneath them, then the search bar, then the page's
- * own content in frosted cards. There is no full-width header; the department
- * and branch that used to sit in one now live in the user menu.
+ * top, then the search bar, then the page's own content in frosted cards. There
+ * is no full-width header; the department and branch that used to sit in one now
+ * live in the user menu.
+ *
+ * The clock is the centrepiece on a dashboard and a small clock-iconned chip in
+ * the icon cluster everywhere else, so a working page is not pushed below the
+ * fold by it.
  *
  * The sidebar is a floating icon rail that expands over the page on hover, so
  * the content only shifts when the rail is deliberately pinned.
@@ -25,6 +38,8 @@ const PIN_KEY = 'hylink-sidebar-pinned';
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [pinned, setPinned] = useState(false);
+  const pathname = usePathname();
+  const isDashboard = DASHBOARD_PATHS.includes(pathname);
   const { data: session } = useSession();
   const user = session?.user as SessionUser | undefined;
 
@@ -75,11 +90,14 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         }`}
       >
         <main className="mx-auto max-w-[110rem] px-4 pb-28 pt-4 lg:px-8 lg:pb-10 lg:pt-6">
-          <WorkspaceBar onMenuToggle={() => setMobileOpen((v) => !v)} />
+          <WorkspaceBar
+            onMenuToggle={() => setMobileOpen((v) => !v)}
+            clock={isDashboard ? undefined : <WorkspaceHeader variant="mini" />}
+          />
 
-          <WorkspaceHeader />
+          {isDashboard && <WorkspaceHeader />}
 
-          <div className="mb-6 mt-1">
+          <div className={isDashboard ? 'mb-6 mt-1' : 'mb-5 mt-4'}>
             <GlobalSearch />
           </div>
 
