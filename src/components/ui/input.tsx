@@ -9,13 +9,15 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
       <input
         type={type}
         className={cn(
-          'flex h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm',
-          'ring-offset-background placeholder:text-slate-400',
+          'flex h-10 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground',
+          // slate-400 placeholders sat near 2.8:1 even in light mode; the muted
+          // token clears 4.5:1 in both themes.
+          'ring-offset-background placeholder:text-muted-foreground',
           'transition-all duration-200',
           'hover:border-indigo-300',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 focus-visible:border-indigo-400',
           'file:border-0 file:bg-transparent file:text-sm file:font-medium',
-          'disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-slate-50',
+          'disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-muted',
           className
         )}
         ref={ref}

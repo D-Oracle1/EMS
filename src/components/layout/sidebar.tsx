@@ -3,12 +3,11 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { X, Landmark, Pin, PinOff } from 'lucide-react';
+import { Landmark, Pin, PinOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { resolveNav } from '@/lib/navigation';
 import { isHrFocused } from '@/lib/landing';
 import type { SessionUser } from '@/types';
-import { useEffect } from 'react';
 
 // All class names written out statically for Tailwind JIT
 const colorConfig: Record<string, { icon: string; activeBg: string; activeRing: string; hoverBg: string }> = {
@@ -32,8 +31,6 @@ const colorConfig: Record<string, { icon: string; activeBg: string; activeRing: 
 };
 
 interface SidebarProps {
-  mobileOpen?: boolean;
-  onClose?: () => void;
   /** Held open, rather than expanding only while hovered. */
   pinned?: boolean;
   onPinnedChange?: (pinned: boolean) => void;
@@ -49,15 +46,14 @@ interface SidebarProps {
  *
  * The width is driven by `group-hover` in CSS rather than React state, so the
  * open and close are frame-perfect and survive rapid pointer movement.
+ *
+ * Desktop only. A phone gets the bottom tab bar and the full-screen icon grid
+ * in `mobile-nav-grid.tsx` instead of a drawer squeezed in from the edge.
  */
-export function Sidebar({ mobileOpen = false, onClose, pinned = false, onPinnedChange }: SidebarProps) {
+export function Sidebar({ pinned = false, onPinnedChange }: SidebarProps) {
   const pathname = usePathname();
   const { data: session } = useSession();
   const user = session?.user as SessionUser | undefined;
-
-  useEffect(() => {
-    onClose?.();
-  }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!user) return null;
 
@@ -74,26 +70,16 @@ export function Sidebar({ mobileOpen = false, onClose, pinned = false, onPinnedC
 
   return (
     <>
-      {mobileOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
-          onClick={onClose}
-        />
-      )}
-
       <aside
         className={cn(
-          'group/rail fixed z-50 flex flex-col text-white',
+          'group/rail fixed z-50 hidden flex-col text-white lg:flex',
           // Floating and rounded, like the reference, rather than flush to the edge.
           'lg:left-3 lg:top-3 lg:bottom-3 lg:rounded-[1.75rem]',
-          'left-0 top-0 h-screen lg:h-auto',
           'bg-gradient-to-b from-slate-950 via-[#0f0c29] to-slate-950',
           'border border-white/[0.08] shadow-2xl shadow-black/40',
-          'transition-[width,transform] duration-300 ease-out',
+          'transition-[width] duration-300 ease-out',
           'overflow-hidden',
-          'w-64',
-          pinned ? 'lg:w-64' : 'lg:w-[76px] lg:hover:w-64',
-          mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+          pinned ? 'lg:w-64' : 'lg:w-[76px] lg:hover:w-64'
         )}
       >
         {/* Logo */}
@@ -112,13 +98,6 @@ export function Sidebar({ mobileOpen = false, onClose, pinned = false, onPinnedC
               </span>
             </span>
           </Link>
-          <button
-            onClick={onClose}
-            className="ml-auto p-1 text-slate-500 transition-colors hover:text-white lg:hidden"
-            aria-label="Close menu"
-          >
-            <X className="h-5 w-5" />
-          </button>
         </div>
 
         {/* Navigation */}

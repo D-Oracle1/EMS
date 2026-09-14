@@ -129,7 +129,13 @@ export function GlobalSearch() {
           onFocus={() => setOpen(true)}
           onKeyDown={onKeyDown}
           placeholder="Search customers, accounts or loans"
-          className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+          // border-0 and focus:ring-0 are load-bearing, not tidying up.
+          // @tailwindcss/forms styles `input:where(:not([type]))` in its base
+          // layer, so this field was being given a 1px border and a focus ring
+          // by the plugin — the box drawn around the placeholder text. Nothing
+          // in this file or globals.css drew it, which is what made it hard to
+          // find. bg-transparent and outline-none never touched a border.
+          className="min-w-0 flex-1 border-0 bg-transparent p-0 text-sm outline-none focus:ring-0 placeholder:text-muted-foreground"
           aria-label="Search"
         />
         {busy ? (

@@ -423,9 +423,14 @@
     @apply fixed inset-x-0 bottom-0 z-40 lg:hidden;
     padding-bottom: env(safe-area-inset-bottom);
   }
+  /* Tokenised rather than hardcoded. It was bg-white/85 with a white border,
+     which left the bar glowing white over a dark page and its slate-400 labels
+     far below 4.5:1 in both themes. */
   .mobile-tabbar-inner {
-    @apply mx-3 mb-3 flex items-center justify-around rounded-[1.5rem] border border-white/60 bg-white/85 backdrop-blur-xl px-1.5 py-1.5;
-    box-shadow: 0 10px 30px -8px rgba(16, 24, 40, 0.25);
+    @apply mx-3 mb-3 flex items-center justify-around rounded-[1.5rem] px-1.5 py-1.5 backdrop-blur-xl;
+    background: hsla(var(--card) / 0.92);
+    border: 1px solid hsl(var(--border));
+    box-shadow: 0 10px 30px -8px hsla(var(--glass-shadow) / 0.25);
   }
 
   /* Safe-area helpers for fullscreen PWA */

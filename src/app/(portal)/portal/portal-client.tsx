@@ -35,13 +35,25 @@ export function PortalClient() {
   const [loading, setLoading] = useState(true);
   const [notices, setNotices] = useState<{ unread: number; items: any[] }>({ unread: 0, items: [] });
 
-  const load = () => {
-    setLoading(true);
+  /**
+   * Fetch without touching `loading` synchronously. Every setState here
+   * happens inside a promise callback, which is the shape an effect is allowed
+   * to use — the component already starts in the loading state, so the first
+   * fetch has nothing to announce.
+   */
+  const refetch = () => {
     getMyPortalData().then(setData).catch((e) => toast.error(e.message)).finally(() => setLoading(false));
     // A failure here must not stop the accounts rendering.
     getMyNotifications(20).then(setNotices).catch(() => undefined);
   };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+
+  /** A reload asked for by a dialog, which should show the spinner again. */
+  const load = () => {
+    setLoading(true);
+    refetch();
+  };
+
+  useEffect(() => { refetch(); }, []);
 
   if (loading && !data) {
     return (

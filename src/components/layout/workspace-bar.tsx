@@ -12,7 +12,7 @@
 import { useEffect, useState } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
-import { Bell, LogOut, User, Key, Menu, Building2 } from 'lucide-react';
+import { Bell, LogOut, User, Key, Building2 } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -54,11 +54,9 @@ function greetingFor(hour: number): string {
 }
 
 export function WorkspaceBar({
-  onMenuToggle,
   clock,
   showGreeting = true,
 }: {
-  onMenuToggle?: () => void;
   /**
    * The mini clock, on pages that do not carry the full one. It rides at the
    * head of the icon cluster rather than beside the greeting, so the time is
@@ -134,16 +132,9 @@ export function WorkspaceBar({
 
   return (
     <div className="flex items-start justify-between gap-3">
-      {/* Greeting. The menu button stays even when the greeting does not — it
-          is the only way into the navigation on a phone. */}
+      {/* Greeting. No menu button here any more: on a phone the navigation is
+          reached from the bottom tab bar, which is where the thumb already is. */}
       <div className="flex flex-wrap items-center gap-2">
-        <button
-          onClick={onMenuToggle}
-          className="greeting-pill lg:hidden"
-          aria-label="Open menu"
-        >
-          <Menu className="h-4 w-4" />
-        </button>
         {showGreeting && (
           <p className="greeting-pill">
             <span aria-hidden>👋</span>

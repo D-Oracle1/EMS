@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useState, useSyncExternalStore } from 'react';
 import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { Sidebar } from './sidebar';
+import { MobileNavGrid } from './mobile-nav-grid';
 import { WorkspaceBar } from './workspace-bar';
 import { GlobalSearch } from './global-search';
 import { MobileTabBar } from './mobile-tab-bar';
@@ -11,6 +12,35 @@ import { WorkspaceHeader } from '@/components/workspace-header';
 import type { SessionUser } from '@/types';
 
 const PIN_KEY = 'hylink-sidebar-pinned';
+/** Fired when this tab changes the pin, since `storage` only fires in others. */
+const PIN_EVENT = 'hylink-sidebar-pinned-change';
+
+/**
+ * localStorage is an external store, so it is subscribed to rather than copied
+ * into state from an effect — reading it in an effect and calling setState
+ * costs a second render on every mount, which is what
+ * react-hooks/set-state-in-effect is warning about.
+ */
+function subscribeToPin(onChange: () => void): () => void {
+  window.addEventListener('storage', onChange);
+  window.addEventListener(PIN_EVENT, onChange);
+  return () => {
+    window.removeEventListener('storage', onChange);
+    window.removeEventListener(PIN_EVENT, onChange);
+  };
+}
+
+function getPinSnapshot(): boolean {
+  try {
+    return localStorage.getItem(PIN_KEY) === '1';
+  } catch {
+    // Storage unavailable; the rail simply starts unpinned.
+    return false;
+  }
+}
+
+/** The server cannot know; it renders unpinned and hydration corrects it. */
+const getPinServerSnapshot = (): boolean => false;
 
 /**
  * The dashboards, and only the dashboards, open with the greeting and the full
@@ -38,28 +68,21 @@ const DASHBOARD_PATHS = ['/dashboard', '/savings/dashboard'];
  */
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [pinned, setPinned] = useState(false);
+  const pinned = useSyncExternalStore(subscribeToPin, getPinSnapshot, getPinServerSnapshot);
   const pathname = usePathname();
   const isDashboard = DASHBOARD_PATHS.includes(pathname);
   const { data: session } = useSession();
   const user = session?.user as SessionUser | undefined;
 
-  useEffect(() => {
-    try {
-      setPinned(localStorage.getItem(PIN_KEY) === '1');
-    } catch {
-      // Storage unavailable; the rail simply starts unpinned.
-    }
-  }, []);
-
-  function changePinned(next: boolean) {
-    setPinned(next);
+  const changePinned = useCallback((next: boolean) => {
     try {
       localStorage.setItem(PIN_KEY, next ? '1' : '0');
     } catch {
       // Not remembering the choice is acceptable; ignoring it is not.
     }
-  }
+    // Tell the store; `storage` does not fire in the tab that wrote it.
+    window.dispatchEvent(new Event(PIN_EVENT));
+  }, []);
 
   // Someone who has not set their password yet gets no navigation at all.
   if (user?.mustChangePassword) {
@@ -78,12 +101,11 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen">
-      <Sidebar
-        mobileOpen={mobileOpen}
-        onClose={() => setMobileOpen(false)}
-        pinned={pinned}
-        onPinnedChange={changePinned}
-      />
+      <Sidebar pinned={pinned} onPinnedChange={changePinned} />
+
+      {/* The phone's navigation. Opened from the bottom bar, never from a
+          corner button. */}
+      <MobileNavGrid open={mobileOpen} onClose={() => setMobileOpen(false)} />
 
       <div
         className={`min-w-0 transition-[margin] duration-300 ease-out ${
@@ -92,7 +114,6 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       >
         <main className="mx-auto max-w-[110rem] px-4 pb-28 pt-4 lg:px-8 lg:pb-10 lg:pt-6">
           <WorkspaceBar
-            onMenuToggle={() => setMobileOpen((v) => !v)}
             clock={isDashboard ? undefined : <WorkspaceHeader variant="mini" />}
             showGreeting={isDashboard}
           />

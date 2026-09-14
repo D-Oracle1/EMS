@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { LayoutDashboard, PiggyBank, Landmark, Users, Menu, type LucideIcon } from 'lucide-react';
+import { LayoutDashboard, PiggyBank, Landmark, Users, LayoutGrid, type LucideIcon } from 'lucide-react';
 import type { SessionUser } from '@/types';
 
 interface TabItem {
@@ -47,17 +47,22 @@ export function MobileTabBar({ onMore }: { onMore: () => void }) {
               href={tab.href}
               className="flex flex-1 flex-col items-center gap-0.5 py-1.5 rounded-2xl transition-colors"
             >
+              {/* Inactive icons and labels were slate-400, which sits near
+                  2.8:1 on the bar and disappears entirely in dark mode. The
+                  muted token clears 4.5:1 in both themes. */}
               <span
                 className={`flex h-9 w-9 items-center justify-center rounded-2xl transition-all ${
                   active
                     ? 'bg-gradient-to-br from-blue-600 to-blue-500 text-white shadow-md shadow-blue-500/30'
-                    : 'text-slate-400'
+                    : 'text-muted-foreground'
                 }`}
               >
                 <Icon className="h-5 w-5" />
               </span>
               <span
-                className={`text-[10px] font-medium ${active ? 'text-blue-700' : 'text-slate-400'}`}
+                className={`text-[10px] font-medium ${
+                  active ? 'text-primary' : 'text-muted-foreground'
+                }`}
               >
                 {tab.label}
               </span>
@@ -65,15 +70,18 @@ export function MobileTabBar({ onMore }: { onMore: () => void }) {
           );
         })}
 
+        {/* Opens the full-screen icon grid. A grid icon rather than a burger,
+            because a grid is what it opens. */}
         <button
           type="button"
           onClick={onMore}
           className="flex flex-1 flex-col items-center gap-0.5 py-1.5 rounded-2xl"
+          aria-label="Open navigation"
         >
-          <span className="flex h-9 w-9 items-center justify-center rounded-2xl text-slate-400">
-            <Menu className="h-5 w-5" />
+          <span className="flex h-9 w-9 items-center justify-center rounded-2xl text-muted-foreground">
+            <LayoutGrid className="h-5 w-5" />
           </span>
-          <span className="text-[10px] font-medium text-slate-400">More</span>
+          <span className="text-[10px] font-medium text-muted-foreground">Menu</span>
         </button>
       </div>
     </nav>

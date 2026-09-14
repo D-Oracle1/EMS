@@ -12,7 +12,7 @@
  * idea of "now" would flash the wrong time before correcting itself.
  */
 
-import { useEffect, useState } from 'react';
+import { useCallback, useMemo, useSyncExternalStore } from 'react';
 import { Clock } from 'lucide-react';
 
 interface WorkspaceHeaderProps {
@@ -34,16 +34,28 @@ export function WorkspaceHeader({
   showSeconds = false,
   variant = 'full',
 }: WorkspaceHeaderProps) {
-  const [now, setNow] = useState<Date | null>(null);
+  // Tick every second when seconds are shown, otherwise every fifteen — no
+  // point waking the page 59 times to redraw the same minute.
+  const period = showSeconds ? 1000 : 15000;
 
-  useEffect(() => {
-    setNow(new Date());
-    // Tick every second when seconds are shown, otherwise every fifteen — no
-    // point waking the page 59 times to redraw the same minute.
-    const period = showSeconds ? 1000 : 15000;
-    const id = setInterval(() => setNow(new Date()), period);
-    return () => clearInterval(id);
-  }, [showSeconds]);
+  // The clock is an external source, not React state: subscribing to it reads
+  // the time without the extra render that setting state from an effect costs.
+  // The snapshot is bucketed to the tick so it stays referentially stable
+  // between ticks, which useSyncExternalStore requires.
+  const subscribe = useCallback(
+    (onChange: () => void) => {
+      const id = setInterval(onChange, period);
+      return () => clearInterval(id);
+    },
+    [period]
+  );
+  const getSnapshot = useCallback(() => Math.floor(Date.now() / period) * period, [period]);
+  // The server has no idea what time it is where the reader is, so it renders
+  // the placeholder and the first client read fills it in.
+  const getServerSnapshot = useCallback(() => null, []);
+
+  const tick = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const now = useMemo(() => (tick === null ? null : new Date(tick)), [tick]);
 
   const time = now
     ? now.toLocaleTimeString('en-GB', {

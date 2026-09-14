@@ -11,7 +11,7 @@
  * the wrong theme and then snaps to the right one.
  */
 
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useSyncExternalStore } from 'react';
 import { Moon, Sun } from 'lucide-react';
 
 export type Theme = 'light' | 'dark';
@@ -42,17 +42,39 @@ interface ThemeContextValue {
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  // Start from whatever the blocking script already put on <html>, so the
-  // provider agrees with the DOM on the very first render.
-  const [theme, setThemeState] = useState<Theme>('light');
+/**
+ * The class on <html> is the single source of truth for the theme — the
+ * blocking script above sets it before first paint, and Tailwind reads it.
+ *
+ * So rather than keeping a second copy in React state and syncing it from an
+ * effect (which pushes a cascading render on every mount), the provider
+ * subscribes to the DOM and reads it. There is only one source of truth, and
+ * React re-reads it after hydration, which is exactly what
+ * useSyncExternalStore exists for.
+ */
+function subscribeToThemeClass(onChange: () => void): () => void {
+  const observer = new MutationObserver(onChange);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+  return () => observer.disconnect();
+}
 
-  useEffect(() => {
-    setThemeState(document.documentElement.classList.contains('dark') ? 'dark' : 'light');
-  }, []);
+const getThemeSnapshot = (): Theme =>
+  document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+
+// The server has no way to know the viewer's theme. It renders light; the
+// blocking script has already corrected the DOM by the time React hydrates.
+const getThemeServerSnapshot = (): Theme => 'light';
+
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const theme = useSyncExternalStore(
+    subscribeToThemeClass,
+    getThemeSnapshot,
+    getThemeServerSnapshot
+  );
 
   const setTheme = useCallback((next: Theme) => {
-    setThemeState(next);
+    // Writing the class is all that is needed: the observer above turns that
+    // into a re-render, so there is no second copy of the state to update.
     document.documentElement.classList.toggle('dark', next === 'dark');
     document.documentElement.style.colorScheme = next;
     try {
@@ -83,16 +105,16 @@ export function useTheme(): ThemeContextValue {
 /** Sun/moon switch for the top bar. */
 export function ThemeToggle({ className = '' }: { className?: string }) {
   const { theme, toggle } = useTheme();
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
 
   return (
     <button
       type="button"
       onClick={toggle}
-      // The label is only accurate once we know the real theme.
-      aria-label={mounted ? `Switch to ${theme === 'dark' ? 'light' : 'dark'} mode` : 'Switch theme'}
-      title={mounted ? `Switch to ${theme === 'dark' ? 'light' : 'dark'} mode` : 'Switch theme'}
+      // No "mounted" flag is needed: the theme comes from a subscribed store,
+      // so it is the server's guess during SSR and the real value immediately
+      // after hydration, and the label follows it.
+      aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+      title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
       className={`inline-flex h-9 w-9 items-center justify-center rounded-full border border-border/60 bg-background/60 text-muted-foreground backdrop-blur transition-colors hover:text-foreground ${className}`}
     >
       {/* Both icons are rendered and cross-faded, so nothing shifts on toggle

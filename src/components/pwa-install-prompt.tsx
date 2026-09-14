@@ -30,44 +30,63 @@ function getIsStandalone(): boolean {
 }
 
 export function PWAInstallPrompt() {
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [showPrompt, setShowPrompt] = useState(false);
-  const [isFirstVisit, setIsFirstVisit] = useState(false);
-  const [isIOS, setIsIOS] = useState(false);
-  const [isInstalled, setIsInstalled] = useState(false);
+  // All of this is decided by the device and by what is already in storage —
+  // none of it changes while the component is alive. Working it out once, as
+  // the initial state, keeps it out of the effect: reading it there and calling
+  // setState costs an extra render on every mount, which is what
+  // react-hooks/set-state-in-effect objects to.
+  //
+  // The initialiser only runs on the client. On the server it returns the
+  // "show nothing" shape, and hydration replaces it with the real answer.
+  const [initial] = useState(() => {
+    if (typeof window === 'undefined') {
+      return { installed: false, ios: false, firstVisit: false, eligible: false };
+    }
+    if (getIsStandalone()) {
+      return { installed: true, ios: false, firstVisit: false, eligible: false };
+    }
+
+    const dismissCount = parseInt(localStorage.getItem('pwa-install-dismiss-count') || '0', 10);
+    const dismissed = localStorage.getItem('pwa-install-dismissed');
+    const recentlyDismissed =
+      Boolean(dismissed) && Date.now() - parseInt(dismissed as string, 10) < 24 * 60 * 60 * 1000;
+
+    return {
+      installed: false,
+      ios: getIsIOS(),
+      firstVisit: !localStorage.getItem('pwa-install-first-visit'),
+      eligible: dismissCount < 5 && !recentlyDismissed,
+    };
+  });
+
+  // The event can fire before this component mounts; Providers stashes it on
+  // window. Read it here rather than in the effect — reading is idempotent, so
+  // StrictMode's double-invoked initialiser is harmless. The effect below is
+  // what clears it, since clearing is a write to an external system.
+  const [cachedPrompt] = useState<BeforeInstallPromptEvent | null>(() =>
+    typeof window === 'undefined'
+      ? null
+      : (((window as any).__pwaInstallEvent as BeforeInstallPromptEvent | undefined) ?? null)
+  );
+
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(cachedPrompt);
+  // iOS never fires beforeinstallprompt, so for iOS the instructions are the
+  // prompt, and they can be shown straight away.
+  const [showPrompt, setShowPrompt] = useState(
+    initial.eligible && (initial.ios || Boolean(cachedPrompt))
+  );
+  const [isInstalled, setIsInstalled] = useState(initial.installed);
+  const isIOS = initial.ios;
+  const isFirstVisit = initial.firstVisit;
 
   useEffect(() => {
-    if (getIsStandalone()) {
-      setIsInstalled(true);
-      return;
-    }
+    // What is left here is genuinely a subscription: setState inside these
+    // callbacks is fine, because it answers an outside event rather than
+    // cascading off this render.
+    if (!initial.eligible || initial.ios) return;
 
-    const ios = getIsIOS();
-    setIsIOS(ios);
-
-    // Check dismiss limits
-    const dismissCount = parseInt(localStorage.getItem('pwa-install-dismiss-count') || '0', 10);
-    if (dismissCount >= 5) return;
-
-    const dismissed = localStorage.getItem('pwa-install-dismissed');
-    if (dismissed && Date.now() - parseInt(dismissed, 10) < 24 * 60 * 60 * 1000) return;
-
-    const firstVisit = !localStorage.getItem('pwa-install-first-visit');
-    setIsFirstVisit(firstVisit);
-
-    if (ios) {
-      // iOS doesn't fire beforeinstallprompt but we can still show instructions
-      setShowPrompt(true);
-      return;
-    }
-
-    // Check if the event was already cached globally by Providers
-    const cachedEvent = (window as any).__pwaInstallEvent;
-    if (cachedEvent) {
-      setDeferredPrompt(cachedEvent as BeforeInstallPromptEvent);
-      setShowPrompt(true);
-      (window as any).__pwaInstallEvent = null;
-    }
+    // Consume the stash: the initial state above already read it.
+    (window as any).__pwaInstallEvent = null;
 
     const handler = (e: Event) => {
       e.preventDefault();
@@ -89,7 +108,7 @@ export function PWAInstallPrompt() {
       window.removeEventListener('beforeinstallprompt', handler);
       window.removeEventListener('appinstalled', installedHandler);
     };
-  }, []);
+  }, [initial.eligible, initial.ios]);
 
   async function handleInstall() {
     if (!deferredPrompt) return;

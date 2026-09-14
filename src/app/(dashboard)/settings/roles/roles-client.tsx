@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, useTransition } from 'react';
+import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
 import {
   ShieldCheck,
@@ -86,7 +86,11 @@ export function RolesClient({ user }: RolesClientProps) {
   const [roles, setRoles] = useState<RoleRow[]>([]);
   const [details, setDetails] = useState<any[]>([]);
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null);
-  const [draftPermissions, setDraftPermissions] = useState<Set<string>>(new Set());
+  // null means "untouched — show whatever the role itself holds". Keeping the
+  // draft separate from the role lets the effective set be derived during
+  // render instead of copied in by an effect, which is what
+  // react-hooks/set-state-in-effect was flagging.
+  const [draft, setDraft] = useState<Set<string> | null>(null);
   const [search, setSearch] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState(emptyRoleForm);
@@ -115,17 +119,35 @@ export function RolesClient({ user }: RolesClientProps) {
 
   const selectedRole = roles.find((r) => r.id === selectedRoleId) ?? null;
 
-  useEffect(() => {
-    if (selectedRole) setDraftPermissions(new Set(selectedRole.permissionIds));
-  }, [selectedRoleId, roles]);
+  // Derived, not synced: an untouched draft simply reads through to the role.
+  const draftPermissions = useMemo(
+    () => draft ?? new Set(selectedRole?.permissionIds ?? []),
+    [draft, selectedRole]
+  );
+
+  /** Switching role abandons any unsaved edits, as it always did. */
+  const selectRole = useCallback((id: string | null) => {
+    setSelectedRoleId(id);
+    setDraft(null);
+  }, []);
+
+  /**
+   * Accepts a value or an updater, like the setter it replaced. The updater is
+   * resolved against the *effective* set rather than the raw draft, so ticking
+   * a box on a role nobody has edited yet starts from that role's own
+   * permissions instead of from an empty set.
+   */
+  const setDraftPermissions = (
+    next: Set<string> | ((prev: Set<string>) => Set<string>)
+  ) => setDraft(typeof next === 'function' ? next(draftPermissions) : next);
 
   const isDirty = useMemo(() => {
-    if (!selectedRole) return false;
+    if (!selectedRole || !draft) return false;
     const original = new Set(selectedRole.permissionIds);
-    if (original.size !== draftPermissions.size) return true;
-    for (const id of draftPermissions) if (!original.has(id)) return true;
+    if (original.size !== draft.size) return true;
+    for (const id of draft) if (!original.has(id)) return true;
     return false;
-  }, [selectedRole, draftPermissions]);
+  }, [selectedRole, draft]);
 
   // A non-super-admin may only grant permissions they themselves hold.
   const heldCodes = useMemo(() => new Set(user.permissions), [user.permissions]);
@@ -208,7 +230,7 @@ export function RolesClient({ user }: RolesClientProps) {
         setCreateOpen(false);
         setForm(emptyRoleForm);
         load();
-        if (result.data) setSelectedRoleId(result.data.id);
+        if (result.data) selectRole(result.data.id);
       } else {
         toast.error(result.error || 'Failed to create role');
       }
@@ -235,7 +257,7 @@ export function RolesClient({ user }: RolesClientProps) {
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => setSelectedRoleId(null)}>
+            <Button variant="ghost" size="sm" onClick={() => selectRole(null)}>
               <ArrowLeft className="mr-2 h-4 w-4" />
               All roles
             </Button>
@@ -438,7 +460,7 @@ export function RolesClient({ user }: RolesClientProps) {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => setSelectedRoleId(role.id)}
+                        onClick={() => selectRole(role.id)}
                         disabled={!editable}
                       >
                         Permissions
