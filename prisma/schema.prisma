@@ -236,6 +236,8 @@ model Staff {
   onboardings             StaffOnboarding[]    @relation("OnboardingStaff")
   onboardingTasksAssigned OnboardingTask[]     @relation("OnboardingAssignee")
   onboardingTasksDone     OnboardingTask[]     @relation("OnboardingCompletedBy")
+  staffTasksAssigned      StaffTask[]          @relation("StaffTaskAssignee")
+  staffTasksCreated       StaffTask[]          @relation("StaffTaskAssigner")
   trainingEnrollments     TrainingEnrollment[]
   trainingsFacilitated    TrainingProgram[]    @relation("TrainingFacilitator")
   assetAssignments        AssetAssignment[]    @relation("AssetHolder")
@@ -2744,6 +2746,57 @@ model OnboardingTask {
   @@index([onboardingId])
   @@index([assigneeId])
   @@index([status])
+}
+
+// ============================================================================
+// HR — ASSIGNED TASKS
+// ============================================================================
+
+enum StaffTaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+/// A task HR hands to a staff member with a deadline, which that staff member
+/// reports complete themselves.
+///
+/// Deliberately separate from the two task tables that already exist:
+/// OnboardingTask only exists inside an onboarding run and dies with it, and
+/// VerificationTask is loan fieldwork with an address attached. Neither can
+/// carry "HR asked you to do this by Friday".
+model StaffTask {
+  id String @id @default(uuid())
+
+  title       String
+  description String?
+  category    String @default("GENERAL")
+
+  assigneeId   String
+  assignedById String
+
+  priority TaskPriority @default(NORMAL)
+
+  /// The window the task covers. startDate defaults to the moment it was
+  /// assigned, so a task's duration is always the span between the two dates
+  /// and never needs its own column.
+  startDate DateTime @default(now())
+  dueDate   DateTime
+
+  status         StaffTaskStatus @default(PENDING)
+  completedAt    DateTime?
+  completionNote String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assignee   Staff @relation("StaffTaskAssignee", fields: [assigneeId], references: [id])
+  assignedBy Staff @relation("StaffTaskAssigner", fields: [assignedById], references: [id])
+
+  @@index([assigneeId, status])
+  @@index([assignedById])
+  @@index([dueDate])
 }
 
 // ============================================================================

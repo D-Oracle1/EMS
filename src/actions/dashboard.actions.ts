@@ -69,6 +69,26 @@ export async function getDashboardData(): Promise<DashboardData> {
       key: 'pendingWithdrawalRequests',
       promise: prisma.withdrawalRequest.count({ where: { status: 'PENDING' } }),
     });
+
+    // Twelve months of savings movement for the dashboard chart. Bucketed in
+    // JS afterwards, the same way the loan disbursement series is, so the two
+    // charts stay consistent about what a "month" means.
+    const savingsFrom = new Date();
+    savingsFrom.setMonth(savingsFrom.getMonth() - 11);
+    savingsFrom.setDate(1);
+    savingsFrom.setHours(0, 0, 0, 0);
+
+    queries.push({
+      key: 'savingsMovement',
+      promise: prisma.savingsTransaction.findMany({
+        where: {
+          valueDate: { gte: savingsFrom },
+          isReversed: false,
+          transactionType: { in: ['DEPOSIT', 'WITHDRAWAL'] },
+        },
+        select: { valueDate: true, amount: true, transactionType: true },
+      }),
+    });
   }
 
   if (hasModuleAccess(user, 'FIXED_DEPOSITS')) {
@@ -315,6 +335,35 @@ export async function getDashboardData(): Promise<DashboardData> {
       todayWithdrawalsAmount: wdr?._sum?.amount?.toNumber() || 0,
       pendingWithdrawals: (data.pendingWithdrawalRequests as number) || 0,
     };
+  }
+
+  if (data.savingsMovement) {
+    // Seed every one of the last twelve months so a quiet month plots as zero
+    // rather than vanishing and distorting the shape of the line.
+    const months: Record<string, { deposits: number; withdrawals: number }> = {};
+    const cursor = new Date();
+    cursor.setMonth(cursor.getMonth() - 11);
+    cursor.setDate(1);
+    for (let i = 0; i < 12; i++) {
+      const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`;
+      months[key] = { deposits: 0, withdrawals: 0 };
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+
+    (data.savingsMovement as any[]).forEach((t) => {
+      const d = new Date(t.valueDate);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const bucket = months[key];
+      if (!bucket) return;
+      const amount = t.amount?.toNumber?.() ?? Number(t.amount) ?? 0;
+      if (t.transactionType === 'WITHDRAWAL') bucket.withdrawals += amount;
+      else bucket.deposits += amount;
+    });
+
+    result.savingsChart = Object.entries(months).map(([month, totals]) => ({
+      month,
+      ...totals,
+    }));
   }
 
   if (data.fdStats) {

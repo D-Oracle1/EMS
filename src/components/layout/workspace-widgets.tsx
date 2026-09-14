@@ -13,12 +13,35 @@ import { useEffect, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import {
-  Grid3x3, CheckCircle2, Circle, History, ChevronRight, Loader2,
+  Grid3x3, CheckCircle2, Circle, History, ChevronRight, Loader2, CalendarClock,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { resolveNav } from '@/lib/navigation';
 import { isHrFocused } from '@/lib/landing';
 import { getMyWorkspace, type WorkspaceData, type WorkspaceTask } from '@/actions/workspace.actions';
+import {
+  getMyTasks, completeStaffTask, type StaffTaskView,
+} from '@/actions/staff-tasks.actions';
 import type { SessionUser } from '@/types';
+
+/** How long is left on a task, in words. Derived from the deadline, never stored. */
+function deadlineLabel(task: StaffTaskView): { text: string; className: string } {
+  const midnightToday = new Date();
+  midnightToday.setHours(0, 0, 0, 0);
+  const dueDay = new Date(task.dueDate);
+  dueDay.setHours(0, 0, 0, 0);
+
+  const days = Math.round((dueDay.getTime() - midnightToday.getTime()) / 86_400_000);
+  if (days < 0) {
+    return {
+      text: `${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'} overdue`,
+      className: 'text-rose-600 font-medium',
+    };
+  }
+  if (days === 0) return { text: 'Due today', className: 'text-amber-600' };
+  if (days === 1) return { text: '1 day left', className: 'text-amber-600' };
+  return { text: `${days} days left`, className: 'text-muted-foreground' };
+}
 
 const TASK_TINT: Record<WorkspaceTask['kind'], string> = {
   loan: 'icon-tile-orange',
@@ -42,7 +65,17 @@ export function WorkspaceWidgets() {
   const { data: session } = useSession();
   const user = session?.user as SessionUser | undefined;
   const [data, setData] = useState<WorkspaceData | null>(null);
+  const [myTasks, setMyTasks] = useState<StaffTaskView[]>([]);
+  const [closing, setClosing] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  const loadMyTasks = () => {
+    getMyTasks()
+      .then((tasks) => setMyTasks(tasks.filter((t) => t.status !== 'COMPLETED')))
+      .catch(() => {
+        // An empty task list is survivable; the rest of the widget still renders.
+      });
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -55,7 +88,20 @@ export function WorkspaceWidgets() {
         setData({ tasks: [], doneToday: 0, activity: [] });
       }
     });
+    loadMyTasks();
   }, [user]);
+
+  async function markDone(task: StaffTaskView) {
+    setClosing(task.id);
+    const result = await completeStaffTask(task.id);
+    setClosing(null);
+    if (result.success) {
+      toast.success(result.message ?? 'Task marked complete');
+      loadMyTasks();
+    } else {
+      toast.error(result.error);
+    }
+  }
 
   if (!user) return null;
 
@@ -114,7 +160,41 @@ export function WorkspaceWidgets() {
               <Loader2 className="h-4 w-4 animate-spin" /> Loading…
             </p>
           )}
-          {data && data.tasks.length === 0 && (
+
+          {/* Assigned by HR. These carry a deadline someone else is counting
+              on, so they sit above the approval queue and are the only rows
+              here that can be cleared from the widget itself. */}
+          {myTasks.map((task) => {
+            const deadline = deadlineLabel(task);
+            return (
+              <div
+                key={task.id}
+                className="glass-inset flex items-start gap-2.5 px-2.5 py-2"
+              >
+                <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-teal-500" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium">{task.title}</span>
+                  <span className={`block text-xs ${deadline.className}`}>
+                    {deadline.text}
+                    {task.assignedBy ? ` · set by ${task.assignedBy.name}` : ''}
+                  </span>
+                </span>
+                <button
+                  onClick={() => markDone(task)}
+                  disabled={closing === task.id}
+                  className="shrink-0 rounded-full px-2 py-1 text-xs font-medium text-emerald-600 transition-colors hover:bg-emerald-500/10 disabled:opacity-50"
+                >
+                  {closing === task.id ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    'Done'
+                  )}
+                </button>
+              </div>
+            );
+          })}
+
+          {data && data.tasks.length === 0 && myTasks.length === 0 && (
             <p className="py-8 text-center text-sm text-muted-foreground">
               Nothing waiting on you. All clear.
             </p>

@@ -108,6 +108,7 @@ export interface DashboardData {
   myActiveVerificationTasks?: DashboardVerificationTask[];
   recentJournals?: DashboardJournalItem[];
   disbursementChart?: { month: string; amount: number }[];
+  savingsChart?: { month: string; deposits: number; withdrawals: number }[];
   loansByCategory?: { name: string; count: number; amount: number }[];
   loansByOfficer?: { name: string; count: number; amount: number }[];
   riskIndicators?: {

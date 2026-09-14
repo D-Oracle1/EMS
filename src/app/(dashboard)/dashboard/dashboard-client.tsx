@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import {
   Users,
@@ -103,22 +104,34 @@ export function DashboardClient({ user, data }: DashboardClientProps) {
 
       <WorkspaceWidgets />
 
-      {/* Hero welcome */}
+      {/* Savings at a glance.
+          The greeting already sits in the workspace bar above, so this card
+          spends its space on the figures rather than saying someone's name
+          back to them. One hero number, then the day's movement beside it. */}
       <div className="hero-card p-5 sm:p-6">
         <div className="relative z-10 flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="text-sm text-blue-100/80">Welcome back</p>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{user.firstName}</h1>
-            <p className="text-sm text-blue-100/70 mt-0.5">
-              {user.role} &middot; {user.department}
+          <div className="min-w-0">
+            <p className="text-sm text-blue-100/80">
+              {data.savings ? 'Savings under management' : 'Assets under management'}
             </p>
-            {aum !== null && (
-              <div className="mt-4">
-                <p className="text-xs text-blue-100/70">Assets under management</p>
-                <p className="text-3xl font-bold tracking-tight">{formatCurrency(aum)}</p>
-              </div>
-            )}
+            {/* Hero figure: proportional figures, not tabular — tabular-nums
+                makes a large standalone number look loose. */}
+            <p className="text-4xl sm:text-5xl font-bold tracking-tight leading-none mt-1">
+              {data.savings
+                ? formatCurrency(data.savings.totalBalance)
+                : aum !== null
+                  ? formatCurrency(aum)
+                  : user.firstName}
+            </p>
+            <p className="text-sm text-blue-100/70 mt-2">
+              {data.savings
+                ? `across ${data.savings.activeAccounts.toLocaleString('en-NG')} active account${
+                    data.savings.activeAccounts === 1 ? '' : 's'
+                  }`
+                : `${user.role} · ${user.department}`}
+            </p>
           </div>
+
           <div className="flex flex-col items-end gap-2">
             {data.attendance?.isClockedIn && user.roleCode !== 'SUPER_ADMIN' && (
               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-400/20 text-emerald-200 text-xs font-medium px-2.5 py-1">
@@ -139,7 +152,39 @@ export function DashboardClient({ user, data }: DashboardClientProps) {
             </span>
           </div>
         </div>
+
+        {data.savings && (
+          <div className="relative z-10 mt-6 grid grid-cols-2 gap-x-4 gap-y-4 border-t border-white/15 pt-5 sm:grid-cols-4">
+            <HeroFigure
+              label="In today"
+              value={formatCompact(data.savings.todayDepositsAmount)}
+              sub={`${data.savings.todayDeposits} deposit${data.savings.todayDeposits === 1 ? '' : 's'}`}
+            />
+            <HeroFigure
+              label="Out today"
+              value={formatCompact(data.savings.todayWithdrawalsAmount)}
+              sub={`${data.savings.todayWithdrawals} withdrawal${data.savings.todayWithdrawals === 1 ? '' : 's'}`}
+            />
+            <HeroFigure
+              label="Awaiting approval"
+              value={String(data.savings.pendingWithdrawals)}
+              sub="withdrawal requests"
+              href="/savings/withdrawals"
+            />
+            <HeroFigure
+              label="Net today"
+              value={formatCompact(
+                data.savings.todayDepositsAmount - data.savings.todayWithdrawalsAmount
+              )}
+              sub="deposits less withdrawals"
+            />
+          </div>
+        )}
       </div>
+
+      {data.savingsChart && data.savingsChart.length > 0 && (
+        <SavingsMovement rows={data.savingsChart} />
+      )}
 
       {/* Risk Dashboard — for managers/directors/accountants */}
       {data.riskIndicators && (
@@ -518,40 +563,8 @@ export function DashboardClient({ user, data }: DashboardClientProps) {
           </>
         )}
 
-        {/* Savings Stats */}
-        {data.savings && (
-          <StatCard
-            title="Savings Accounts"
-            color="emerald"
-            value={data.savings.activeAccounts}
-            icon={PiggyBank}
-            description={formatCurrency(data.savings.totalBalance) + ' total'}
-            variant="success"
-            href="/savings"
-          />
-        )}
-        {data.savings && data.savings.todayDeposits > 0 && (
-          <StatCard
-            title="Today's Deposits"
-            color="teal"
-            value={data.savings.todayDeposits}
-            icon={TrendingUp}
-            description={formatCurrency(data.savings.todayDepositsAmount)}
-            variant="success"
-            href="/savings"
-          />
-        )}
-        {data.savings && data.savings.pendingWithdrawals > 0 && (
-          <StatCard
-            title="Pending Withdrawals"
-            color="amber"
-            value={data.savings.pendingWithdrawals}
-            icon={AlertTriangle}
-            description="Awaiting approval"
-            variant="warning"
-            href="/savings/withdrawals"
-          />
-        )}
+        {/* Savings figures moved into the hero card and the movement chart
+            above, so they are not also repeated as tiles here. */}
 
         {/* FD Stats */}
         {data.fixedDeposits && (
@@ -851,6 +864,177 @@ function RiskKpiCard({
         <p className="text-xs font-medium uppercase tracking-wider mb-1 opacity-70">{label}</p>
         <p className="text-2xl font-bold">{value}</p>
         {description && <p className="text-xs mt-1 opacity-60">{description}</p>}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** One figure in the hero card's row. Optionally a link, when there is a
+ *  page worth opening behind it. */
+function HeroFigure({
+  label,
+  value,
+  sub,
+  href,
+}: {
+  label: string;
+  value: string;
+  sub: string;
+  href?: string;
+}) {
+  const body = (
+    <>
+      <p className="text-xs text-blue-100/70">{label}</p>
+      <p className="mt-0.5 text-xl font-bold tracking-tight sm:text-2xl">{value}</p>
+      <p className="mt-0.5 text-[11px] text-blue-100/60">{sub}</p>
+    </>
+  );
+
+  if (href) {
+    return (
+      <Link href={href} className="block rounded-2xl transition-colors hover:bg-white/5">
+        {body}
+      </Link>
+    );
+  }
+  return <div>{body}</div>;
+}
+
+const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTH_LONG = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+/** '2026-09' → 'Sep' for the axis, 'September 2026' for the tooltip. */
+function monthShort(key: string): string {
+  const month = Number(key.split('-')[1]);
+  return MONTH_SHORT[month - 1] ?? key;
+}
+function monthLong(key: string): string {
+  const [year, month] = key.split('-');
+  return `${MONTH_LONG[Number(month) - 1] ?? month} ${year}`;
+}
+
+/**
+ * Twelve months of money in and money out.
+ *
+ * The two series colours sit in the validator's 6–8 CVD band and light-mode
+ * aqua is under 3:1 on the surface, so three things here are load-bearing for
+ * accessibility rather than decoration: the legend, the 2px gap between paired
+ * bars, and the table view. A reader who cannot separate the two hues can
+ * still read every value. Do not remove them.
+ */
+function SavingsMovement({ rows }: { rows: { month: string; deposits: number; withdrawals: number }[] }) {
+  const [view, setView] = useState<'chart' | 'table'>('chart');
+
+  return (
+    <Card className="savings-series">
+      <CardHeader className="flex flex-row items-start justify-between gap-3 pb-3">
+        <div>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <PiggyBank className="h-5 w-5 text-emerald-600" />
+            Savings movement
+          </CardTitle>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Deposits and withdrawals, last 12 months
+          </p>
+        </div>
+        <div className="flex shrink-0 rounded-full border border-border/70 p-0.5 text-xs">
+          {(['chart', 'table'] as const).map((option) => (
+            <button
+              key={option}
+              onClick={() => setView(option)}
+              className={`rounded-full px-3 py-1 capitalize transition-colors ${
+                view === option ? 'bg-foreground/10 font-medium text-foreground' : 'text-muted-foreground'
+              }`}
+              aria-pressed={view === option}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+      </CardHeader>
+
+      <CardContent>
+        {view === 'chart' ? (
+          // Height covers the plot *and* the axis band, so the card never
+          // grows its own little scrollbar.
+          <div className="h-[320px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={rows} barGap={2} barCategoryGap="22%" margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                {/* Solid hairline, horizontal only — never dashed. */}
+                <CartesianGrid vertical={false} stroke="hsl(var(--border))" />
+                <XAxis
+                  dataKey="month"
+                  tickFormatter={monthShort}
+                  tickLine={false}
+                  axisLine={{ stroke: 'hsl(var(--border))' }}
+                  tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
+                />
+                <YAxis
+                  tickFormatter={(value: number) => formatCompact(value)}
+                  tickLine={false}
+                  axisLine={false}
+                  width={64}
+                  tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
+                />
+                <Tooltip
+                  cursor={{ fill: 'hsl(var(--foreground) / 0.04)' }}
+                  labelFormatter={(label: string) => monthLong(label)}
+                  formatter={(value: number, name: string) => [formatCurrency(value), name]}
+                  contentStyle={{
+                    borderRadius: 12,
+                    fontSize: 12,
+                    border: '1px solid hsl(var(--border))',
+                    background: 'hsl(var(--popover))',
+                    color: 'hsl(var(--popover-foreground))',
+                  }}
+                />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                <Bar
+                  dataKey="deposits"
+                  name="Deposits"
+                  fill="var(--series-in)"
+                  radius={[4, 4, 0, 0]}
+                  maxBarSize={18}
+                />
+                <Bar
+                  dataKey="withdrawals"
+                  name="Withdrawals"
+                  fill="var(--series-out)"
+                  radius={[4, 4, 0, 0]}
+                  maxBarSize={18}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b">
+                  <th className="px-2 py-2 text-left font-medium text-muted-foreground">Month</th>
+                  <th className="px-2 py-2 text-right font-medium text-muted-foreground">Deposits</th>
+                  <th className="px-2 py-2 text-right font-medium text-muted-foreground">Withdrawals</th>
+                  <th className="px-2 py-2 text-right font-medium text-muted-foreground">Net</th>
+                </tr>
+              </thead>
+              <tbody className="tabular-nums">
+                {rows.map((row) => (
+                  <tr key={row.month} className="border-b last:border-0">
+                    <td className="px-2 py-1.5">{monthLong(row.month)}</td>
+                    <td className="px-2 py-1.5 text-right">{formatCurrency(row.deposits)}</td>
+                    <td className="px-2 py-1.5 text-right">{formatCurrency(row.withdrawals)}</td>
+                    <td className="px-2 py-1.5 text-right font-medium">
+                      {formatCurrency(row.deposits - row.withdrawals)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

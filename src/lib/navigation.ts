@@ -75,6 +75,7 @@ export const navItems: NavItem[] = [
   { label: 'Payroll',       href: '/hr/payroll',       icon: Wallet,         color: 'emerald', permissions: ['HR:PAYROLL_READ', 'HR:PAYROLL_MANAGE', 'HR:PAYROLL_APPROVE'] },
   { label: 'Recruitment',   href: '/hr/recruitment',   icon: Briefcase,      color: 'cyan',    permission: 'HR:RECRUITMENT_MANAGE' },
   { label: 'Onboarding',    href: '/hr/onboarding',    icon: ClipboardList,  color: 'sky',     permissions: ['HR:STAFF_READ', 'HR:STAFF_UPDATE'] },
+  { label: 'Tasks',         href: '/hr/tasks',         icon: ClipboardCheck, color: 'teal',    permission: 'HR:STAFF_UPDATE' },
   { label: 'Movements',     href: '/hr/lifecycle',     icon: ArrowRightLeft, color: 'orange',  permissions: ['HR:STAFF_READ', 'HR:STAFF_UPDATE'] },
   { label: 'Performance',   href: '/hr/performance',   icon: Star,           color: 'gold',    permission: 'HR:PERFORMANCE_MANAGE' },
   { label: 'Learning',      href: '/hr/training',      icon: GraduationCap,  color: 'purple',  permission: 'HR:TRAINING_MANAGE' },

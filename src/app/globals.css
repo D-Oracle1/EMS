@@ -384,6 +384,32 @@
   .sc-fuchsia { --sc-from: #e879f9; --sc-to: #c026d3; --sc-ink: #a21caf; --sc-tint: linear-gradient(135deg, #fae8ff, #f5d0fe); --sc-glow: rgba(192, 38, 211, 0.32); }
   .sc-slate   { --sc-from: #94a3b8; --sc-to: #475569; --sc-ink: #334155; --sc-tint: linear-gradient(135deg, #f1f5f9, #e2e8f0); --sc-glow: rgba(71, 85, 105, 0.28); }
 
+  /* ── Savings chart series ────────────────────────────────────────────
+     Money in and money out. These two hexes were chosen by running the
+     data-viz palette validator against this app's own chart surfaces
+     (#f8fafc light, #14132b dark), not by eye.
+
+     The obvious pairing — the emerald and rose this system already uses
+     for savings and for risk — FAILED: 5.8 ΔE under simulated deuteranopia,
+     below the 6.0 floor. It separates cleanly for normal vision (33.5),
+     which is exactly what makes green-vs-red a trap: it looks right to
+     whoever picks it and merges for a red-green colourblind reader.
+
+     This pair measures 6.9 ΔE light / 6.5 dark. That sits in the 6–8 band,
+     which is only legal alongside secondary encoding, and light-mode aqua
+     is 2.69:1 against the surface, which obliges visible labels or a table.
+     The chart therefore ships a legend, a 2px surface gap between bars and
+     a full table view. Do not drop any of the three, and do not "simplify"
+     these colours back to green/red. */
+  .savings-series {
+    --series-in: #1baf7a;
+    --series-out: #e34948;
+  }
+  .dark .savings-series {
+    --series-in: #199e70;
+    --series-out: #e66767;
+  }
+
   /* Thin colored progress track */
   .progress-track { @apply h-1.5 w-full rounded-full bg-muted overflow-hidden; }
   .progress-fill  { @apply h-full rounded-full transition-all duration-500; }
