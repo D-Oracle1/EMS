@@ -63,17 +63,18 @@ export function WorkspaceHeader({
       })
     : null;
 
-  // The chip in the right-hand icon cluster: a clock face and the time, no
-  // larger than the icons it sits beside. The full date rides along as a
-  // tooltip so nothing is actually lost by shrinking it.
+  // The chip in the right-hand icon cluster: a clock face and the time, sized
+  // and hovered like the round buttons it sits beside so the cluster reads as
+  // one row. The full date rides along as a tooltip, so nothing is actually
+  // lost by shrinking it.
   if (variant === 'mini') {
     return (
       <span
-        className="inline-flex h-10 items-center gap-1.5 rounded-full px-3 text-xs font-semibold tabular-nums tracking-tight text-muted-foreground"
+        className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-semibold tabular-nums tracking-tight text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
         title={subtitle ?? date ?? undefined}
         suppressHydrationWarning
       >
-        <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden />
+        <Clock className="h-4 w-4 shrink-0" aria-hidden />
         {time ?? '--:--'}
       </span>
     );

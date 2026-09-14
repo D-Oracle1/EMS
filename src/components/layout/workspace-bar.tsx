@@ -56,6 +56,7 @@ function greetingFor(hour: number): string {
 export function WorkspaceBar({
   onMenuToggle,
   clock,
+  showGreeting = true,
 }: {
   onMenuToggle?: () => void;
   /**
@@ -64,6 +65,13 @@ export function WorkspaceBar({
    * always in the same corner whichever page you are on.
    */
   clock?: React.ReactNode;
+  /**
+   * The greeting belongs to the dashboards, where it opens the day alongside
+   * the full clock. A working page greets you once and then wastes a row on
+   * every visit after that, so there it is left off and the icon cluster —
+   * clock included — has the bar to itself.
+   */
+  showGreeting?: boolean;
 }) {
   const { data: session } = useSession();
   const user = session?.user as SessionUser | undefined;
@@ -72,11 +80,12 @@ export function WorkspaceBar({
 
   // The greeting depends on the viewer's clock, which the server does not have.
   useEffect(() => {
+    if (!showGreeting) return;
     const set = () => setGreeting(greetingFor(new Date().getHours()));
     set();
     const id = setInterval(set, 60_000);
     return () => clearInterval(id);
-  }, []);
+  }, [showGreeting]);
 
   useEffect(() => {
     if (!user) return;
@@ -125,7 +134,8 @@ export function WorkspaceBar({
 
   return (
     <div className="flex items-start justify-between gap-3">
-      {/* Greeting */}
+      {/* Greeting. The menu button stays even when the greeting does not — it
+          is the only way into the navigation on a phone. */}
       <div className="flex flex-wrap items-center gap-2">
         <button
           onClick={onMenuToggle}
@@ -134,12 +144,14 @@ export function WorkspaceBar({
         >
           <Menu className="h-4 w-4" />
         </button>
-        <p className="greeting-pill">
-          <span aria-hidden>👋</span>
-          <span suppressHydrationWarning>
-            {greeting ?? 'Welcome'}, {user.firstName}
-          </span>
-        </p>
+        {showGreeting && (
+          <p className="greeting-pill">
+            <span aria-hidden>👋</span>
+            <span suppressHydrationWarning>
+              {greeting ?? 'Welcome'}, {user.firstName}
+            </span>
+          </p>
+        )}
       </div>
 
       {/* Icon cluster */}

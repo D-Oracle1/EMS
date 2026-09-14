@@ -13,24 +13,25 @@ import type { SessionUser } from '@/types';
 const PIN_KEY = 'hylink-sidebar-pinned';
 
 /**
- * The dashboards, and only the dashboards, carry the full clock as their
- * centrepiece. Everywhere else is a working page — a table, a form, a report —
- * where the clock shrinks to a chip in the icon cluster rather than pushing the
- * work itself below the fold.
+ * The dashboards, and only the dashboards, open with the greeting and the full
+ * clock. Everywhere else is a working page — a table, a form, a report — where
+ * both give way to a clock chip in the icon cluster rather than spending the
+ * top of the screen on a welcome and pushing the work below the fold.
  */
 const DASHBOARD_PATHS = ['/dashboard', '/savings/dashboard'];
 
 /**
  * The workspace frame, built to the reference design.
  *
- * Every page opens the same way: greeting pill and icon cluster floating at the
- * top, then the search bar, then the page's own content in frosted cards. There
- * is no full-width header; the department and branch that used to sit in one now
- * live in the user menu.
+ * Every page opens the same way: a floating icon cluster at the top, then the
+ * search bar, then the page's own content in frosted cards. There is no
+ * full-width header; the department and branch that used to sit in one now live
+ * in the user menu.
  *
- * The clock is the centrepiece on a dashboard and a small clock-iconned chip in
- * the icon cluster everywhere else, so a working page is not pushed below the
- * fold by it.
+ * A dashboard adds the greeting pill and the big clock above the search bar. On
+ * every other page the greeting is dropped and the clock becomes a small
+ * clock-iconned chip at the head of the icon cluster, so the work itself is not
+ * pushed below the fold.
  *
  * The sidebar is a floating icon rail that expands over the page on hover, so
  * the content only shifts when the rail is deliberately pinned.
@@ -93,6 +94,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           <WorkspaceBar
             onMenuToggle={() => setMobileOpen((v) => !v)}
             clock={isDashboard ? undefined : <WorkspaceHeader variant="mini" />}
+            showGreeting={isDashboard}
           />
 
           {isDashboard && <WorkspaceHeader />}
