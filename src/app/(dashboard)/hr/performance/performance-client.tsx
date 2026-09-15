@@ -142,7 +142,6 @@ export function PerformanceClient({ user }: PerformanceClientProps) {
     fetchReviews();
     fetchDisciplinary();
     fetchStaff();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleCreateReview = () => {

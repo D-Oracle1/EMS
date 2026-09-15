@@ -137,17 +137,27 @@ export function SavingsDashboardClient({ user }: Props) {
   const [data, setData] = useState<SavingsDashboard | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const load = () => {
-    setLoading(true);
+  /**
+   * Fetch without announcing the spinner. Every setState here happens inside a
+   * promise callback, which is the shape an effect is allowed to use — and the
+   * component already starts in the loading state, so the first fetch has
+   * nothing to announce.
+   */
+  const refetch = () => {
     getSavingsDashboard()
       .then(setData)
       .catch((e) => toast.error(e.message || 'Failed to load savings dashboard'))
       .finally(() => setLoading(false));
   };
 
+  /** An explicit refresh, which should put the spinner back. */
+  const load = () => {
+    setLoading(true);
+    refetch();
+  };
+
   useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    refetch();
   }, []);
 
   // Products with money in them, for the portfolio charts.

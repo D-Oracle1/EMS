@@ -913,6 +913,11 @@ export default function VerificationTaskDetailPage() {
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                       {photos.map((photo, idx) => (
                         <div key={idx} className="relative group rounded-lg border overflow-hidden">
+                          {/* A base64 preview of a photo the officer has just
+                              picked, not a remote asset. next/image would need
+                              unoptimized for a data URL and optimises nothing,
+                              and this is never the LCP element. */}
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
                             src={photo.dataUrl}
                             alt={photo.name}

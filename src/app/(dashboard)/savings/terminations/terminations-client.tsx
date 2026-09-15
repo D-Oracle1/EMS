@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
+import { useCallback, useEffect, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { CheckCircle, XCircle, DollarSign, RefreshCw, Loader2, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import { toast } from 'sonner';
@@ -55,7 +55,10 @@ export function TerminationsClient({ user }: Props) {
 
   const canApprove = user.permissions.includes('SAVINGS:APPROVE');
 
-  function loadData(page = 1) {
+  // Memoised on statusFilter, which is exactly what the effect below already
+  // reran on — so the dependency is now declared rather than assumed, and the
+  // behaviour is unchanged.
+  const loadData = useCallback((page = 1) => {
     startTransition(async () => {
       try {
         const result = await getTerminationRequests({ status: statusFilter || undefined, page, limit: 20 });
@@ -65,9 +68,9 @@ export function TerminationsClient({ user }: Props) {
         toast.error(e.message || 'Failed to load terminations');
       }
     });
-  }
+  }, [statusFilter]);
 
-  useEffect(() => { loadData(1); }, [statusFilter]);
+  useEffect(() => { loadData(1); }, [loadData]);
 
   function openReview(t: any) {
     setSelected(t);

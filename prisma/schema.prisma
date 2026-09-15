@@ -1221,6 +1221,9 @@ model SavingsAccount {
   @@index([customerId])
   @@index([status])
   @@index([maturityDate])
+  /// Exists in the database (SavingsAccount_isPromoRate_idx) but was never
+  /// declared here, so `prisma migrate diff` wanted to drop it. Declared now.
+  @@index([isPromoRate])
 }
 
 // Immutable per-account monthly interest ledger.

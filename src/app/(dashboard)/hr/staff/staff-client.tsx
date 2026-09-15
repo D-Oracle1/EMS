@@ -1407,7 +1407,7 @@ export function StaffClient({ user }: { user: SessionUser }) {
           <DialogHeader>
             <DialogTitle>Edit Staff Member</DialogTitle>
             <DialogDescription>
-              Update the staff member's details.
+              Update the staff member&apos;s details.
             </DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

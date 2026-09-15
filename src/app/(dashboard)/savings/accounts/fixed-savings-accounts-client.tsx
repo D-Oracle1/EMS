@@ -77,6 +77,11 @@ export function FixedSavingsAccountsClient({ user }: Props) {
     });
   }
 
+  // Mount only, and deliberately so: the filters reload explicitly (the search
+  // box calls loadData on Enter, the selects on change). Depending on loadData
+  // here would refetch on every keystroke, which is a behaviour change dressed
+  // up as a lint fix.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadData(1); }, []);
 
   function monthsRemaining(maturityDate: string | Date | null) {

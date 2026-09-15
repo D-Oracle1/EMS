@@ -64,7 +64,6 @@ export function MyProfileClient({ user }: MyProfileClientProps) {
 
   useEffect(() => {
     fetchProfile();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const formatTime = (dateStr: string | null) => {

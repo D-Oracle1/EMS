@@ -92,22 +92,29 @@ export async function createPermission(data: {
   try {
     const user = await requirePermission('ADMIN:SYSTEM');
 
-    const module = data.module.trim().toUpperCase().replace(/\s+/g, '_');
+    // Named moduleCode rather than module: a local called `module` shadows the
+    // CommonJS `module` object, which Next flags because it can break bundling.
+    const moduleCode = data.module.trim().toUpperCase().replace(/\s+/g, '_');
     const action = data.action.trim().toUpperCase().replace(/\s+/g, '_');
 
-    if (!module || !action) {
+    if (!moduleCode || !action) {
       return { success: false, error: 'Module and action are both required' };
     }
-    if (!/^[A-Z0-9_]+$/.test(module) || !/^[A-Z0-9_]+$/.test(action)) {
+    if (!/^[A-Z0-9_]+$/.test(moduleCode) || !/^[A-Z0-9_]+$/.test(action)) {
       return { success: false, error: 'Module and action may only contain letters, digits and underscores' };
     }
 
-    const code = `${module}:${action}`;
+    const code = `${moduleCode}:${action}`;
     const existing = await prisma.permission.findUnique({ where: { code } });
     if (existing) return { success: false, error: `Permission ${code} already exists` };
 
     const permission = await prisma.permission.create({
-      data: { code, module, action, description: data.description?.trim() || `${action} in ${module}` },
+      data: {
+        code,
+        module: moduleCode,
+        action,
+        description: data.description?.trim() || `${action} in ${moduleCode}`,
+      },
     });
 
     await auditLog({

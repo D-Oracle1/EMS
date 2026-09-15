@@ -59,7 +59,6 @@ export function NotificationsClient({ user }: NotificationsClientProps) {
 
   useEffect(() => {
     fetchNotifications();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleMarkRead = (id: string) => {
