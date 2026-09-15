@@ -14,9 +14,20 @@ export function LoginForm() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  // Codes are raised in src/lib/auth.ts. Anything unrecognised — including a
+  // genuinely wrong password — falls through to the neutral message below, so
+  // the screen never hints at which half of the credentials was wrong.
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const SIGN_IN_MESSAGES: Record<string, string> = {
+    account_locked:
+      'This account is locked after too many failed attempts. Wait for the lockout to pass, or ask an administrator to unlock it. Trying again now extends the lock.',
+    account_inactive: 'This account is not active. Contact an administrator.',
+    signin_unavailable:
+      'Could not reach the sign-in service. This is not your password — try again in a moment.',
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,11 +42,11 @@ export function LoginForm() {
       });
 
       if (result?.error) {
-        setError(
-          result.error === 'CredentialsSignin'
-            ? 'Invalid email or password'
-            : result.error
-        );
+        // Auth.js puts the reason in `code`; `error` is only ever the class
+        // name. Echoing `error` raw is how a locked account used to reach this
+        // screen as the bare word "Configuration".
+        const code = (result as { code?: string }).code;
+        setError(SIGN_IN_MESSAGES[code ?? ''] ?? 'Invalid email or password');
       } else {
         // With no explicit callback, hand off to '/', which resolves the
         // right home for this user server-side (HR staff open onto /hr).

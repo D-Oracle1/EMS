@@ -132,7 +132,7 @@ export function DashboardClient({ user, data }: DashboardClientProps) {
           <p className="mt-3 text-3xl font-bold tracking-tight">
             {data.savings ? data.savings.activeAccounts.toLocaleString('en-NG') : '—'}
           </p>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 break-words text-sm text-muted-foreground">
             {data.savings
               ? `${formatCurrency(data.savings.totalBalance)} held`
               : 'No savings access'}
@@ -185,8 +185,14 @@ export function DashboardClient({ user, data }: DashboardClientProps) {
               {data.savings ? 'Savings under management' : 'Assets under management'}
             </p>
             {/* Hero figure: proportional figures, not tabular — tabular-nums
-                makes a large standalone number look loose. */}
-            <p className="text-4xl sm:text-5xl font-bold tracking-tight leading-none mt-1">
+                makes a large standalone number look loose.
+
+                It starts at text-3xl on a phone rather than text-4xl. Money is
+                written "NGN 182,653" now, three characters wider than the ₦ it
+                replaced, and at 36px that ran past the right edge of a 360px
+                screen. break-all is the backstop for an unusually large figure:
+                it wraps rather than widening the page. */}
+            <p className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight leading-none mt-1 break-all">
               {data.savings
                 ? formatCurrency(data.savings.totalBalance)
                 : aum !== null
@@ -202,7 +208,10 @@ export function DashboardClient({ user, data }: DashboardClientProps) {
             </p>
           </div>
 
-          <div className="flex flex-col items-end gap-2">
+          {/* shrink-0 so the badges keep their size, and the figure beside them
+              is what gives way — without it this column can force the flex row
+              wider than the card on a narrow screen. */}
+          <div className="flex shrink-0 flex-col items-end gap-2">
             {data.attendance?.isClockedIn && user.roleCode !== 'SUPER_ADMIN' && (
               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-400/20 text-emerald-200 text-xs font-medium px-2.5 py-1">
                 <CheckCircle className="h-3 w-3" /> Clocked In

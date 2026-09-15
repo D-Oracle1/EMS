@@ -131,22 +131,32 @@ export function WorkspaceBar({
     'inline-flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground';
 
   return (
-    <div className="flex items-start justify-between gap-3">
+    // flex-wrap is load-bearing, not tidiness. On a dashboard this row holds
+    // the greeting pill *and* the icon cluster; neither could shrink (the
+    // cluster's children are fixed h-10 w-10 squares, the greeting had no
+    // truncation), so on a ~360px screen their combined min-content width
+    // forced the row — and the whole document — wider than the viewport. That
+    // was the horizontal scrolling on the home page. Wrapping lets the cluster
+    // drop to its own line instead of pushing the page.
+    <div className="flex flex-wrap items-start justify-between gap-3">
       {/* Greeting. No menu button here any more: on a phone the navigation is
           reached from the bottom tab bar, which is where the thumb already is. */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
         {showGreeting && (
-          <p className="greeting-pill">
+          // max-w-full + truncate: the greeting is the half that should give
+          // way, since the controls opposite have to stay tappable.
+          <p className="greeting-pill max-w-full">
             <span aria-hidden>👋</span>
-            <span suppressHydrationWarning>
+            <span className="truncate" suppressHydrationWarning>
               {greeting ?? 'Welcome'}, {user.firstName}
             </span>
           </p>
         )}
       </div>
 
-      {/* Icon cluster */}
-      <div className="glass-panel flex items-center gap-0.5 rounded-full p-1">
+      {/* Icon cluster. shrink-0 so these stay full-size tap targets and the
+          greeting beside them is what yields. */}
+      <div className="glass-panel ml-auto flex shrink-0 items-center gap-0.5 rounded-full p-1">
         {clock}
 
         <PwaInstallPrompt />

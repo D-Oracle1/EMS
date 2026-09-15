@@ -1,10 +1,34 @@
 import { randomBytes } from 'crypto';
-import NextAuth from 'next-auth';
+import NextAuth, { CredentialsSignin } from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import bcrypt from 'bcryptjs';
 import { prisma } from './prisma';
 import { authConfig } from './auth.config';
 import { getConfigNumber } from './system-config';
+
+/**
+ * Why these exist rather than `throw new Error(...)`.
+ *
+ * Auth.js v5 treats any *generic* error thrown from `authorize` as a server
+ * fault and redirects with `error=Configuration`. So a locked account — an
+ * ordinary, expected, user-facing condition — was reaching the login screen as
+ * the single word "Configuration", indistinguishable from a broken deployment.
+ * It cost a long diagnosis to work out that a superadmin lockout was behind it.
+ *
+ * `CredentialsSignin` is the supported way to carry a reason out: its `code`
+ * lands in the redirect URL, so it must stay a non-sensitive token. The human
+ * sentence is mapped from the code in the login form; the detail stays here on
+ * the server.
+ */
+class AccountLocked extends CredentialsSignin {
+  code = 'account_locked';
+}
+class AccountInactive extends CredentialsSignin {
+  code = 'account_inactive';
+}
+class SignInUnavailable extends CredentialsSignin {
+  code = 'signin_unavailable';
+}
 
 /**
  * Record a staff sign-in as a UserSession row so administrators can see who is
@@ -54,22 +78,33 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const email = credentials.email as string;
         const password = credentials.password as string;
 
-        const staff = await prisma.staff.findUnique({
-          where: { email },
-          include: {
-            role: {
-              include: {
-                permissions: {
-                  include: {
-                    permission: true,
+        // The lookup is wrapped so an infrastructure failure (the database
+        // being unreachable, a connect timeout) is reported as its own code
+        // rather than collapsing into the same opaque error as a locked
+        // account. Telling those two apart from the login screen is the whole
+        // point.
+        let staff;
+        try {
+          staff = await prisma.staff.findUnique({
+            where: { email },
+            include: {
+              role: {
+                include: {
+                  permissions: {
+                    include: {
+                      permission: true,
+                    },
                   },
                 },
               },
+              department: true,
+              branch: true,
             },
-            department: true,
-            branch: true,
-          },
-        });
+          });
+        } catch (error) {
+          console.error('Sign-in lookup failed:', error);
+          throw new SignInUnavailable();
+        }
 
         if (!staff) {
           // Not a staff member — try customer portal login (additive; staff
@@ -80,10 +115,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           if (!customer || !customer.passwordHash) return null;
 
           if (customer.portalLockedUntil && new Date() < customer.portalLockedUntil) {
-            throw new Error('Account is locked. Try again later.');
+            throw new AccountLocked();
           }
           if (customer.status !== 'ACTIVE') {
-            throw new Error('Account is not active. Contact support.');
+            throw new AccountInactive();
           }
 
           const customerOk = await bcrypt.compare(password, customer.passwordHash);
@@ -126,12 +161,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         // Check if account is locked
         if (staff.lockedUntil && new Date() < staff.lockedUntil) {
-          throw new Error('Account is locked. Try again later.');
+          throw new AccountLocked();
         }
 
         // Check if account is active
         if (staff.status !== 'ACTIVE') {
-          throw new Error('Account is not active. Contact administrator.');
+          throw new AccountInactive();
         }
 
         // Verify password
