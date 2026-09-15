@@ -3,7 +3,9 @@ import { prisma } from '@/lib/prisma';
 
 const apiKey = process.env.RESEND_API_KEY;
 const FROM = process.env.EMAIL_FROM || 'Hylink Finance <info@hylinkfinance.com>';
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://hylink-ems.vercel.app';
+// The branded address, not the *.vercel.app one: this is the base for every
+// link in outbound email, and it is what recipients see and trust.
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://app.hylinkfinance.com';
 
 const resend = apiKey ? new Resend(apiKey) : null;
 

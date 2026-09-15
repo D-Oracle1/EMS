@@ -3,7 +3,8 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { sendEmail, renderAlertEmail } from '@/lib/email';
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://hylink-ems.vercel.app';
+// The branded address, not the *.vercel.app one — see the note in email.ts.
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://app.hylinkfinance.com';
 
 /** Generate a readable temporary password (no ambiguous characters). */
 export function generateOtp(len = 8): string {
