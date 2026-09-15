@@ -352,7 +352,7 @@ export function FixedSavingsAccountsClient({ user }: Props) {
               </div>
             )}
             <div className="space-y-1.5">
-              <Label>Amount (₦) <span className="text-destructive">*</span></Label>
+              <Label>Amount (NGN) <span className="text-destructive">*</span></Label>
               <Input type="number" min={0.01} step={0.01} placeholder="0.00" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} />
             </div>
             <div className="space-y-1.5">

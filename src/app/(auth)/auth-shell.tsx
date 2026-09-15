@@ -41,7 +41,7 @@ const DEFAULT_PANEL = {
 const STATS = [
   { value: '1,000', suffix: '+', label: 'Clients served' },
   { value: '5', suffix: '+', label: 'Years of trust' },
-  { value: '₦1B', suffix: '+', label: 'Funds disbursed' },
+  { value: 'NGN 1B', suffix: '+', label: 'Funds disbursed' },
 ];
 
 export function AuthShell({ eyebrow, title, lede, children, footer, panel }: AuthShellProps) {

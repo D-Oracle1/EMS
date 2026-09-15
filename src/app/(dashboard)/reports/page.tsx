@@ -47,6 +47,10 @@ const formatCurrency = (amount: number): string => {
   return new Intl.NumberFormat('en-NG', {
     style: 'currency',
     currency: 'NGN',
+    // "NGN" rather than ₦ — see the note on formatCurrency in src/lib/utils.ts.
+    // These figures also go into exported PDFs, where an absent glyph is worse
+    // still: the reader has no way to tell what the missing character was.
+    currencyDisplay: 'code',
     minimumFractionDigits: 2,
   }).format(amount);
 };

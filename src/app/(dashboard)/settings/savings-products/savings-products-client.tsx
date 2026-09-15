@@ -343,8 +343,8 @@ export function SavingsProductsClient({ user }: SavingsProductsClientProps) {
                       )}
                     </TableCell>
                     <TableCell className="text-center text-sm">{parseFloat(p.monthlyInterestRate ?? 0).toFixed(4)}%</TableCell>
-                    <TableCell className="text-right">₦{Number(p.minDeposit ?? 0).toLocaleString()}</TableCell>
-                    <TableCell className="text-right">{p.maxBalance ? `₦${Number(p.maxBalance).toLocaleString()}` : '—'}</TableCell>
+                    <TableCell className="text-right">NGN {Number(p.minDeposit ?? 0).toLocaleString()}</TableCell>
+                    <TableCell className="text-right">{p.maxBalance ? `NGN ${Number(p.maxBalance).toLocaleString()}` : '—'}</TableCell>
                     <TableCell className="text-center">
                       {p.allowEarlyTermination ? <CheckCircle className="h-4 w-4 text-green-600 mx-auto" /> : <XCircle className="h-4 w-4 text-muted-foreground mx-auto" />}
                     </TableCell>
@@ -430,7 +430,7 @@ export function SavingsProductsClient({ user }: SavingsProductsClientProps) {
                   </div>
                   <div className="grid grid-cols-2 gap-1 text-sm">
                     <span className="text-muted-foreground">Monthly Rate:</span><span>{parseFloat(p.monthlyInterestRate ?? 0).toFixed(4)}%</span>
-                    <span className="text-muted-foreground">Min Deposit:</span><span>₦{Number(p.minDeposit ?? 0).toLocaleString()}</span>
+                    <span className="text-muted-foreground">Min Deposit:</span><span>NGN {Number(p.minDeposit ?? 0).toLocaleString()}</span>
                     <span className="text-muted-foreground">Accounts:</span><span>{p.usageCount}</span>
                     <span className="text-muted-foreground">Early Exit:</span><span>{p.allowEarlyTermination ? 'Yes' : 'No'}</span>
                   </div>
@@ -550,7 +550,7 @@ export function SavingsProductsClient({ user }: SavingsProductsClientProps) {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label>Minimum Deposit (₦) <span className="text-destructive">*</span></Label>
+                <Label>Minimum Deposit (NGN) <span className="text-destructive">*</span></Label>
                 <Input
                   type="number"
                   min={0}
@@ -560,7 +560,7 @@ export function SavingsProductsClient({ user }: SavingsProductsClientProps) {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Maximum Deposit (₦)</Label>
+                <Label>Maximum Deposit (NGN)</Label>
                 <Input
                   type="number"
                   min={0}

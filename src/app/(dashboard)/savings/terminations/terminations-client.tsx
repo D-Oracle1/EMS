@@ -350,7 +350,7 @@ export function TerminationsClient({ user }: Props) {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label>Approved Interest (₦)</Label>
+                  <Label>Approved Interest (NGN)</Label>
                   <Input
                     type="number"
                     min={0}
@@ -361,7 +361,7 @@ export function TerminationsClient({ user }: Props) {
                   <p className="text-xs text-muted-foreground">Can be reduced from accrued amount</p>
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Penalty (₦)</Label>
+                  <Label>Penalty (NGN)</Label>
                   <Input
                     type="number"
                     min={0}

@@ -77,7 +77,7 @@ export function CreateFixedSavingsClient({ user }: Props) {
     if (!selectedProductId) return toast.error('Select a savings plan');
     if (!initialDeposit || parseFloat(initialDeposit) <= 0) return toast.error('Enter initial deposit amount');
     if (selectedProduct && parseFloat(initialDeposit) < selectedProduct.minDeposit) {
-      return toast.error(`Minimum deposit for this plan is ₦${Number(selectedProduct.minDeposit).toLocaleString()}`);
+      return toast.error(`Minimum deposit for this plan is NGN ${Number(selectedProduct.minDeposit).toLocaleString()}`);
     }
 
     setSubmitting(true);
@@ -172,7 +172,7 @@ export function CreateFixedSavingsClient({ user }: Props) {
                   <Separator className="my-2" />
                   <div className="space-y-0.5 text-xs text-muted-foreground">
                     <p>Monthly: {parseFloat(p.monthlyInterestRate ?? 0).toFixed(4)}%</p>
-                    <p>Min deposit: ₦{Number(p.minDeposit ?? 0).toLocaleString()}</p>
+                    <p>Min deposit: NGN {Number(p.minDeposit ?? 0).toLocaleString()}</p>
                     {p.allowEarlyTermination && <p className="text-orange-600">Early exit allowed</p>}
                   </div>
                 </button>
@@ -191,7 +191,7 @@ export function CreateFixedSavingsClient({ user }: Props) {
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label>Initial Deposit (₦) <span className="text-destructive">*</span></Label>
+              <Label>Initial Deposit (NGN) <span className="text-destructive">*</span></Label>
               <Input
                 type="number"
                 min={selectedProduct?.minDeposit ?? 0}
@@ -202,8 +202,8 @@ export function CreateFixedSavingsClient({ user }: Props) {
               />
               {selectedProduct && (
                 <p className="text-xs text-muted-foreground">
-                  Min: ₦{Number(selectedProduct.minDeposit).toLocaleString()}
-                  {selectedProduct.maxBalance ? ` · Max: ₦${Number(selectedProduct.maxBalance).toLocaleString()}` : ''}
+                  Min: NGN {Number(selectedProduct.minDeposit).toLocaleString()}
+                  {selectedProduct.maxBalance ? ` · Max: NGN ${Number(selectedProduct.maxBalance).toLocaleString()}` : ''}
                 </p>
               )}
             </div>

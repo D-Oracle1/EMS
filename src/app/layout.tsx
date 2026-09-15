@@ -4,7 +4,26 @@ import './globals.css';
 import { Toaster } from 'sonner';
 import { ThemeProvider, themeScript } from '@/components/theme';
 
-const inter = Inter({ subsets: ['latin'] });
+/**
+ * `subsets` here controls which faces get preloaded, not which exist:
+ * next/font emits @font-face rules for every subset Google publishes, and the
+ * browser fetches a given unicode-range file only when a character in it is
+ * actually rendered. Naming latin-ext promotes it to a preload rather than a
+ * lazy, mid-render discovery, and the named fallbacks cover the gap before it
+ * lands.
+ *
+ * (Currency no longer depends on any of this: money is formatted as "NGN"
+ * rather than ₦, because the naira sign is missing from enough device fonts
+ * that it was rendering as a struck-through N. See formatCurrency in
+ * src/lib/utils.ts.)
+ */
+const inter = Inter({
+  subsets: ['latin', 'latin-ext'],
+  display: 'swap',
+  // Named fallbacks that carry ₦ themselves, so the symbol still reads
+  // correctly in the moment before the webfont lands, or if it never does.
+  fallback: ['Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+});
 
 export const metadata: Metadata = {
   title: 'Hylink Finance EMS',

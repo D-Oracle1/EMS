@@ -102,8 +102,8 @@ const savingsNav = [
 const TILE_TINTS = ['blue', 'orange', 'emerald', 'violet', 'cyan', 'amber', 'rose', 'sky'] as const;
 
 function compact(n: number): string {
-  if (Math.abs(n) >= 1_000_000) return `₦${(n / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(n) >= 1_000) return `₦${(n / 1_000).toFixed(0)}k`;
+  if (Math.abs(n) >= 1_000_000) return `NGN ${(n / 1_000_000).toFixed(1)}M`;
+  if (Math.abs(n) >= 1_000) return `NGN ${(n / 1_000).toFixed(0)}k`;
   return formatCurrency(n);
 }
 

@@ -18,6 +18,12 @@ export function formatCurrency(amount: number | string | Decimal): string {
   return new Intl.NumberFormat('en-NG', {
     style: 'currency',
     currency: 'NGN',
+    // "NGN 150,000.00" rather than "₦150,000.00". The naira sign (U+20A6) is
+    // absent from many device fonts, so it was being drawn by whatever
+    // fallback the phone happened to pick — landing as a struck-through N next
+    // to figures people are meant to trust. The code renders identically
+    // everywhere. Intl still supplies grouping and decimals.
+    currencyDisplay: 'code',
     minimumFractionDigits: 2,
   }).format(num);
 }

@@ -64,16 +64,18 @@ function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('en-NG', {
     style: 'currency',
     currency: 'NGN',
+    // "NGN" rather than ₦ — see the note on formatCurrency in src/lib/utils.ts.
+    currencyDisplay: 'code',
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(amount);
 }
 
 function formatCompact(amount: number): string {
-  if (amount >= 1_000_000_000) return `₦${(amount / 1_000_000_000).toFixed(1)}B`;
-  if (amount >= 1_000_000) return `₦${(amount / 1_000_000).toFixed(1)}M`;
-  if (amount >= 1_000) return `₦${(amount / 1_000).toFixed(0)}K`;
-  return `₦${amount}`;
+  if (amount >= 1_000_000_000) return `NGN ${(amount / 1_000_000_000).toFixed(1)}B`;
+  if (amount >= 1_000_000) return `NGN ${(amount / 1_000_000).toFixed(1)}M`;
+  if (amount >= 1_000) return `NGN ${(amount / 1_000).toFixed(0)}K`;
+  return `NGN ${amount}`;
 }
 
 const CHART_COLORS = ['#2563eb', '#16a34a', '#ea580c', '#8b5cf6', '#ec4899', '#14b8a6', '#f59e0b', '#6366f1'];

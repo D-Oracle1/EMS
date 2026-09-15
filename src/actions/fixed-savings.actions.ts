@@ -383,9 +383,9 @@ export async function createFixedSavingsAccount(data: {
     }
 
     const minDep = product.minDeposit.toNumber();
-    if (data.initialDeposit < minDep) return { success: false, error: `Minimum deposit is ₦${minDep.toLocaleString()}` };
+    if (data.initialDeposit < minDep) return { success: false, error: `Minimum deposit is NGN ${minDep.toLocaleString()}` };
     const maxDep = product.maxBalance?.toNumber();
-    if (maxDep && data.initialDeposit > maxDep) return { success: false, error: `Maximum deposit is ₦${maxDep.toLocaleString()}` };
+    if (maxDep && data.initialDeposit > maxDep) return { success: false, error: `Maximum deposit is NGN ${maxDep.toLocaleString()}` };
 
     const startDate = data.startDate ? new Date(data.startDate) : new Date();
 
@@ -542,11 +542,11 @@ export async function fixedSavingsDeposit(data: {
     if (!account.maturityDate) return { success: false, error: 'This is not a fixed-term savings account' };
 
     const minDep = account.product.minDeposit.toNumber();
-    if (data.amount < minDep) return { success: false, error: `Minimum deposit is ₦${minDep.toLocaleString()}` };
+    if (data.amount < minDep) return { success: false, error: `Minimum deposit is NGN ${minDep.toLocaleString()}` };
     const maxBal = account.product.maxBalance?.toNumber();
     const newTotal = new Decimal(account.totalDeposits.toString()).plus(data.amount);
     if (maxBal && newTotal.gt(maxBal)) {
-      return { success: false, error: `This deposit would exceed the maximum allowed of ₦${maxBal.toLocaleString()}` };
+      return { success: false, error: `This deposit would exceed the maximum allowed of NGN ${maxBal.toLocaleString()}` };
     }
 
     const transactionRef = await generateReference('SAVINGS_TXN');
@@ -614,10 +614,10 @@ export async function fixedSavingsDeposit(data: {
 
     await auditLog({
       userId: user.id, action: 'CREATE', module: 'SAVINGS', entityType: 'SAVINGS_TRANSACTION', entityId: data.accountId,
-      description: `Fixed savings deposit ${transactionRef}: ₦${data.amount} to ${account.accountNumber} (pending until next month roll)`,
+      description: `Fixed savings deposit ${transactionRef}: NGN ${data.amount} to ${account.accountNumber} (pending until next month roll)`,
     });
 
-    return { success: true, message: `Deposit of ₦${data.amount.toLocaleString()} recorded. Ref: ${transactionRef}. Balance eligible from next month.` };
+    return { success: true, message: `Deposit of NGN ${data.amount.toLocaleString()} recorded. Ref: ${transactionRef}. Balance eligible from next month.` };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
@@ -789,7 +789,7 @@ export async function runMonthlySavingsInterest(): Promise<ActionResult<{ proces
     const result = await engineRunMonthlyInterest();
     return {
       success: true,
-      message: `Monthly interest processed for ${result.processed} account(s) (${result.skipped} skipped). Total: ₦${result.totalInterest.toLocaleString()}`,
+      message: `Monthly interest processed for ${result.processed} account(s) (${result.skipped} skipped). Total: NGN ${result.totalInterest.toLocaleString()}`,
       data: { processed: result.processed, totalInterest: result.totalInterest },
     };
   } catch (error: any) {
@@ -997,11 +997,11 @@ export async function decideTermination(data: {
 
     await auditLog({
       userId: user.id, action: 'UPDATE', module: 'SAVINGS', entityType: 'SAVINGS_TERMINATION', entityId: data.terminationId,
-      description: `Approved termination for ${termination.account.accountNumber}. Payout: ₦${payout}`,
+      description: `Approved termination for ${termination.account.accountNumber}. Payout: NGN ${payout}`,
       metadata: { approvedInterest, penaltyAmount: penalty, payoutAmount: payout },
     });
 
-    return { success: true, message: `Termination approved. Payout: ₦${payout.toLocaleString()}. Proceed to execute payout.` };
+    return { success: true, message: `Termination approved. Payout: NGN ${payout.toLocaleString()}. Proceed to execute payout.` };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
@@ -1035,7 +1035,7 @@ export async function processTerminationPayout(terminationId: string): Promise<A
           balanceBefore: termination.account.currentBalance.toNumber(),
           balanceAfter: 0,
           paymentMode: 'BANK_TRANSFER',
-          narration: `Early termination payout: Principal ₦${principal} + Interest ₦${approvedInterest} - Penalty ₦${penalty}`,
+          narration: `Early termination payout: Principal NGN ${principal} + Interest NGN ${approvedInterest} - Penalty NGN ${penalty}`,
           processedById: user.id,
         },
       });
@@ -1078,11 +1078,11 @@ export async function processTerminationPayout(terminationId: string): Promise<A
 
     await auditLog({
       userId: user.id, action: 'UPDATE', module: 'SAVINGS', entityType: 'SAVINGS_TERMINATION', entityId: terminationId,
-      description: `Termination payout ${transactionRef}: ₦${payout} for ${termination.account.accountNumber}`,
+      description: `Termination payout ${transactionRef}: NGN ${payout} for ${termination.account.accountNumber}`,
       metadata: { principal, approvedInterest, penalty, payout, transactionRef },
     });
 
-    return { success: true, message: `Payout of ₦${payout.toLocaleString()} processed. Ref: ${transactionRef}` };
+    return { success: true, message: `Payout of NGN ${payout.toLocaleString()} processed. Ref: ${transactionRef}` };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
