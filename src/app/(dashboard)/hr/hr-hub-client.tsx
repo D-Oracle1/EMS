@@ -43,6 +43,8 @@ import { Progress } from '@/components/ui/progress';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatCard } from '@/components/ui/stat-card';
+import { WorkspaceTodo } from '@/components/layout/workspace-widgets';
+import { HeadcountMonthDialog } from '@/components/hr/headcount-month-dialog';
 import {
   getHROverview,
   getHeadcountTrend,
@@ -93,6 +95,8 @@ export function HRHubClient({ user }: HRHubClientProps) {
   const [overview, setOverview] = useState<any>(null);
   const [trend, setTrend] = useState<any[]>([]);
   const [milestones, setMilestones] = useState<any>(null);
+  // The month a reader drilled into, as YYYY-MM. Null means the dialog is shut.
+  const [openMonth, setOpenMonth] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [denied, setDenied] = useState(false);
 
@@ -121,6 +125,7 @@ export function HRHubClient({ user }: HRHubClientProps) {
 
   return (
     <div className="space-y-6">
+      <HeadcountMonthDialog month={openMonth} onClose={() => setOpenMonth(null)} />
 
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Human Resources</h1>
@@ -128,6 +133,10 @@ export function HRHubClient({ user }: HRHubClientProps) {
           Workforce, payroll, talent and everything in between.
         </p>
       </div>
+
+      {/* What is waiting on you, the same card the other dashboards carry. It
+          fetches its own data, so it can sit on any page. */}
+      <WorkspaceTodo />
 
       {denied && (
         <Card>
@@ -218,6 +227,9 @@ export function HRHubClient({ user }: HRHubClientProps) {
             <Card className="lg:col-span-2">
               <CardHeader>
                 <CardTitle className="text-lg">Hires & Exits — 12 Months</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Pick a month to see who joined and who left.
+                </p>
               </CardHeader>
               <CardContent>
                 <div className="h-[280px] w-full">
@@ -235,8 +247,28 @@ export function HRHubClient({ user }: HRHubClientProps) {
                         }}
                       />
                       <Legend wrapperStyle={{ fontSize: 12 }} />
-                      <Bar dataKey="hires" name="Hires" fill="#10b981" radius={[3, 3, 0, 0]} />
-                      <Bar dataKey="exits" name="Exits" fill="#ef4444" radius={[3, 3, 0, 0]} />
+                      {/* getHeadcountTrend's buckets carry a YYYY-MM key, so a
+                          click can open that month in full. */}
+                      <Bar
+                        dataKey="hires"
+                        name="Hires"
+                        fill="#10b981"
+                        radius={[3, 3, 0, 0]}
+                        cursor="pointer"
+                        onClick={(entry: { month?: string; payload?: { month?: string } }) =>
+                          setOpenMonth(entry?.payload?.month ?? entry?.month ?? null)
+                        }
+                      />
+                      <Bar
+                        dataKey="exits"
+                        name="Exits"
+                        fill="#ef4444"
+                        radius={[3, 3, 0, 0]}
+                        cursor="pointer"
+                        onClick={(entry: { month?: string; payload?: { month?: string } }) =>
+                          setOpenMonth(entry?.payload?.month ?? entry?.month ?? null)
+                        }
+                      />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>

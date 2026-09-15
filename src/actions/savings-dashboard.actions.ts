@@ -53,10 +53,16 @@ export interface SavingsDashboard {
   productBreakdown: Array<{ productId: string; name: string; accountCount: number; totalBalance: number }>;
   mostPopularProduct: { name: string; accountCount: number } | null;
   depositsByMonth: Array<{ label: string; amount: number }>;
-  /** Deposits against withdrawals per month, with the net movement. */
-  flowByMonth: Array<{ label: string; deposits: number; withdrawals: number; net: number }>;
+  /**
+   * Deposits against withdrawals per month, with the net movement.
+   *
+   * `month` is the machine-readable YYYY-MM key; `label` is for display only.
+   * The key is what lets a reader click a bar and open that month in full
+   * (getSavingsMonthDetail takes YYYY-MM), which a localised label cannot do.
+   */
+  flowByMonth: Array<{ month: string; label: string; deposits: number; withdrawals: number; net: number }>;
   /** Interest posted to savers each month. */
-  interestByMonth: Array<{ label: string; amount: number }>;
+  interestByMonth: Array<{ month: string; label: string; amount: number }>;
   /** Money falling due over the coming months, for cash planning. */
   maturitySchedule: Array<{ label: string; count: number; amount: number }>;
   /** Take-up of promotional rates. */
@@ -76,6 +82,10 @@ export async function getSavingsDashboard(): Promise<SavingsDashboard> {
     const from = startOfMonth(-(5 - i));
     const to = startOfMonth(-(4 - i));
     return {
+      // Machine-readable, so a chart built from these windows can hand the
+      // month straight to getSavingsMonthDetail. The label below is localised
+      // and cannot be parsed back into a date.
+      month: `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, '0')}`,
       label: from.toLocaleDateString('en-NG', { month: 'short', year: '2-digit' }),
       from,
       to,
@@ -253,6 +263,7 @@ export async function getSavingsDashboard(): Promise<SavingsDashboard> {
   });
 
   const depositsByMonth = monthWindows.map((w, i) => ({
+    month: w.month,
     label: w.label,
     amount: monthDeposits[i]?._sum.amount?.toNumber() ?? 0,
   }));
@@ -260,10 +271,11 @@ export async function getSavingsDashboard(): Promise<SavingsDashboard> {
   const flowByMonth = monthWindows.map((w, i) => {
     const deposits = monthDeposits[i]?._sum.amount?.toNumber() ?? 0;
     const withdrawals = monthWithdrawals[i]?._sum.amount?.toNumber() ?? 0;
-    return { label: w.label, deposits, withdrawals, net: deposits - withdrawals };
+    return { month: w.month, label: w.label, deposits, withdrawals, net: deposits - withdrawals };
   });
 
   const interestByMonth = monthWindows.map((w, i) => ({
+    month: w.month,
     label: w.label,
     amount: monthInterest[i]?._sum.amount?.toNumber() ?? 0,
   }));

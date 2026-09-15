@@ -229,6 +229,112 @@ export async function getHeadcountTrend(months = 12) {
   return buckets;
 }
 
+// ============================================================================
+// HEADCOUNT MONTH DRILL-DOWN
+// ============================================================================
+
+export interface HeadcountMovement {
+  id: string;
+  employeeId: string;
+  name: string;
+  jobTitle: string | null;
+  department: string;
+  role: string;
+  employmentType: string;
+  /** ISO date: the hire date for a joiner, the termination date for a leaver. */
+  date: string;
+  status: string;
+}
+
+export interface HeadcountMonthDetail {
+  /** YYYY-MM, matching the `month` key on getHeadcountTrend's buckets. */
+  month: string;
+  label: string;
+  hires: HeadcountMovement[];
+  exits: HeadcountMovement[];
+  net: number;
+  generatedAt: string;
+}
+
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+/**
+ * Who joined and who left in one month.
+ *
+ * The counterpart to getHeadcountTrend: that answers "how many", this answers
+ * "which people", so a reader clicking a bar on the hires-and-exits chart gets
+ * the names behind the number rather than just a taller column.
+ */
+export async function getHeadcountMonthDetail(month: string): Promise<HeadcountMonthDetail> {
+  await requireAnyPermission(HR_VIEW);
+
+  const match = /^(\d{4})-(\d{2})$/.exec(month ?? '');
+  if (!match) throw new Error('Month must be given as YYYY-MM');
+  const year = Number(match[1]);
+  const monthIndex = Number(match[2]) - 1;
+  if (monthIndex < 0 || monthIndex > 11) throw new Error('Month must be between 01 and 12');
+
+  const from = new Date(year, monthIndex, 1);
+  const to = new Date(year, monthIndex + 1, 1);
+
+  const select = {
+    id: true,
+    employeeId: true,
+    firstName: true,
+    lastName: true,
+    jobTitle: true,
+    employmentType: true,
+    status: true,
+    hireDate: true,
+    terminationDate: true,
+    department: { select: { name: true } },
+    role: { select: { name: true } },
+  } as const;
+
+  const [hireRows, exitRows] = await Promise.all([
+    prisma.staff.findMany({
+      where: { hireDate: { gte: from, lt: to }, isDeleted: false },
+      select,
+      orderBy: { hireDate: 'asc' },
+    }),
+    prisma.staff.findMany({
+      where: { terminationDate: { gte: from, lt: to }, isDeleted: false },
+      select,
+      orderBy: { terminationDate: 'asc' },
+    }),
+  ]);
+
+  const toMovement = (
+    row: (typeof hireRows)[number],
+    which: 'hire' | 'exit'
+  ): HeadcountMovement => ({
+    id: row.id,
+    employeeId: row.employeeId,
+    name: `${row.firstName} ${row.lastName}`,
+    jobTitle: row.jobTitle,
+    department: row.department.name,
+    role: row.role.name,
+    employmentType: row.employmentType,
+    date: (which === 'hire' ? row.hireDate : (row.terminationDate as Date)).toISOString(),
+    status: row.status,
+  });
+
+  const hires = hireRows.map((r) => toMovement(r, 'hire'));
+  const exits = exitRows.map((r) => toMovement(r, 'exit'));
+
+  return {
+    month,
+    label: `${MONTH_NAMES[monthIndex]} ${year}`,
+    hires,
+    exits,
+    net: hires.length - exits.length,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
 /** Attendance rate and lateness per department over a window. */
 export async function getAttendanceAnalytics(days = 30) {
   await requireAnyPermission([...HR_VIEW, 'HR:ATTENDANCE_MANAGE']);

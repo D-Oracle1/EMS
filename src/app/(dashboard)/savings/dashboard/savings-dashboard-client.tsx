@@ -24,6 +24,8 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@/lib/utils';
 import { getSavingsDashboard, type SavingsDashboard } from '@/actions/savings-dashboard.actions';
+import { MonthDetailDialog } from '@/components/savings/month-detail-dialog';
+import { WorkspaceTodo } from '@/components/layout/workspace-widgets';
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -136,6 +138,8 @@ function StatTile({
 export function SavingsDashboardClient({ user }: Props) {
   const [data, setData] = useState<SavingsDashboard | null>(null);
   const [loading, setLoading] = useState(true);
+  // The month a reader drilled into, as YYYY-MM. Null means the dialog is shut.
+  const [openMonth, setOpenMonth] = useState<string | null>(null);
 
   /**
    * Fetch without announcing the spinner. Every setState here happens inside a
@@ -165,6 +169,7 @@ export function SavingsDashboardClient({ user }: Props) {
 
   return (
     <div className="space-y-5 animate-rise">
+      <MonthDetailDialog month={openMonth} onClose={() => setOpenMonth(null)} />
 
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -209,6 +214,10 @@ export function SavingsDashboardClient({ user }: Props) {
           );
         })}
       </div>
+
+      {/* What is waiting on you, the same card the home dashboard carries. It
+          fetches its own data, so it can sit on any page. */}
+      <WorkspaceTodo />
 
       {loading && !data ? (
         <div className="flex items-center justify-center py-24 text-muted-foreground">
@@ -372,7 +381,7 @@ export function SavingsDashboardClient({ user }: Props) {
             {/* Deposits against withdrawals */}
             <ChartPanel
               title="Deposits vs Withdrawals"
-              subtitle="Last 6 months, with net movement"
+              subtitle="Last 6 months. Pick a month to see everything in it."
               icon={<TrendingUp className="h-4 w-4" />}
               tint="blue"
             >
@@ -387,8 +396,28 @@ export function SavingsDashboardClient({ user }: Props) {
                   />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
                   <ReferenceLine y={0} stroke="currentColor" opacity={0.3} />
-                  <Bar dataKey="deposits" name="Deposits" fill="#059669" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="withdrawals" name="Withdrawals" fill="#f43f5e" radius={[4, 4, 0, 0]} />
+                  {/* Same drill-down as the home dashboard: the bars carry a
+                      YYYY-MM key, so a click opens that month in full. */}
+                  <Bar
+                    dataKey="deposits"
+                    name="Deposits"
+                    fill="#059669"
+                    radius={[4, 4, 0, 0]}
+                    cursor="pointer"
+                    onClick={(entry: { month?: string; payload?: { month?: string } }) =>
+                      setOpenMonth(entry?.payload?.month ?? entry?.month ?? null)
+                    }
+                  />
+                  <Bar
+                    dataKey="withdrawals"
+                    name="Withdrawals"
+                    fill="#f43f5e"
+                    radius={[4, 4, 0, 0]}
+                    cursor="pointer"
+                    onClick={(entry: { month?: string; payload?: { month?: string } }) =>
+                      setOpenMonth(entry?.payload?.month ?? entry?.month ?? null)
+                    }
+                  />
                   <Line
                     type="monotone"
                     dataKey="net"
