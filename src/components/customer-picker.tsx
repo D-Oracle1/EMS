@@ -205,25 +205,39 @@ export function CustomerPicker({
       {/* Mode toggle */}
       <div className="space-y-2">
         <Label>Customer</Label>
-        <div className="inline-flex rounded-md border p-0.5 text-sm bg-muted/30">
+        {/* A segmented control, full width on a phone so each half is a
+            comfortable tap target, shrinking to content width from sm up. */}
+        <div
+          role="tablist"
+          aria-label="Choose an existing customer or add a new one"
+          className="flex w-full rounded-full border border-border bg-muted/40 p-1 text-sm sm:inline-flex sm:w-auto"
+        >
           <button
             type="button"
+            role="tab"
+            aria-selected={value.mode === 'existing'}
             onClick={() => setMode('existing')}
-            className={`flex items-center gap-1.5 rounded px-3 py-1.5 transition-colors ${
-              value.mode === 'existing' ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground hover:text-foreground'
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-full px-4 py-2 transition-colors sm:flex-none ${
+              value.mode === 'existing'
+                ? 'bg-background font-medium text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            <Search className="h-3.5 w-3.5" />
+            <Search className="h-3.5 w-3.5 shrink-0" />
             Existing
           </button>
           <button
             type="button"
+            role="tab"
+            aria-selected={value.mode === 'new'}
             onClick={() => setMode('new')}
-            className={`flex items-center gap-1.5 rounded px-3 py-1.5 transition-colors ${
-              value.mode === 'new' ? 'bg-background shadow-sm font-medium' : 'text-muted-foreground hover:text-foreground'
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-full px-4 py-2 transition-colors sm:flex-none ${
+              value.mode === 'new'
+                ? 'bg-background font-medium text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            <UserPlus className="h-3.5 w-3.5" />
+            <UserPlus className="h-3.5 w-3.5 shrink-0" />
             New customer
           </button>
         </div>

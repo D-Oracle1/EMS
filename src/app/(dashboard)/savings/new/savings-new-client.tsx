@@ -122,7 +122,15 @@ export function SavingsNewClient({ user }: SavingsNewClientProps) {
                     <SelectContent>
                       {products.map((p) => (
                         <SelectItem key={p.id} value={p.id}>
-                          {p.name} ({p.code}) - {p.savingsType}
+                          {/* Two lines rather than one long string: on a phone
+                              "Name (CODE) - TYPE" clamps to a single line and
+                              loses the part that tells them apart. */}
+                          <span className="flex flex-col text-left">
+                            <span className="font-medium">{p.name}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {p.code} · {p.savingsType}
+                            </span>
+                          </span>
                         </SelectItem>
                       ))}
                     </SelectContent>

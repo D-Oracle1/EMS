@@ -44,9 +44,12 @@ const getPinServerSnapshot = (): boolean => false;
 
 /**
  * The dashboards, and only the dashboards, open with the greeting and the full
- * clock. Everywhere else is a working page — a table, a form, a report — where
- * both give way to a clock chip in the icon cluster rather than spending the
- * top of the screen on a welcome and pushing the work below the fold.
+ * centred clock. Everywhere else is a working page — a table, a form, a report —
+ * which opens straight into the work rather than spending the top of the screen
+ * on a welcome.
+ *
+ * The small clock chip in the icon cluster is on every page, dashboards
+ * included, so the time is always in the same corner wherever you are.
  */
 const DASHBOARD_PATHS = ['/dashboard', '/savings/dashboard'];
 
@@ -58,9 +61,9 @@ const DASHBOARD_PATHS = ['/dashboard', '/savings/dashboard'];
  * full-width header; the department and branch that used to sit in one now live
  * in the user menu.
  *
- * A dashboard adds the greeting pill and the big clock above the search bar. On
- * every other page the greeting is dropped and the clock becomes a small
- * clock-iconned chip at the head of the icon cluster, so the work itself is not
+ * Every page carries a small clock-iconned chip at the head of the icon
+ * cluster. A dashboard adds the greeting pill and the big centred clock above
+ * the search bar as well; a working page drops both, so the work itself is not
  * pushed below the fold.
  *
  * The sidebar is a floating icon rail that expands over the page on hover, so
@@ -114,7 +117,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       >
         <main className="mx-auto max-w-[110rem] px-4 pb-28 pt-4 lg:px-8 lg:pb-10 lg:pt-6">
           <WorkspaceBar
-            clock={isDashboard ? undefined : <WorkspaceHeader variant="mini" />}
+            clock={<WorkspaceHeader variant="mini" />}
             showGreeting={isDashboard}
           />
 

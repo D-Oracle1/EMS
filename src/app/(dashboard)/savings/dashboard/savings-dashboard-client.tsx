@@ -217,6 +217,11 @@ export function SavingsDashboardClient({ user }: Props) {
         </div>
       ) : data ? (
         <>
+          {/* On a phone the figures lead and the hero follows: column-reverse
+              puts the stat tiles (the second child) first, so the order under
+              the search bar is quick-access pills, then stats, then the hero.
+              Desktop keeps the hero on top. */}
+          <div className="flex flex-col-reverse gap-5 lg:flex-col">
           {/* Hero */}
           <div className="hero-card p-5 sm:p-6">
             <div className="relative z-10">
@@ -284,6 +289,7 @@ export function SavingsDashboardClient({ user }: Props) {
               value={String(data.completed.count)}
               sub={compact(data.completed.totalPaidOut)}
             />
+          </div>
           </div>
 
           {/* Promo take-up, only once a promo has actually been run */}
