@@ -32,6 +32,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatCard } from '@/components/ui/stat-card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { BankSubmissionQueue } from '@/components/hr/bank-submission-queue';
 import {
   Select,
   SelectContent,
@@ -282,6 +283,7 @@ export function PayrollClient({ user }: PayrollClientProps) {
       <Tabs defaultValue="periods">
         <TabsList>
           <TabsTrigger value="periods">Payroll Periods</TabsTrigger>
+          {canManage && <TabsTrigger value="bank">Bank Details</TabsTrigger>}
           <TabsTrigger value="coverage">
             Salary Packages
             {withoutPackage.length > 0 && (
@@ -434,6 +436,12 @@ export function PayrollClient({ user }: PayrollClientProps) {
         </TabsContent>
 
         {/* Coverage */}
+        {canManage && (
+          <TabsContent value="bank" className="mt-4">
+            <BankSubmissionQueue />
+          </TabsContent>
+        )}
+
         <TabsContent value="coverage" className="mt-4">
           <Card>
             <CardHeader>

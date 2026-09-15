@@ -238,6 +238,8 @@ model Staff {
   onboardingTasksDone     OnboardingTask[]     @relation("OnboardingCompletedBy")
   staffTasksAssigned      StaffTask[]          @relation("StaffTaskAssignee")
   staffTasksCreated       StaffTask[]          @relation("StaffTaskAssigner")
+  bankSubmissions         BankDetailSubmission[] @relation("BankSubmissionStaff")
+  bankSubmissionsReviewed BankDetailSubmission[] @relation("BankSubmissionReviewer")
   trainingEnrollments     TrainingEnrollment[]
   trainingsFacilitated    TrainingProgram[]    @relation("TrainingFacilitator")
   assetAssignments        AssetAssignment[]    @relation("AssetHolder")
@@ -2800,6 +2802,55 @@ model StaffTask {
   @@index([assigneeId, status])
   @@index([assignedById])
   @@index([dueDate])
+}
+
+// ============================================================================
+// HR — BANK DETAILS
+// ============================================================================
+
+enum BankDetailStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// A staff member's submitted bank details, awaiting HR confirmation.
+///
+/// The confirmed values live on Staff (bankName, bankAccountNumber,
+/// bankAccountName) and are written only when HR approves a submission. That
+/// separation is the whole point: payroll reads Staff, so an unconfirmed
+/// account number cannot reach a bank draft even by mistake.
+///
+/// Kept as a table rather than a set of "pending" columns on Staff so that
+/// every change to a fraud-sensitive field leaves a record of who asked for
+/// what, who approved it, and when — including the rejected attempts.
+model BankDetailSubmission {
+  id      String @id @default(uuid())
+  staffId String
+
+  bankName      String
+  accountNumber String
+  accountName   String
+
+  status BankDetailStatus @default(PENDING)
+
+  submittedAt     DateTime  @default(now())
+  reviewedById    String?
+  reviewedAt      DateTime?
+  rejectionReason String?
+
+  /// What was on the staff record when this was approved, so the trail shows
+  /// what each change replaced.
+  previousAccountNumber String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  staff      Staff  @relation("BankSubmissionStaff", fields: [staffId], references: [id])
+  reviewedBy Staff? @relation("BankSubmissionReviewer", fields: [reviewedById], references: [id])
+
+  @@index([staffId, status])
+  @@index([status])
 }
 
 // ============================================================================

@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { formatDate, formatDateTime } from '@/lib/utils';
+import { MyBankDetails } from '@/components/hr/my-bank-details';
 import { getMyProfile } from '@/actions/hr.actions';
 import type { SessionUser } from '@/types';
 
@@ -167,6 +168,9 @@ export function MyProfileClient({ user }: MyProfileClientProps) {
               </div>
             </CardContent>
           </Card>
+
+          {/* Where payroll pays you. Submitted here, confirmed by HR. */}
+          <MyBankDetails />
 
           {/* Tabs for Attendance, Leave, Performance */}
           <Tabs defaultValue="attendance">
