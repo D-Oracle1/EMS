@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { Sidebar } from './sidebar';
 import { MobileNavGrid } from './mobile-nav-grid';
+import { AttendanceChip } from './attendance-chip';
 import { WorkspaceBar } from './workspace-bar';
 import { GlobalSearch } from './global-search';
 import { MobileTabBar } from './mobile-tab-bar';
@@ -117,7 +118,10 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       >
         <main className="mx-auto max-w-[110rem] px-4 pb-28 pt-4 lg:px-8 lg:pb-10 lg:pt-6">
           <WorkspaceBar
-            clock={<WorkspaceHeader variant="mini" />}
+            // A dashboard already has the big clock on it, so the slot in the
+            // icon cluster carries today's attendance instead. Working pages,
+            // which have no clock of their own, keep the small one.
+            clock={isDashboard ? <AttendanceChip /> : <WorkspaceHeader variant="mini" />}
             showGreeting={isDashboard}
           />
 

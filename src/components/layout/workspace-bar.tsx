@@ -58,9 +58,9 @@ export function WorkspaceBar({
   showGreeting = true,
 }: {
   /**
-   * The mini clock, on pages that do not carry the full one. It rides at the
-   * head of the icon cluster rather than beside the greeting, so the time is
-   * always in the same corner whichever page you are on.
+   * Whatever leads the icon cluster: the small clock on a working page, and
+   * today's attendance on a dashboard, which already shows the time in full.
+   * Either way it sits in the same corner on every screen.
    */
   clock?: React.ReactNode;
   /**
