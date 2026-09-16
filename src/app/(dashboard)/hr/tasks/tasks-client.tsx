@@ -133,8 +133,11 @@ export function StaffTasksClient({ user }: Props) {
   useEffect(() => {
     getStaffList({ status: 'ACTIVE' })
       .then(setStaff)
-      .catch(() => {
-        // The picker being empty is survivable; the list still renders.
+      .catch((error) => {
+        // An empty picker is indistinguishable from "these people cannot be
+        // assigned work", so report the reason rather than leaving a silent
+        // dead dropdown behind.
+        toast.error(error instanceof Error ? error.message : 'Could not load the staff list');
       });
   }, []);
 
@@ -211,9 +214,19 @@ export function StaffTasksClient({ user }: Props) {
                         <SelectValue placeholder="Choose who this is for" />
                       </SelectTrigger>
                       <SelectContent>
+                        {staff.length === 0 && (
+                          <div className="px-2 py-3 text-sm text-muted-foreground">
+                            No staff loaded yet.
+                          </div>
+                        )}
+                        {/* The role is shown because every active member of
+                            staff is assignable — managers, the director and the
+                            administrator included — and a list of bare names
+                            gives no way to tell that. */}
                         {staff.map((member) => (
                           <SelectItem key={member.id} value={member.id}>
-                            {member.firstName} {member.lastName} — {member.employeeId}
+                            {member.firstName} {member.lastName}
+                            {member.role?.name ? ` · ${member.role.name}` : ''} — {member.employeeId}
                           </SelectItem>
                         ))}
                       </SelectContent>

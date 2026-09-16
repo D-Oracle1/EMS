@@ -100,24 +100,11 @@ async function main() {
       name: 'Director',
       code: 'DIRECTOR',
       level: 90,
-      perms: [
-        // Full operational oversight + final loan approval (L2) — no LOANS:CREATE (Loan Officer only)
-        'CUSTOMERS:READ', 'CUSTOMERS:CREATE', 'CUSTOMERS:UPDATE',
-        'LOANS:READ', 'LOANS:APPROVE', 'LOANS:APPROVE_L1', 'LOANS:APPROVE_L2',
-        'LOANS:DISBURSE', 'LOANS:COLLECT', 'LOANS:MANAGE_ALL', 'LOANS:RESTRUCTURE',
-        'SAVINGS:READ', 'SAVINGS:CREATE', 'SAVINGS:TRANSACT', 'SAVINGS:DEPOSIT', 'SAVINGS:WITHDRAW',
-        'SAVINGS:APPROVE',
-        'FIXED_DEPOSITS:READ', 'FIXED_DEPOSITS:CREATE', 'FIXED_DEPOSITS:MANAGE', 'FIXED_DEPOSITS:LIQUIDATE',
-        'ACCOUNTS:COA_MANAGE', 'ACCOUNTS:JOURNAL_CREATE', 'ACCOUNTS:REPORTS_VIEW',
-        'ACCOUNTS:JOURNAL_POST', 'ACCOUNTS:JOURNAL_REVERSE', 'ACCOUNTS:PERIOD_CLOSE',
-        'DOCUMENTS:READ', 'DOCUMENTS:CREATE', 'DOCUMENTS:APPROVE',
-        'HR:STAFF_READ', 'HR:ATTENDANCE_MANAGE', 'HR:LEAVE_MANAGE', 'HR:PERFORMANCE_MANAGE',
-        'HR:PAYROLL_READ', 'HR:PAYROLL_APPROVE', 'HR:ANALYTICS_VIEW',
-        'HR:RECRUITMENT_MANAGE', 'HR:ANNOUNCE',
-        'CMS:READ',
-        'VERIFICATION:READ',
-        'AUDIT:READ',
-      ],
+      // The Director holds the same authority as the Super Administrator:
+      // every permission except LOANS:CREATE, which stays exclusive to Loan
+      // Officers. Separation of duties is still enforced per record — the
+      // approver of a payroll run may not be the person who processed it.
+      perms: permissionCodes.filter((p) => p !== 'LOANS:CREATE'),
     },
     {
       name: 'HR Administrator',

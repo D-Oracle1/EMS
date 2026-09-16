@@ -163,7 +163,7 @@ export function WorkspaceTodo() {
       href={task.href}
       className="flex items-center gap-2.5 rounded-2xl px-1.5 py-2 transition-colors hover:bg-foreground/5"
     >
-      <Circle className="h-4 w-4 shrink-0 text-muted-foreground/50" />
+      <Circle className="h-4 w-4 shrink-0 text-muted-foreground" />
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-medium">{task.label}</span>
         <span className="block truncate text-xs text-muted-foreground">{task.detail}</span>
@@ -361,7 +361,7 @@ export function WorkspaceWidgets() {
           )}
           {data?.activity.slice(0, 6).map((entry) => (
             <div key={entry.id} className="flex items-start gap-2.5 rounded-2xl px-1.5 py-1.5">
-              <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
+              <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm">{entry.description}</span>
                 <span className="block text-[11px] text-muted-foreground">

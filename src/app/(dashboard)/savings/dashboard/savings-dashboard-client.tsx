@@ -130,7 +130,7 @@ function StatTile({
       </div>
       <p className="mt-3 text-xl font-bold tracking-tight leading-tight">{value}</p>
       <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
-      {sub && <p className="text-[11px] text-muted-foreground/80 mt-0.5">{sub}</p>}
+      {sub && <p className="text-[11px] text-muted-foreground mt-0.5">{sub}</p>}
     </div>
   );
 }

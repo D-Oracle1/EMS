@@ -578,7 +578,7 @@ export function SettingsClient({ user }: SettingsClientProps) {
                               className={`rounded px-1 py-0.5 text-[10px] ${
                                 shift.workDays.includes(index)
                                   ? 'bg-primary/15 text-primary'
-                                  : 'text-muted-foreground/40'
+                                  : 'text-muted-foreground'
                               }`}
                             >
                               {day[0]}

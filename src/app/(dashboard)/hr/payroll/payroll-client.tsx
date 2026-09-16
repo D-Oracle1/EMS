@@ -366,6 +366,9 @@ export function PayrollClient({ user }: PayrollClientProps) {
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-1">
+                            {/* Each action is labelled. As bare icons these were
+                                four near-identical glyphs, and the approve step
+                                was invisible to the person looking for it. */}
                             {canManage &&
                               ['DRAFT', 'PROCESSING', 'PENDING_APPROVAL'].includes(period.status) && (
                                 <Button
@@ -378,10 +381,11 @@ export function PayrollClient({ user }: PayrollClientProps) {
                                   title="Compute payslips"
                                 >
                                   {busy ? (
-                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                                   ) : (
-                                    <Play className="h-3.5 w-3.5" />
+                                    <Play className="mr-1.5 h-3.5 w-3.5" />
                                   )}
+                                  Process
                                 </Button>
                               )}
                             {canApprove && period.status === 'PENDING_APPROVAL' && (
@@ -393,7 +397,8 @@ export function PayrollClient({ user }: PayrollClientProps) {
                                 }
                                 title="Approve and post to the ledger"
                               >
-                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+                                Approve
                               </Button>
                             )}
                             {canApprove && period.status === 'APPROVED' && (
@@ -404,7 +409,8 @@ export function PayrollClient({ user }: PayrollClientProps) {
                                 onClick={() => runAction(period.id, () => markPayrollPaid(period.id))}
                                 title="Mark as paid"
                               >
-                                <Banknote className="h-3.5 w-3.5" />
+                                <Banknote className="mr-1.5 h-3.5 w-3.5" />
+                                Mark paid
                               </Button>
                             )}
                             {canApprove &&
@@ -416,7 +422,8 @@ export function PayrollClient({ user }: PayrollClientProps) {
                                   onClick={() => setCancelTarget(period)}
                                   title="Cancel this run"
                                 >
-                                  <XCircle className="h-3.5 w-3.5" />
+                                  <XCircle className="mr-1.5 h-3.5 w-3.5" />
+                                  Cancel
                                 </Button>
                               )}
                             <Button size="sm" variant="ghost" asChild>

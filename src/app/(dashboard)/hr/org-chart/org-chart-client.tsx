@@ -128,7 +128,7 @@ function OrgNodeRow({
               <Users className="h-3.5 w-3.5" />
               <span className="tabular-nums">{node.directReports}</span>
               {node.totalReports !== node.directReports && (
-                <span className="tabular-nums text-muted-foreground/60">
+                <span className="tabular-nums text-muted-foreground">
                   ({node.totalReports})
                 </span>
               )}

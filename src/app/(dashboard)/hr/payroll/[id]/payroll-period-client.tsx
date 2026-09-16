@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   FileText,
   Banknote,
+  CheckCircle2,
   Download,
   Loader2,
   AlertTriangle,
@@ -41,6 +42,8 @@ import {
   getPayslips,
   getPayslipDetail,
   getPayrollBankSchedule,
+  approvePayrollPeriod,
+  markPayrollPaid,
 } from '@/actions/payroll.actions';
 import type { SessionUser } from '@/types';
 
@@ -66,8 +69,9 @@ export function PayrollPeriodClient({ periodId, user }: PayrollPeriodClientProps
   const [isPending, startTransition] = useTransition();
 
   const canManage = user.permissions.includes('HR:PAYROLL_MANAGE');
+  const canApprove = user.permissions.includes('HR:PAYROLL_APPROVE');
 
-  useEffect(() => {
+  function load() {
     startTransition(async () => {
       try {
         const [periods, slips] = await Promise.all([getPayrollPeriods(60), getPayslips(periodId)]);
@@ -85,8 +89,30 @@ export function PayrollPeriodClient({ periodId, user }: PayrollPeriodClientProps
         toast.error(e.message || 'Failed to load the payroll period');
       }
     });
+  }
+
+  useEffect(() => {
+    load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [periodId]);
+
+  /**
+   * Approval lives here as well as on the period list. This is the screen an
+   * approver actually opens to check the figures before releasing pay, and the
+   * decision belongs beside the numbers it rests on — on the list it was a bare
+   * icon in a row of identical icons, which read as "there is no approve button".
+   */
+  function runAction(action: () => Promise<{ success: boolean; message?: string; error?: string }>) {
+    startTransition(async () => {
+      const result = await action();
+      if (result.success) {
+        toast.success(result.message ?? 'Done');
+        load();
+      } else {
+        toast.error(result.error ?? 'That did not work');
+      }
+    });
+  }
 
   function openPayslip(payslipId: string) {
     startTransition(async () => {
@@ -167,9 +193,38 @@ export function PayrollPeriodClient({ periodId, user }: PayrollPeriodClientProps
           )}
         </div>
         {period && (
-          <Badge variant={STATUS_VARIANT[period.status] ?? 'default'}>
-            {period.status.replace('_', ' ')}
-          </Badge>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant={STATUS_VARIANT[period.status] ?? 'default'}>
+              {period.status.replace('_', ' ')}
+            </Badge>
+
+            {canApprove && period.status === 'PENDING_APPROVAL' && (
+              <Button
+                size="sm"
+                disabled={isPending}
+                onClick={() => runAction(() => approvePayrollPeriod(periodId, true))}
+              >
+                {isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                )}
+                Approve payroll
+              </Button>
+            )}
+
+            {canApprove && period.status === 'APPROVED' && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={isPending}
+                onClick={() => runAction(() => markPayrollPaid(periodId))}
+              >
+                <Banknote className="mr-2 h-4 w-4" />
+                Mark as paid
+              </Button>
+            )}
+          </div>
         )}
       </div>
 

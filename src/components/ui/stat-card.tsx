@@ -129,14 +129,17 @@ export function StatCard({
 
       <p className={`text-sm text-muted-foreground ${Icon ? 'mt-4' : 'mt-1'}`}>{title}</p>
 
-      <p className="mt-0.5 flex items-baseline gap-1.5 text-[1.75rem] font-bold leading-tight tracking-tight">
-        {value}
+      {/* Money is written as "NGN 1,919,783.47", which is materially wider than
+          a ₦ figure, so the value steps up with the viewport instead of being
+          fixed at a size that overflowed the card. */}
+      <p className="mt-0.5 flex min-w-0 flex-wrap items-baseline gap-x-1.5 text-[1.3rem] font-bold leading-tight tracking-tight sm:text-[1.45rem] lg:text-[1.6rem]">
+        <span className="min-w-0 break-words">{value}</span>
         {secondaryValue !== undefined && (
-          <span className="text-base font-semibold text-muted-foreground">- {secondaryValue}</span>
+          <span className="text-sm font-semibold text-muted-foreground">- {secondaryValue}</span>
         )}
       </p>
 
-      {description && <p className="mt-1 text-xs text-muted-foreground/80">{description}</p>}
+      {description && <p className="mt-1 text-xs text-muted-foreground">{description}</p>}
     </div>
   );
 

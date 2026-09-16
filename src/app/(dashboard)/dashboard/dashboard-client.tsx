@@ -930,9 +930,10 @@ function RiskKpiCard({
   return (
     <Card className={`border ${colorClass}`}>
       <CardContent className="p-4">
-        <p className="text-xs font-medium uppercase tracking-wider mb-1 opacity-70">{label}</p>
-        <p className="text-2xl font-bold">{value}</p>
-        {description && <p className="text-xs mt-1 opacity-60">{description}</p>}
+        {/* Full opacity: at 60-70% these sat at 2.4-3.0:1 on their own tint. */}
+        <p className="text-xs font-medium uppercase tracking-wider mb-1">{label}</p>
+        <p className="text-xl font-bold sm:text-2xl">{value}</p>
+        {description && <p className="text-xs mt-1">{description}</p>}
       </CardContent>
     </Card>
   );
@@ -953,9 +954,11 @@ function HeroFigure({
 }) {
   const body = (
     <>
-      <p className="text-xs text-blue-100/70">{label}</p>
+      {/* The gradient runs to brand blue, where blue-100/70 and /60 fell to
+          3.5:1 and 3.0:1. At full strength they clear AA at both ends. */}
+      <p className="text-xs text-blue-100">{label}</p>
       <p className="mt-0.5 text-xl font-bold tracking-tight sm:text-2xl">{value}</p>
-      <p className="mt-0.5 text-[11px] text-blue-100/60">{sub}</p>
+      <p className="mt-0.5 text-[11px] text-blue-100">{sub}</p>
     </>
   );
 

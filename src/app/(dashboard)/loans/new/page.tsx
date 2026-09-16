@@ -1572,7 +1572,7 @@ export default function NewLoanPage() {
             {!preview && (
               <Card>
                 <CardContent className="py-12 text-center">
-                  <Calculator className="h-10 w-10 mx-auto text-muted-foreground/30 mb-3" />
+                  <Calculator className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
                   <p className="text-sm text-muted-foreground">
                     Select a product and enter loan details to see the repayment schedule
                     preview.
