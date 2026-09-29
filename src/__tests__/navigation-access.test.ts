@@ -286,6 +286,10 @@ describe('IT administrator', () => {
     expect(hrefs).not.toContain('/hr/payroll');
   });
 
+  it('cannot open the cross-branch view, which exposes customer and money data', () => {
+    expect(hrefs).not.toContain('/branches');
+  });
+
   it('cannot administer roles, only system configuration', () => {
     // IT keeps the lights on; it does not grant itself or anyone else access.
     expect(hrefs).not.toContain('/settings/roles');
