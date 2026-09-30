@@ -378,6 +378,25 @@ describe('My Branch', () => {
   });
 });
 
+// ── Branches console ────────────────────────────────────────────────────────
+
+describe('Branches', () => {
+  const sees = (v: { permissions: string[]; roleLevel?: number }) =>
+    resolveNav(v).items.some((i) => i.href === '/branches');
+
+  it('is open to the General Manager (85), Director and the superuser', () => {
+    expect(sees({ permissions: ['LOANS:READ'], roleLevel: 85 })).toBe(true);
+    expect(sees({ permissions: [], roleLevel: 90 })).toBe(true);
+    expect(sees({ permissions: ['ADMIN:SYSTEM'], roleLevel: 0 })).toBe(true);
+  });
+
+  it('is closed to an HR officer without admin, a branch manager and IT', () => {
+    expect(sees({ permissions: [...ROLES.HR_OFFICER], roleLevel: 80 })).toBe(false);
+    expect(sees({ permissions: ['LOANS:APPROVE_L1', 'SAVINGS:APPROVE'], roleLevel: 70 })).toBe(false);
+    expect(sees({ permissions: [...ROLES.IT_ADMIN], roleLevel: 55 })).toBe(false);
+  });
+});
+
 // ── Marketing ───────────────────────────────────────────────────────────────
 
 describe('Marketing', () => {

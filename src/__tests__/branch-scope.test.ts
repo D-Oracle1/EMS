@@ -22,6 +22,7 @@ vi.mock('@/lib/prisma', () => ({
 
 import {
   seesAllBranches, branchScopeFor, staffScopeFor, inScope, ALL_BRANCHES_ROLE_LEVEL, NO_BRANCH,
+  canOpenBranchesConsole,
 } from '@/lib/branch-scope';
 
 const viewer = (id: string, overrides: Partial<{ permissions: string[]; roleLevel: number }> = {}) => ({
@@ -90,6 +91,19 @@ describe('staffScopeFor', () => {
 
   it('confines a manager reading HR to their own branch', async () => {
     expect(await staffScopeFor(viewer('manager', { permissions: ['HR:STAFF_READ'] }))).toBe('branch-a');
+  });
+});
+
+describe('canOpenBranchesConsole', () => {
+  it('opens to level 85 and up (General Manager, Director) and the superuser', () => {
+    expect(canOpenBranchesConsole({ permissions: [], roleLevel: 85 })).toBe(true);
+    expect(canOpenBranchesConsole({ permissions: [], roleLevel: 90 })).toBe(true);
+    expect(canOpenBranchesConsole({ permissions: ['ADMIN:SYSTEM'], roleLevel: 10 })).toBe(true);
+  });
+
+  it('stays closed at HR level (80) without admin, and to IT', () => {
+    expect(canOpenBranchesConsole({ permissions: [], roleLevel: 80 })).toBe(false);
+    expect(canOpenBranchesConsole({ permissions: ['SYSTEM:CONFIG_MANAGE'], roleLevel: 55 })).toBe(false);
   });
 });
 

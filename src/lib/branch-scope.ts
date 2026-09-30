@@ -42,6 +42,23 @@ export function overseesOwnBranch(user: Pick<SessionUser, 'permissions' | 'roleL
   );
 }
 
+/**
+ * Role level at and above which a role may open the Branches console, the
+ * cross-branch window onto every branch's staff, customers and money:
+ * General Manager (85), Director (90), Super Administrator (100).
+ */
+export const BRANCHES_CONSOLE_ROLE_LEVEL = 85;
+
+/**
+ * Whether a viewer may open the Branches console (/branches) and any branch
+ * in it. Stricter than seesAllBranches: HR at level 80 sees every branch's
+ * people, but the console of every branch's money is for level 85 and up, and
+ * the superuser. IT (SYSTEM:CONFIG_MANAGE, level 55) never qualifies.
+ */
+export function canOpenBranchesConsole(user: Pick<SessionUser, 'permissions' | 'roleLevel'>): boolean {
+  return user.permissions.includes('ADMIN:SYSTEM') || (user.roleLevel ?? 0) >= BRANCHES_CONSOLE_ROLE_LEVEL;
+}
+
 /** Whether a viewer oversees every branch regardless of their own posting. */
 export function seesAllBranches(user: Pick<SessionUser, 'permissions' | 'roleLevel'>): boolean {
   return user.permissions.includes('ADMIN:SYSTEM') || (user.roleLevel ?? 0) >= ALL_BRANCHES_ROLE_LEVEL;

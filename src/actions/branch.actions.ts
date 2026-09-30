@@ -9,24 +9,30 @@
  * money that moved through them, its journal entries and every audited action
  * its staff took. Read-only.
  *
- * The index of every branch is the superuser's alone (ADMIN:SYSTEM) — IT holds
+ * The index of every branch is for the superuser and roles at level 85 and up
+ * (General Manager, Director) — see canOpenBranchesConsole. IT holds
  * SYSTEM:CONFIG_MANAGE but touches no customer or money data. A single branch
  * can also be opened by the manager posted to it (My Branch), and only that one.
  */
 
 import { prisma } from '@/lib/prisma';
-import { getSession, requirePermission } from '@/lib/auth-utils';
-import { overseesOwnBranch } from '@/lib/branch-scope';
+import { getSession } from '@/lib/auth-utils';
+import { overseesOwnBranch, canOpenBranchesConsole } from '@/lib/branch-scope';
 
-const PERMISSION = 'ADMIN:SYSTEM';
+/** Allow only those who may open the Branches console. */
+async function requireBranchesConsole() {
+  const { user } = await getSession();
+  if (!canOpenBranchesConsole(user)) throw new Error('Permission denied');
+  return user;
+}
 
 /**
- * Allow the superuser into any branch, and a branch manager into their own.
+ * Allow the Branches console into any branch, and a branch manager into their own.
  * Throws for anyone else, and for a manager reaching for another branch.
  */
 async function authorizeBranch(branchId: string) {
   const { user } = await getSession();
-  if (user.permissions.includes(PERMISSION)) return user;
+  if (canOpenBranchesConsole(user)) return user;
   if (overseesOwnBranch(user)) {
     const staff = await prisma.staff.findUnique({ where: { id: user.id }, select: { branchId: true } });
     if (staff?.branchId && staff.branchId === branchId) return user;
@@ -109,7 +115,7 @@ async function branchFigures(branchId: string) {
 
 /** Every branch with its headline figures — the Branches index. */
 export async function getBranchOverview() {
-  await requirePermission(PERMISSION);
+  await requireBranchesConsole();
 
   const branches = await prisma.branch.findMany({ orderBy: [{ isActive: 'desc' }, { code: 'asc' }] });
   const figures = await Promise.all(branches.map((b) => branchFigures(b.id)));

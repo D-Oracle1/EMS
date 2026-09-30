@@ -106,10 +106,11 @@ export const navItems: NavItem[] = [
   { label: 'Blog Posts',    href: '/cms/posts',   icon: Newspaper,      color: 'fuchsia', permission: 'CMS:READ' },
 
   // ── Security & administration ────────────────────────────────────────────
-  // Branches is the superuser's cross-branch window onto customers, money and
-  // staff, so it is gated on ADMIN:SYSTEM alone — IT holds SYSTEM:CONFIG_MANAGE
-  // and must not reach it.
-  { label: 'Branches',            href: '/branches',               icon: Building2,          color: 'indigo', permission: 'ADMIN:SYSTEM', section: 'Security & Admin' },
+  // Branches is the cross-branch window onto every branch's customers, money
+  // and staff: the superuser and level 85+ (General Manager, Director). IT
+  // holds SYSTEM:CONFIG_MANAGE and must not reach it. The server applies the
+  // same rule (canOpenBranchesConsole in lib/branch-scope).
+  { label: 'Branches',            href: '/branches',               icon: Building2,          color: 'indigo', section: 'Security & Admin', anyOf: { minRoleLevel: 85, permissions: ['ADMIN:SYSTEM'] } },
   { label: 'Roles & Permissions', href: '/settings/roles',         icon: ShieldCheck,        color: 'rose',  permissions: ['SYSTEM:USER_MANAGE', 'ADMIN:SYSTEM'] },
   { label: 'Active Sessions',     href: '/settings/sessions',      icon: MonitorSmartphone,  color: 'rose',  permission: 'SYSTEM:USER_MANAGE' },
   { label: 'Audit Logs',          href: '/audit-logs',             icon: Shield,             color: 'slate', permission: 'AUDIT:READ' },
