@@ -5,10 +5,11 @@
  *  - Marketers are the staff in the MARKETING department. Access comes from
  *    the department rather than a permission, so moving someone into or out
  *    of Marketing is all it takes.
- *  - Sales are confirmed by the superuser (ADMIN:SYSTEM) or any role at level
- *    85 and above: Director (90), Super Administrator (100) and a General
- *    Manager (85). HR Administrator (80) sees every branch but does not sign
- *    off sales.
+ *  - Sales are confirmed by an admin or the accountant, whichever gets there
+ *    first: the superuser (ADMIN:SYSTEM), any role at level 85 and above
+ *    (General Manager 85, Director 90, Super Administrator 100), or the
+ *    head-office accountant (ACCOUNTS:JOURNAL_POST). All of them are notified
+ *    of every reported sale.
  *  - Nobody confirms their own sale.
  *
  * Pure rules live here so they can be tested without a database.
@@ -19,6 +20,9 @@ export const MARKETING_DEPARTMENT_CODE = 'MARKETING';
 
 /** Role level at and above which a role confirms marketing sales. */
 export const SALE_CONFIRM_ROLE_LEVEL = 85;
+
+/** The accountant's permission; its holders confirm sales alongside admins. */
+export const ACCOUNTANT_PERMISSION = 'ACCOUNTS:JOURNAL_POST';
 
 export type SaleType = 'SAVINGS' | 'LOAN' | 'FIXED_DEPOSIT' | 'FIELD_COLLECTION';
 
@@ -42,7 +46,11 @@ export function isMarketer(user: Pick<SessionUser, 'departmentCode'>): boolean {
 }
 
 export function canConfirmSales(user: Pick<SessionUser, 'permissions' | 'roleLevel'>): boolean {
-  return user.permissions.includes('ADMIN:SYSTEM') || (user.roleLevel ?? 0) >= SALE_CONFIRM_ROLE_LEVEL;
+  return (
+    user.permissions.includes('ADMIN:SYSTEM') ||
+    user.permissions.includes(ACCOUNTANT_PERMISSION) ||
+    (user.roleLevel ?? 0) >= SALE_CONFIRM_ROLE_LEVEL
+  );
 }
 
 /** Commission on `base` at `ratePercent`, rounded to kobo. Never negative. */

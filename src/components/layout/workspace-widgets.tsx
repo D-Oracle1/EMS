@@ -24,7 +24,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { resolveNav } from '@/lib/navigation';
-import { isHrFocused } from '@/lib/landing';
+import { hidesGenericDashboard } from '@/lib/landing';
 import { getMyWorkspace, type WorkspaceData, type WorkspaceTask } from '@/actions/workspace.actions';
 import {
   getMyTasks, completeStaffTask, type StaffTaskView,
@@ -303,7 +303,7 @@ export function WorkspaceWidgets() {
 
   if (!user) return null;
 
-  const { items } = resolveNav(user, { hideDashboard: isHrFocused(user) });
+  const { items } = resolveNav(user, { hideDashboard: hidesGenericDashboard(user) });
   // The reference shows a compact grid, not the whole menu.
   const quick = items.filter((i) => i.href !== '/dashboard').slice(0, 8);
 

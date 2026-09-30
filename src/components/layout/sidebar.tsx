@@ -6,7 +6,7 @@ import { useSession } from 'next-auth/react';
 import { Landmark, Pin, PinOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { resolveNav } from '@/lib/navigation';
-import { isHrFocused } from '@/lib/landing';
+import { hidesGenericDashboard } from '@/lib/landing';
 import type { SessionUser } from '@/types';
 
 // All class names written out statically for Tailwind JIT
@@ -60,7 +60,7 @@ export function Sidebar({ pinned = false, onPinnedChange }: SidebarProps) {
   // For HR-only staff the HR overview is their dashboard, so the generic one
   // would just be a thinner copy of the same numbers.
   const { items: filteredNav, headings: headingFor } = resolveNav(user, {
-    hideDashboard: isHrFocused(user),
+    hideDashboard: hidesGenericDashboard(user),
   });
 
   // Labels and headings fade in together with the width.

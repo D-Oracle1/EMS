@@ -19,7 +19,7 @@ import { usePathname } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import { X, LogOut } from 'lucide-react';
 import { resolveNav } from '@/lib/navigation';
-import { isHrFocused } from '@/lib/landing';
+import { hidesGenericDashboard } from '@/lib/landing';
 import type { SessionUser } from '@/types';
 
 export function MobileNavGrid({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -56,7 +56,7 @@ export function MobileNavGrid({ open, onClose }: { open: boolean; onClose: () =>
 
   if (!user || !open) return null;
 
-  const { items, headings } = resolveNav(user, { hideDashboard: isHrFocused(user) });
+  const { items, headings } = resolveNav(user, { hideDashboard: hidesGenericDashboard(user) });
 
   // Group the entries under their section headings, so a long menu still reads
   // as a set of places rather than forty identical squares.

@@ -22,12 +22,11 @@ import { createNotification, createNotificationForUsers } from '@/lib/notificati
 import { generateReference } from '@/lib/utils';
 import { getConfigNumber } from '@/lib/system-config';
 import {
-  MARKETING_DEPARTMENT_CODE, SALE_CONFIRM_ROLE_LEVEL, COMMISSION_CONFIG_KEY, SALE_TYPE_LABELS,
+  MARKETING_DEPARTMENT_CODE, SALE_CONFIRM_ROLE_LEVEL, ACCOUNTANT_PERMISSION, COMMISSION_CONFIG_KEY, SALE_TYPE_LABELS,
   canConfirmSales, commissionFor, validateSaleLinks, monthKey, monthRange,
   type SaleType,
 } from '@/lib/marketing-access';
-import { processDeposit } from '@/actions/savings.actions';
-import { processRepayment } from '@/actions/loan.actions';
+import { postSavingsDeposit, postLoanRepayment } from '@/lib/money-posting';
 import type { ActionResult, SessionUser } from '@/types';
 
 const PAYMENT_MODES = ['CASH', 'BANK_TRANSFER', 'CHEQUE', 'MOBILE_MONEY', 'POS', 'DIRECT_DEBIT'] as const;
@@ -35,8 +34,8 @@ type PaymentMode = (typeof PAYMENT_MODES)[number];
 
 /** Loans that have gone out to the customer, and so count as a sale. */
 const DISBURSED_LOAN_STATUSES = ['DISBURSED', 'ACTIVE', 'OVERDUE', 'CLOSED'];
-/** Loans that can still take a repayment. */
-const REPAYABLE_LOAN_STATUSES = ['DISBURSED', 'ACTIVE', 'OVERDUE'];
+/** Loans that can still take a repayment (as postLoanRepayment requires). */
+const REPAYABLE_LOAN_STATUSES = ['ACTIVE', 'OVERDUE'];
 
 const num = (v: unknown) => (v == null ? 0 : Number(v));
 const fullName = (s?: { firstName: string; lastName: string } | null) => (s ? `${s.firstName} ${s.lastName}` : null);
@@ -79,7 +78,7 @@ async function requireMarketingAccess() {
   return v;
 }
 
-/** Everyone who confirms sales, for notifications. */
+/** Everyone who confirms sales (admins and the accountant), for notifications. */
 async function confirmerIds(): Promise<string[]> {
   const rows = await prisma.staff.findMany({
     where: {
@@ -87,7 +86,7 @@ async function confirmerIds(): Promise<string[]> {
       isDeleted: false,
       OR: [
         { role: { level: { gte: SALE_CONFIRM_ROLE_LEVEL } } },
-        { role: { permissions: { some: { permission: { code: 'ADMIN:SYSTEM' } } } } },
+        { role: { permissions: { some: { permission: { code: { in: ['ADMIN:SYSTEM', ACCOUNTANT_PERMISSION] } } } } } },
       ],
     },
     select: { id: true },
@@ -411,16 +410,19 @@ export async function confirmSale(id: string, note?: string): Promise<ActionResu
     let postedReference: string | null = null;
 
     if (sale.type === 'FIELD_COLLECTION') {
+      // Posted in the confirmer's name through the same core the teller
+      // screens use. The confirmer is authorised by canConfirmSales, not by
+      // teller permissions: an accountant confirms without holding a till.
       const narration = `Field collection ${sale.reference}`;
       const posted = sale.savingsAccountId
-        ? await processDeposit({
+        ? await postSavingsDeposit(user, {
             accountId: sale.savingsAccountId,
             amount,
             paymentMode: sale.paymentMode,
             paymentReference: sale.paymentReference ?? sale.reference,
             narration,
           })
-        : await processRepayment({
+        : await postLoanRepayment(user, {
             loanId: sale.loanId!,
             amount,
             paymentMode: sale.paymentMode,
@@ -691,5 +693,93 @@ export async function getMarketingSummary(month?: string) {
     commissionUnpaid: num(unpaid._sum.commissionAmount),
     targetAmount: target ? num(target.targetAmount) : null,
     targetCount: target?.targetCount ?? null,
+  };
+}
+
+// ── Reporting ───────────────────────────────────────────────────────────────
+
+/** Every YYYY-MM from `from` to `to` inclusive. */
+function monthsBetween(from: string, to: string): string[] {
+  const out: string[] = [];
+  let { from: cursor } = monthRange(from);
+  const { from: last } = monthRange(to);
+  while (cursor <= last && out.length < 36) {
+    out.push(monthKey(cursor));
+    cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+  }
+  return out;
+}
+
+/**
+ * Confirmed sales between two months (inclusive), by month, type, branch and
+ * marketer. A confirmer sees the whole company; a marketer sees their own.
+ * Rows carry every confirmed sale in the range, for export.
+ */
+export async function getSalesReport(fromMonth: string, toMonth: string) {
+  const v = await requireMarketingAccess();
+  if (fromMonth > toMonth) [fromMonth, toMonth] = [toMonth, fromMonth];
+  const months = monthsBetween(fromMonth, toMonth);
+  const { from } = monthRange(months[0]);
+  const { to } = monthRange(months[months.length - 1]);
+  const mine = v.confirmer ? {} : { marketerId: v.user.id };
+
+  const [sales, pending, rejected] = await Promise.all([
+    prisma.marketingSale.findMany({
+      where: { ...mine, status: 'CONFIRMED', collectedAt: { gte: from, lt: to } },
+      include: saleInclude,
+      orderBy: { collectedAt: 'asc' },
+      take: 5000,
+    }),
+    prisma.marketingSale.count({ where: { ...mine, status: { in: ['PENDING', 'CONFIRMING'] }, collectedAt: { gte: from, lt: to } } }),
+    prisma.marketingSale.count({ where: { ...mine, status: 'REJECTED', collectedAt: { gte: from, lt: to } } }),
+  ]);
+  const rows = sales.map(shapeSale);
+
+  type Bucket = { amount: number; count: number; commission: number };
+  const add = (map: Map<string, Bucket>, key: string, r: MarketingSaleRow) => {
+    const b = map.get(key) ?? { amount: 0, count: 0, commission: 0 };
+    b.amount += r.amount;
+    b.count += 1;
+    b.commission += r.commissionAmount ?? 0;
+    map.set(key, b);
+  };
+
+  const byMonth = new Map<string, Bucket>(months.map((m) => [m, { amount: 0, count: 0, commission: 0 }]));
+  const byType = new Map<string, Bucket>();
+  const byBranch = new Map<string, Bucket>();
+  const byMarketer = new Map<string, Bucket & { name: string }>();
+  for (const r of rows) {
+    add(byMonth, monthKey(new Date(r.collectedAt)), r);
+    add(byType, r.type, r);
+    add(byBranch, r.branch ?? 'Head office', r);
+    const m = byMarketer.get(r.marketerId) ?? { name: r.marketer ?? '', amount: 0, count: 0, commission: 0 };
+    m.amount += r.amount;
+    m.count += 1;
+    m.commission += r.commissionAmount ?? 0;
+    byMarketer.set(r.marketerId, m);
+  }
+
+  const sorted = <T extends { amount: number }>(xs: T[]) => xs.sort((a, b) => b.amount - a.amount);
+  const round = (n: number) => Math.round(n * 100) / 100;
+  const totals = rows.reduce(
+    (t, r) => ({ amount: t.amount + r.amount, count: t.count + 1, commission: t.commission + (r.commissionAmount ?? 0) }),
+    { amount: 0, count: 0, commission: 0 }
+  );
+
+  return {
+    scope: v.confirmer ? ('company' as const) : ('mine' as const),
+    fromMonth: months[0],
+    toMonth: months[months.length - 1],
+    totals: { amount: round(totals.amount), count: totals.count, commission: round(totals.commission), pending, rejected },
+    byMonth: months.map((m) => {
+      const b = byMonth.get(m)!;
+      const d = monthRange(m).from;
+      return { month: m, label: d.toLocaleDateString('en-NG', { month: 'short', year: '2-digit' }), amount: round(b.amount), count: b.count, commission: round(b.commission) };
+    }),
+    byType: sorted(Array.from(byType, ([type, b]) => ({ type: type as SaleType, label: SALE_TYPE_LABELS[type as SaleType], ...b }))),
+    byBranch: sorted(Array.from(byBranch, ([branch, b]) => ({ branch, ...b }))),
+    byMarketer: sorted(Array.from(byMarketer.values())),
+    rows,
+    truncated: sales.length === 5000,
   };
 }

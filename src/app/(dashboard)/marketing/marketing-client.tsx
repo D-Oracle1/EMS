@@ -34,6 +34,7 @@ import {
   type MarketingSaleRow, type SaleFilters,
 } from '@/actions/marketing.actions';
 import { ReportSaleDialog } from './report-sale-dialog';
+import { SalesReportPanel } from './sales-report-panel';
 
 type Access = { isMarketer: boolean; canConfirm: boolean; userId: string };
 type Summary = Awaited<ReturnType<typeof getMarketingSummary>>;
@@ -109,6 +110,7 @@ export function MarketingClient({ access }: { access: Access }) {
             {isMarketer && <TabsTrigger value="mine">My sales</TabsTrigger>}
             {canConfirm && <TabsTrigger value="all">All sales</TabsTrigger>}
             <TabsTrigger value="leaderboard">Leaderboard</TabsTrigger>
+            <TabsTrigger value="report">{canConfirm ? 'Company report' : 'My report'}</TabsTrigger>
             {canConfirm && <TabsTrigger value="targets">Targets</TabsTrigger>}
             {canConfirm && <TabsTrigger value="commission">Commission</TabsTrigger>}
           </TabsList>
@@ -131,6 +133,9 @@ export function MarketingClient({ access }: { access: Access }) {
         )}
         <TabsContent value="leaderboard">
           <LeaderboardPanel key={`l-${refreshKey}`} access={access} />
+        </TabsContent>
+        <TabsContent value="report">
+          <SalesReportPanel key={`r-${refreshKey}`} company={canConfirm} />
         </TabsContent>
         {canConfirm && (
           <TabsContent value="targets">

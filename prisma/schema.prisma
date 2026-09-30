@@ -55,6 +55,7 @@ model Branch {
   assets         CompanyAsset[]
   shifts         WorkShift[]
   marketingSales MarketingSale[]
+  expenses       Expense[]
 }
 
 // ============================================================================
@@ -201,6 +202,8 @@ model Staff {
   marketingCommissionsPaid     MarketingSale[]      @relation("SaleCommissionPayer")
   marketingTargets             MarketingTarget[]    @relation("TargetMarketer")
   marketingTargetsSet          MarketingTarget[]    @relation("TargetSetter")
+  expensesRecorded             Expense[]            @relation("ExpenseRecorder")
+  expensesReviewed             Expense[]            @relation("ExpenseReviewer")
   disciplinaryActions          DisciplinaryAction[] @relation("DisciplinedStaff")
   disciplinaryIssued           DisciplinaryAction[] @relation("DisciplinaryIssuer")
   createdLoans                 Loan[]               @relation("LoanCreatedBy")
@@ -1741,6 +1744,8 @@ model ChartOfAccounts {
 
   journalEntryLines JournalEntryLine[]
   ledgerAccounts    LedgerAccount[]
+  expensesCharged   Expense[]          @relation("ExpenseCategory")
+  expensesPaidFrom  Expense[]          @relation("ExpensePaidFrom")
 
   @@index([accountCode])
   @@index([accountType])
@@ -3382,4 +3387,61 @@ model MarketingTarget {
 
   @@unique([marketerId, month])
   @@index([month])
+}
+
+// ============================================================================
+// EXPENSES — RECORDED BY THE ACCOUNTANT, APPROVED BY AN ADMIN
+// ============================================================================
+
+enum ExpenseStatus {
+  PENDING
+  APPROVING // claimed by an approver while the ledger entry is posted
+  APPROVED
+  REJECTED
+}
+
+/// An operating expense. The accountant records it; an admin approves it; only
+/// then is it posted to the ledger (Dr the expense account, Cr the cash or bank
+/// account it was paid from), tagged with its branch.
+model Expense {
+  id        String @id @default(uuid())
+  reference String @unique
+
+  expenseDate DateTime
+  amount      Decimal  @db.Decimal(18, 2)
+  payee       String
+  description String
+
+  /// The expense account charged (e.g. 5210 Rent & Utilities).
+  expenseAccountId String
+  /// The cash or bank account it was paid from (e.g. 1120 Cash at Bank).
+  paymentAccountId String
+  paymentMode      PaymentMode @default(CASH)
+  paymentReference String?
+
+  /// The branch the expense belongs to; null for head office.
+  branchId String?
+
+  status       ExpenseStatus @default(PENDING)
+  recordedById String
+  reviewedById String?
+  reviewedAt   DateTime?
+  reviewNote   String?
+
+  /// The ledger entry posted on approval.
+  journalEntryId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  expenseAccount ChartOfAccounts @relation("ExpenseCategory", fields: [expenseAccountId], references: [id])
+  paymentAccount ChartOfAccounts @relation("ExpensePaidFrom", fields: [paymentAccountId], references: [id])
+  branch         Branch?         @relation(fields: [branchId], references: [id])
+  recordedBy     Staff           @relation("ExpenseRecorder", fields: [recordedById], references: [id])
+  reviewedBy     Staff?          @relation("ExpenseReviewer", fields: [reviewedById], references: [id])
+
+  @@index([status])
+  @@index([expenseDate])
+  @@index([branchId])
+  @@index([expenseAccountId])
 }

@@ -3,6 +3,7 @@
 import Decimal from 'decimal.js';
 import { prisma, withTransaction } from '@/lib/prisma';
 import { branchScopeFor, inScope } from '@/lib/branch-scope';
+import { postSavingsDeposit } from '@/lib/money-posting';
 import { requirePermission, requireAnyPermission } from '@/lib/auth-utils';
 import { auditLog } from '@/lib/audit';
 import { createNotification } from '@/lib/notifications';
@@ -252,72 +253,11 @@ export async function processDeposit(data: {
 
     const account = await prisma.savingsAccount.findUnique({
       where: { id: data.accountId },
-      include: { product: true, customer: true },
+      select: { branchId: true },
     });
     if (!account || !inScope(await branchScopeFor(user), account.branchId)) return { success: false, error: 'Account not found' };
-    if (account.status !== 'ACTIVE') return { success: false, error: 'Account is not active' };
 
-    if (data.amount < account.product.minDeposit.toNumber()) {
-      return { success: false, error: `Minimum deposit is ${account.product.minDeposit}` };
-    }
-
-    const transactionRef = await generateReference('SAVINGS_TXN');
-    const balanceBefore = account.currentBalance.toNumber();
-    const balanceAfter = new Decimal(balanceBefore).plus(data.amount).toNumber();
-
-    await withTransaction(async (tx) => {
-      await tx.savingsTransaction.create({
-        data: {
-          accountId: data.accountId,
-          transactionRef,
-          transactionType: 'DEPOSIT',
-          amount: data.amount,
-          balanceBefore,
-          balanceAfter,
-          paymentMode: data.paymentMode as any,
-          paymentReference: data.paymentReference,
-          narration: data.narration || 'Cash deposit',
-          processedById: user.id,
-        },
-      });
-
-      await tx.savingsAccount.update({
-        where: { id: data.accountId },
-        data: {
-          currentBalance: balanceAfter,
-          availableBalance: balanceAfter,
-          lastTransactionAt: new Date(),
-        },
-      });
-    });
-
-    // Post GL: Dr Cash, Cr Savings Liability
-    const cashAccount = await getAccountByCode(SAVINGS_GL.CASH);
-    const savingsLiability = await getAccountByCode(SAVINGS_GL.SAVINGS_LIABILITY);
-
-    if (cashAccount && savingsLiability) {
-      await createJournalEntry({
-        entryDate: new Date(),
-        description: `Savings deposit: ${account.accountNumber} - ${transactionRef}`,
-        sourceModule: 'SAVINGS',
-        sourceType: 'DEPOSIT',
-        sourceId: data.accountId,
-        savingsAccountId: data.accountId,
-        lines: [
-          { accountId: cashAccount.id, debitAmount: data.amount, description: `Cash deposit - ${account.accountNumber}` },
-          { accountId: savingsLiability.id, creditAmount: data.amount, description: `Savings deposit - ${account.accountNumber}`, customerId: account.customerId },
-        ],
-        createdById: user.id,
-        autoPost: true,
-      });
-    }
-
-    await auditLog({
-      userId: user.id, action: 'CREATE', module: 'SAVINGS', entityType: 'SAVINGS_TRANSACTION', entityId: data.accountId,
-      description: `Deposit ${transactionRef}: ${data.amount} to ${account.accountNumber}`,
-    });
-
-    return { success: true, message: `Deposit of ${data.amount} successful. Ref: ${transactionRef}`, data: { transactionRef } };
+    return await postSavingsDeposit(user, data);
   } catch (error: any) {
     return { success: false, error: error.message };
   }

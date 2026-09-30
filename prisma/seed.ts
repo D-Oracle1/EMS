@@ -19,6 +19,7 @@ async function main() {
     { code: 'DOCUMENT', prefix: 'DOC', padLength: 4 },
     { code: 'RESTRUCTURING', prefix: 'RST', padLength: 4 },
     { code: 'MARKETING_SALE', prefix: 'MKT', padLength: 4 },
+    { code: 'EXPENSE', prefix: 'EXP', padLength: 4 },
     { code: 'WITHDRAWAL_REQ', prefix: 'WDR', padLength: 4 },
   ];
 

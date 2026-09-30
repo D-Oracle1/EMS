@@ -22,7 +22,7 @@ import {
   Briefcase, GraduationCap, Laptop, Megaphone, Network, ArrowRightLeft,
   ClipboardList, Receipt, HeartHandshake, Package, Percent, Layers,
   CalendarDays, XCircle, LayoutTemplate, Newspaper, ShieldCheck,
-  MonitorSmartphone, Building2, SlidersHorizontal, TrendingUp,
+  MonitorSmartphone, Building2, SlidersHorizontal, TrendingUp, Banknote,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -73,14 +73,17 @@ export const navItems: NavItem[] = [
   { label: 'Deposit Rates',  href: '/settings/deposit-rates', icon: Percent, color: 'purple', permission: 'SYSTEM:CONFIG_MANAGE' },
 
   // ── Marketing ────────────────────────────────────────────────────────────
-  // Owned by the Marketing department, who report sales; senior staff (level
-  // 85+, see lib/marketing-access) confirm them. The server applies the same rule.
-  { label: 'Sales',            href: '/marketing', icon: TrendingUp, color: 'fuchsia', section: 'Marketing', anyOf: { departments: ['MARKETING'], minRoleLevel: 85, permissions: ['ADMIN:SYSTEM'] } },
+  // Owned by the Marketing department, who report sales; admins (level 85+ or
+  // ADMIN:SYSTEM) and the accountant confirm them (lib/marketing-access). The
+  // server applies the same rule.
+  { label: 'Sales',            href: '/marketing', icon: TrendingUp, color: 'fuchsia', section: 'Marketing', anyOf: { departments: ['MARKETING'], minRoleLevel: 85, permissions: ['ADMIN:SYSTEM', 'ACCOUNTS:JOURNAL_POST'] } },
 
   // ── Accounting ───────────────────────────────────────────────────────────
   { label: 'Accounting',       href: '/accounting',                     icon: BookOpen,  color: 'sky', permissions: ['ACCOUNTS:COA_MANAGE', 'ACCOUNTS:JOURNAL_CREATE', 'ACCOUNTS:REPORTS_VIEW'], section: 'Accounting' },
   { label: 'Chart of Accounts',href: '/accounting/chart-of-accounts',   icon: Layers,    color: 'sky', permission: 'ACCOUNTS:COA_MANAGE' },
   { label: 'Journal Entries',  href: '/accounting/journal',             icon: FileText,  color: 'sky', permissions: ['ACCOUNTS:JOURNAL_CREATE', 'ACCOUNTS:JOURNAL_POST'] },
+  // Recorded by the accountant, approved by an admin (lib/expense-access).
+  { label: 'Expenses',         href: '/accounting/expenses',            icon: Banknote,  color: 'sky', anyOf: { permissions: ['ACCOUNTS:JOURNAL_CREATE', 'ADMIN:SYSTEM'], minRoleLevel: 85 } },
   { label: 'Periods',          href: '/accounting/periods',             icon: CalendarDays, color: 'sky', permission: 'ACCOUNTS:PERIOD_CLOSE' },
   { label: 'Reports',          href: '/reports',                        icon: BarChart3, color: 'pink', permission: 'ACCOUNTS:REPORTS_VIEW' },
 

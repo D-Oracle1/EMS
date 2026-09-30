@@ -12,7 +12,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { resolveNav, visibleSections, navItems, canSee } from '@/lib/navigation';
-import { resolveLandingPath, isCmsFocused } from '@/lib/landing';
+import { resolveLandingPath, isCmsFocused, isMarketingFocused } from '@/lib/landing';
 
 // ── Seeded role permission sets ─────────────────────────────────────────────
 
@@ -397,6 +397,29 @@ describe('Branches', () => {
   });
 });
 
+// ── Expenses ────────────────────────────────────────────────────────────────
+
+describe('Expenses', () => {
+  const sees = (v: { permissions: string[]; roleLevel?: number }) =>
+    resolveNav(v).items.some((i) => i.href === '/accounting/expenses');
+
+  it('is shown to the accountant, who records them', () => {
+    expect(sees({ permissions: [...ROLES.ACCOUNT_OFFICER], roleLevel: 60 })).toBe(true);
+  });
+
+  it('is shown to the admins who approve them', () => {
+    expect(sees({ permissions: [], roleLevel: 85 })).toBe(true);
+    expect(sees({ permissions: ['ADMIN:SYSTEM'], roleLevel: 0 })).toBe(true);
+  });
+
+  it('is hidden from savings, loans, HR-only and IT staff', () => {
+    expect(sees({ permissions: [...ROLES.SAVINGS_OFFICER], roleLevel: 40 })).toBe(false);
+    expect(sees({ permissions: [...ROLES.LOAN_OFFICER], roleLevel: 50 })).toBe(false);
+    expect(sees({ permissions: [...ROLES.HR_OFFICER], roleLevel: 80 })).toBe(false);
+    expect(sees({ permissions: [...ROLES.IT_ADMIN], roleLevel: 55 })).toBe(false);
+  });
+});
+
 // ── Marketing ───────────────────────────────────────────────────────────────
 
 describe('Marketing', () => {
@@ -410,6 +433,10 @@ describe('Marketing', () => {
   it('is shown to the staff who confirm sales: level 85+ and the superuser', () => {
     expect(sees({ permissions: [], roleLevel: 85, departmentCode: 'MANAGEMENT' })).toBe(true);
     expect(sees({ permissions: ['ADMIN:SYSTEM'], roleLevel: 10 })).toBe(true);
+  });
+
+  it('is shown to the accountant, who confirms sales', () => {
+    expect(sees({ permissions: [...ROLES.ACCOUNT_OFFICER], roleLevel: 60, departmentCode: 'ACCOUNTS' })).toBe(true);
   });
 
   it('is hidden from other departments below level 85, including HR', () => {
@@ -455,6 +482,16 @@ describe('landing page', () => {
 
   it('sends the HR administrator, who is also admin, to the full dashboard', () => {
     expect(resolveLandingPath(viewer('HR_ADMIN'))).toBe('/dashboard');
+  });
+
+  it('sends a marketer to their Sales page', () => {
+    const marketer = { permissions: [] as string[], departmentCode: 'MARKETING' };
+    expect(isMarketingFocused(marketer)).toBe(true);
+    expect(resolveLandingPath(marketer)).toBe('/marketing');
+  });
+
+  it('does not treat someone in Marketing with operational access as marketing-only', () => {
+    expect(isMarketingFocused({ permissions: ['SAVINGS:CREATE'], departmentCode: 'MARKETING' })).toBe(false);
   });
 
   it('sends an IT-only user to the site content editor', () => {

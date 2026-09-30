@@ -24,6 +24,7 @@ const OPERATIONAL_MODULES = [
 export interface LandingUser {
   permissions?: string[];
   userType?: string;
+  departmentCode?: string;
 }
 
 /**
@@ -62,9 +63,28 @@ export function isCmsFocused(user: LandingUser | null | undefined): boolean {
   return !hasOperational && !hasHr;
 }
 
+/**
+ * True for a marketer whose work is Sales alone: in the Marketing department
+ * and holding no operational or HR permissions. Their Sales page is their
+ * dashboard; the generic one would show them nothing.
+ */
+export function isMarketingFocused(user: LandingUser | null | undefined): boolean {
+  if (user?.departmentCode !== 'MARKETING') return false;
+  const permissions = user.permissions ?? [];
+  return !permissions.some(
+    (p) => p.startsWith('HR:') || OPERATIONAL_MODULES.some((m) => p.startsWith(`${m}:`))
+  );
+}
+
+/** Whether the generic dashboard would only duplicate (or be empty for) this user. */
+export function hidesGenericDashboard(user: LandingUser | null | undefined): boolean {
+  return isHrFocused(user) || isMarketingFocused(user);
+}
+
 /** The path a user should be sent to on sign-in, or when hitting the app root. */
 export function resolveLandingPath(user: LandingUser | null | undefined): string {
   if (user?.userType === 'customer') return '/portal';
+  if (isMarketingFocused(user)) return '/marketing';
   if (isHrFocused(user)) return '/hr';
   if (isCmsFocused(user)) return '/cms/content';
   return '/dashboard';

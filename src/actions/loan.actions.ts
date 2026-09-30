@@ -4,6 +4,7 @@ import { LoanStatus, ScheduleStatus } from '@prisma/client';
 import Decimal from 'decimal.js';
 import { prisma, withTransaction } from '@/lib/prisma';
 import { branchScopeFor, inScope } from '@/lib/branch-scope';
+import { postLoanRepayment } from '@/lib/money-posting';
 import { requirePermission, requireAnyPermission, getSession } from '@/lib/auth-utils';
 import { auditLog } from '@/lib/audit';
 import {
@@ -1067,176 +1068,10 @@ export async function processRepayment(data: {
   try {
     const user = await requireAnyPermission(['LOANS:COLLECT', 'SAVINGS:DEPOSIT']);
 
-    const loan = await prisma.loan.findUnique({
-      where: { id: data.loanId },
-      include: {
-        customer: true,
-        schedule: { where: { status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] } }, orderBy: { installmentNumber: 'asc' } },
-      },
-    });
+    const loan = await prisma.loan.findUnique({ where: { id: data.loanId }, select: { branchId: true } });
     if (!loan || !inScope(await branchScopeFor(user), loan.branchId)) return { success: false, error: 'Loan not found' };
-    if (loan.status !== 'ACTIVE' && loan.status !== 'OVERDUE') {
-      return { success: false, error: `Cannot process repayment for loan with status ${loan.status}` };
-    }
 
-    let remainingAmount = new Decimal(data.amount);
-    let totalPrincipal = new Decimal(0);
-    let totalInterest = new Decimal(0);
-    let scheduleId: string | null = null;
-
-    const receiptNumber = await generateReference('RECEIPT');
-
-    await withTransaction(async (tx) => {
-      // FIFO: Allocate to oldest unpaid schedule first, interest before principal
-      for (const schedule of loan.schedule) {
-        if (remainingAmount.lte(0)) break;
-
-        const interestOwed = new Decimal(schedule.interestDue.toString()).minus(schedule.interestPaid.toString());
-        const principalOwed = new Decimal(schedule.principalDue.toString()).minus(schedule.principalPaid.toString());
-
-        let interestPaid = new Decimal(0);
-        let principalPaid = new Decimal(0);
-
-        // Pay interest first
-        if (interestOwed.gt(0) && remainingAmount.gt(0)) {
-          interestPaid = Decimal.min(interestOwed, remainingAmount);
-          remainingAmount = remainingAmount.minus(interestPaid);
-          totalInterest = totalInterest.plus(interestPaid);
-        }
-
-        // Then principal
-        if (principalOwed.gt(0) && remainingAmount.gt(0)) {
-          principalPaid = Decimal.min(principalOwed, remainingAmount);
-          remainingAmount = remainingAmount.minus(principalPaid);
-          totalPrincipal = totalPrincipal.plus(principalPaid);
-        }
-
-        if (interestPaid.gt(0) || principalPaid.gt(0)) {
-          const newInterestPaid = new Decimal(schedule.interestPaid.toString()).plus(interestPaid);
-          const newPrincipalPaid = new Decimal(schedule.principalPaid.toString()).plus(principalPaid);
-          const newTotalPaid = newInterestPaid.plus(newPrincipalPaid);
-          const totalDue = new Decimal(schedule.totalDue.toString());
-
-          const newStatus = newTotalPaid.gte(totalDue) ? ScheduleStatus.PAID
-            : newTotalPaid.gt(0) ? ScheduleStatus.PARTIAL
-            : schedule.status;
-
-          await tx.loanSchedule.update({
-            where: { id: schedule.id },
-            data: {
-              interestPaid: newInterestPaid.toNumber(),
-              principalPaid: newPrincipalPaid.toNumber(),
-              totalPaid: newTotalPaid.toNumber(),
-              status: newStatus,
-              paidDate: newStatus === 'PAID' ? new Date() : undefined,
-            },
-          });
-
-          if (!scheduleId) scheduleId = schedule.id;
-        }
-      }
-
-      // Create repayment record
-      await tx.loanRepayment.create({
-        data: {
-          loanId: data.loanId,
-          scheduleId,
-          receiptNumber,
-          amount: data.amount,
-          principalPortion: totalPrincipal.toNumber(),
-          interestPortion: totalInterest.toNumber(),
-          paymentMode: data.paymentMode as any,
-          paymentReference: data.paymentReference,
-          collectedById: user.id,
-          notes: data.notes,
-        },
-      });
-
-      // Check if loan is fully repaid
-      const unpaidSchedules = await tx.loanSchedule.count({
-        where: { loanId: data.loanId, status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] } },
-      });
-
-      if (unpaidSchedules === 0) {
-        await tx.loan.update({
-          where: { id: data.loanId },
-          data: { status: LoanStatus.CLOSED, closedAt: new Date() },
-        });
-      }
-    });
-
-    // Post GL: Dr Cash, Cr Loans Receivable (principal), Cr Interest Income
-    const loansReceivable = await getAccountByCode(LOAN_GL.LOANS_RECEIVABLE);
-    const cashBank = await getAccountByCode(LOAN_GL.CASH_BANK);
-    const interestIncome = await getAccountByCode(LOAN_GL.INTEREST_INCOME);
-
-    if (loansReceivable && cashBank && interestIncome) {
-      const glLines = [
-        {
-          accountId: cashBank.id,
-          debitAmount: data.amount,
-          creditAmount: 0,
-          description: `Loan repayment - ${loan.loanNumber}`,
-        },
-      ];
-
-      if (totalPrincipal.gt(0)) {
-        glLines.push({
-          accountId: loansReceivable.id,
-          debitAmount: 0,
-          creditAmount: totalPrincipal.toNumber(),
-          description: `Principal repayment - ${loan.loanNumber}`,
-          customerId: loan.customerId,
-          referenceType: 'LOAN',
-          referenceId: loan.id,
-        } as any);
-      }
-
-      if (totalInterest.gt(0)) {
-        glLines.push({
-          accountId: interestIncome.id,
-          debitAmount: 0,
-          creditAmount: totalInterest.toNumber(),
-          description: `Interest payment - ${loan.loanNumber}`,
-        });
-      }
-
-      await createJournalEntry({
-        entryDate: new Date(),
-        description: `Loan repayment: ${loan.loanNumber} - ${receiptNumber}`,
-        sourceModule: 'LOANS',
-        sourceType: 'REPAYMENT',
-        sourceId: loan.id,
-        loanId: loan.id,
-        lines: glLines,
-        createdById: user.id,
-        autoPost: true,
-      });
-    }
-
-    await auditLog({
-      userId: user.id, action: 'CREATE', module: 'LOANS', entityType: 'LOAN_REPAYMENT', entityId: data.loanId,
-      description: `Repayment ${receiptNumber}: ${data.amount} for loan ${loan.loanNumber}`,
-    });
-
-    // Notify the loan officer who created the loan
-    if (loan.createdById !== user.id) {
-      await createNotification({
-        userId: loan.createdById,
-        type: 'PAYMENT_RECEIVED',
-        title: 'Loan Repayment Received',
-        message: `Payment of ${data.amount} received for loan ${loan.loanNumber}. Receipt: ${receiptNumber}`,
-        entityType: 'LOAN',
-        entityId: data.loanId,
-        actionUrl: `/loans/${data.loanId}`,
-      });
-    }
-
-    return {
-      success: true,
-      message: `Payment of ${data.amount} received. Receipt: ${receiptNumber}`,
-      data: { receiptNumber, principalPaid: totalPrincipal.toNumber(), interestPaid: totalInterest.toNumber() },
-    };
+    return await postLoanRepayment(user, data);
   } catch (error: any) {
     return { success: false, error: error.message };
   }

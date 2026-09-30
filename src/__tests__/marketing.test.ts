@@ -55,16 +55,13 @@ vi.mock('@/lib/utils', async (importOriginal) => ({
   generateReference: vi.fn(async () => 'MKT0001'),
 }));
 vi.mock('@/lib/system-config', () => ({ getConfigNumber: vi.fn(async () => h.rate) }));
-vi.mock('@/actions/savings.actions', () => ({
-  processDeposit: vi.fn(async () => ({ success: true, data: { transactionRef: 'STX0042' } })),
-}));
-vi.mock('@/actions/loan.actions', () => ({
-  processRepayment: vi.fn(async () => ({ success: true, data: { receiptNumber: 'RCP0007' } })),
+vi.mock('@/lib/money-posting', () => ({
+  postSavingsDeposit: vi.fn(async () => ({ success: true, data: { transactionRef: 'STX0042' } })),
+  postLoanRepayment: vi.fn(async () => ({ success: true, data: { receiptNumber: 'RCP0007' } })),
 }));
 
 import { reportSale, confirmSale, rejectSale } from '@/actions/marketing.actions';
-import { processDeposit } from '@/actions/savings.actions';
-import { processRepayment } from '@/actions/loan.actions';
+import { postSavingsDeposit as processDeposit, postLoanRepayment as processRepayment } from '@/lib/money-posting';
 import {
   canConfirmSales, commissionFor, validateSaleLinks, isMarketer, monthRange, SALE_CONFIRM_ROLE_LEVEL,
 } from '@/lib/marketing-access';
@@ -102,6 +99,10 @@ describe('who confirms', () => {
     expect(canConfirmSales({ permissions: [], roleLevel: 85 })).toBe(true);  // General Manager
     expect(canConfirmSales({ permissions: [], roleLevel: 90 })).toBe(true);  // Director
     expect(canConfirmSales({ permissions: ['ADMIN:SYSTEM'], roleLevel: 0 })).toBe(true);
+  });
+
+  it('includes the accountant, who holds ACCOUNTS:JOURNAL_POST', () => {
+    expect(canConfirmSales({ permissions: ['ACCOUNTS:JOURNAL_POST'], roleLevel: 60 })).toBe(true);
   });
 
   it('is not HR (80) or a branch manager (70)', () => {
@@ -211,7 +212,14 @@ describe('reportSale', () => {
 describe('confirmSale', () => {
   beforeEach(() => { h.session = { user: gm }; h.department = 'MANAGEMENT'; });
 
-  it('refuses staff below level 85', async () => {
+  it('lets the accountant confirm and post a collection without teller permissions', async () => {
+    h.session = { user: { id: 'acct-1', firstName: 'Ann', lastName: 'Acct', permissions: ['ACCOUNTS:JOURNAL_POST'], roleLevel: 60 } };
+    const result = await confirmSale('sale-1');
+    expect(result.success).toBe(true);
+    expect(processDeposit).toHaveBeenCalledWith(expect.objectContaining({ id: 'acct-1' }), expect.objectContaining({ accountId: 'sav-1' }));
+  });
+
+  it('refuses staff below level 85 who are not the accountant', async () => {
     h.session = { user: { ...gm, roleLevel: 80 } };
     expect((await confirmSale('sale-1')).success).toBe(false);
     expect(processDeposit).not.toHaveBeenCalled();
@@ -227,7 +235,7 @@ describe('confirmSale', () => {
   it('posts a savings collection as a deposit, then records commission', async () => {
     const result = await confirmSale('sale-1');
     expect(result.success).toBe(true);
-    expect(processDeposit).toHaveBeenCalledWith(expect.objectContaining({ accountId: 'sav-1', amount: 50_000 }));
+    expect(processDeposit).toHaveBeenCalledWith(expect.objectContaining({ id: 'gm-1' }), expect.objectContaining({ accountId: 'sav-1', amount: 50_000 }));
     const final = h.updates.find((u) => u.kind === 'update');
     expect(final.data).toMatchObject({ status: 'CONFIRMED', postedReference: 'STX0042', commissionAmount: 500, commissionRate: 1 });
   });
@@ -235,7 +243,7 @@ describe('confirmSale', () => {
   it('posts a loan collection as a repayment', async () => {
     h.sale = pendingSale({ savingsAccountId: null, loanId: 'loan-1' });
     await confirmSale('sale-1');
-    expect(processRepayment).toHaveBeenCalledWith(expect.objectContaining({ loanId: 'loan-1', amount: 50_000 }));
+    expect(processRepayment).toHaveBeenCalledWith(expect.objectContaining({ id: 'gm-1' }), expect.objectContaining({ loanId: 'loan-1', amount: 50_000 }));
     expect(processDeposit).not.toHaveBeenCalled();
   });
 
