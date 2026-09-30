@@ -317,7 +317,7 @@ export async function processDeposit(data: {
       description: `Deposit ${transactionRef}: ${data.amount} to ${account.accountNumber}`,
     });
 
-    return { success: true, message: `Deposit of ${data.amount} successful. Ref: ${transactionRef}` };
+    return { success: true, message: `Deposit of ${data.amount} successful. Ref: ${transactionRef}`, data: { transactionRef } };
   } catch (error: any) {
     return { success: false, error: error.message };
   }

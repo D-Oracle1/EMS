@@ -87,7 +87,7 @@ describe('nav structure', () => {
   it('only leaves personal entries ungated', () => {
     // An entry with no permission is visible to every employee, so it must be
     // the staff member's own record — never a department's module.
-    const ungated = navItems.filter((i) => !i.permission && !i.permissions).map((i) => i.href);
+    const ungated = navItems.filter((i) => !i.permission && !i.permissions && !i.anyOf).map((i) => i.href);
     expect(ungated.sort()).toEqual(
       [
         '/dashboard',
@@ -346,6 +346,28 @@ describe('My Branch', () => {
 
   it('is hidden from a senior role that approves nothing at the branch', () => {
     expect(sees({ permissions: [...ROLES.HR_ADMIN], roleLevel: 80, branchId: 'b1' })).toBe(false);
+  });
+});
+
+// ── Marketing ───────────────────────────────────────────────────────────────
+
+describe('Marketing', () => {
+  const sees = (v: { permissions: string[]; roleLevel?: number; departmentCode?: string }) =>
+    resolveNav(v).items.some((i) => i.href === '/marketing');
+
+  it('is shown to the Marketing department, whatever their role', () => {
+    expect(sees({ permissions: [], roleLevel: 35, departmentCode: 'MARKETING' })).toBe(true);
+  });
+
+  it('is shown to the staff who confirm sales: level 85+ and the superuser', () => {
+    expect(sees({ permissions: [], roleLevel: 85, departmentCode: 'MANAGEMENT' })).toBe(true);
+    expect(sees({ permissions: ['ADMIN:SYSTEM'], roleLevel: 10 })).toBe(true);
+  });
+
+  it('is hidden from other departments below level 85, including HR', () => {
+    expect(sees({ permissions: [...ROLES.HR_ADMIN], roleLevel: 80, departmentCode: 'HR' })).toBe(false);
+    expect(sees({ permissions: [...ROLES.SAVINGS_OFFICER], roleLevel: 40, departmentCode: 'SAVINGS' })).toBe(false);
+    expect(sees({ permissions: [...ROLES.IT_ADMIN], roleLevel: 55, departmentCode: 'IT' })).toBe(false);
   });
 });
 

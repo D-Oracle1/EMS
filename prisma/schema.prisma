@@ -54,6 +54,7 @@ model Branch {
   jobOpenings    JobOpening[]
   assets         CompanyAsset[]
   shifts         WorkShift[]
+  marketingSales MarketingSale[]
 }
 
 // ============================================================================
@@ -195,6 +196,11 @@ model Staff {
 
   // Activity Relations
   auditLogs                    AuditLog[]
+  marketingSales               MarketingSale[]      @relation("SaleMarketer")
+  marketingSalesReviewed       MarketingSale[]      @relation("SaleReviewer")
+  marketingCommissionsPaid     MarketingSale[]      @relation("SaleCommissionPayer")
+  marketingTargets             MarketingTarget[]    @relation("TargetMarketer")
+  marketingTargetsSet          MarketingTarget[]    @relation("TargetSetter")
   disciplinaryActions          DisciplinaryAction[] @relation("DisciplinedStaff")
   disciplinaryIssued           DisciplinaryAction[] @relation("DisciplinaryIssuer")
   createdLoans                 Loan[]               @relation("LoanCreatedBy")
@@ -223,39 +229,39 @@ model Staff {
   terminationApprovals         SavingsTermination[] @relation("TerminationApproved")
 
   // HR module relations
-  grade                   SalaryGrade?         @relation(fields: [gradeId], references: [id])
+  grade                   SalaryGrade?           @relation(fields: [gradeId], references: [id])
   leaveBalances           LeaveBalance[]
-  compensations           StaffCompensation[]  @relation("CompensationStaff")
-  compensationsCreated    StaffCompensation[]  @relation("CompensationCreatedBy")
+  compensations           StaffCompensation[]    @relation("CompensationStaff")
+  compensationsCreated    StaffCompensation[]    @relation("CompensationCreatedBy")
   payslips                Payslip[]
-  payrollProcessed        PayrollPeriod[]      @relation("PayrollProcessedBy")
-  payrollApproved         PayrollPeriod[]      @relation("PayrollApprovedBy")
-  jobOpeningsManaged      JobOpening[]         @relation("HiringManager")
-  interviewsConducted     Interview[]          @relation("Interviewer")
-  hiredFromApplication    JobApplication[]     @relation("HiredStaff")
-  onboardings             StaffOnboarding[]    @relation("OnboardingStaff")
-  onboardingTasksAssigned OnboardingTask[]     @relation("OnboardingAssignee")
-  onboardingTasksDone     OnboardingTask[]     @relation("OnboardingCompletedBy")
-  staffTasksAssigned      StaffTask[]          @relation("StaffTaskAssignee")
-  staffTasksCreated       StaffTask[]          @relation("StaffTaskAssigner")
+  payrollProcessed        PayrollPeriod[]        @relation("PayrollProcessedBy")
+  payrollApproved         PayrollPeriod[]        @relation("PayrollApprovedBy")
+  jobOpeningsManaged      JobOpening[]           @relation("HiringManager")
+  interviewsConducted     Interview[]            @relation("Interviewer")
+  hiredFromApplication    JobApplication[]       @relation("HiredStaff")
+  onboardings             StaffOnboarding[]      @relation("OnboardingStaff")
+  onboardingTasksAssigned OnboardingTask[]       @relation("OnboardingAssignee")
+  onboardingTasksDone     OnboardingTask[]       @relation("OnboardingCompletedBy")
+  staffTasksAssigned      StaffTask[]            @relation("StaffTaskAssignee")
+  staffTasksCreated       StaffTask[]            @relation("StaffTaskAssigner")
   bankSubmissions         BankDetailSubmission[] @relation("BankSubmissionStaff")
   bankSubmissionsReviewed BankDetailSubmission[] @relation("BankSubmissionReviewer")
   trainingEnrollments     TrainingEnrollment[]
-  trainingsFacilitated    TrainingProgram[]    @relation("TrainingFacilitator")
-  assetAssignments        AssetAssignment[]    @relation("AssetHolder")
-  assetsIssued            AssetAssignment[]    @relation("AssetIssuer")
-  announcementsAuthored   Announcement[]       @relation("AnnouncementAuthor")
+  trainingsFacilitated    TrainingProgram[]      @relation("TrainingFacilitator")
+  assetAssignments        AssetAssignment[]      @relation("AssetHolder")
+  assetsIssued            AssetAssignment[]      @relation("AssetIssuer")
+  announcementsAuthored   Announcement[]         @relation("AnnouncementAuthor")
   announcementAcks        AnnouncementAck[]
-  movements               StaffMovement[]      @relation("MovementStaff")
-  movementsCreated        StaffMovement[]      @relation("MovementCreatedBy")
-  exitRecord              StaffExit?           @relation("ExitStaff")
-  exitsProcessed          StaffExit[]          @relation("ExitProcessedBy")
-  goals                   StaffGoal[]          @relation("GoalStaff")
-  goalsCreated            StaffGoal[]          @relation("GoalCreatedBy")
+  movements               StaffMovement[]        @relation("MovementStaff")
+  movementsCreated        StaffMovement[]        @relation("MovementCreatedBy")
+  exitRecord              StaffExit?             @relation("ExitStaff")
+  exitsProcessed          StaffExit[]            @relation("ExitProcessedBy")
+  goals                   StaffGoal[]            @relation("GoalStaff")
+  goalsCreated            StaffGoal[]            @relation("GoalCreatedBy")
   shiftAssignments        ShiftAssignment[]
-  blogPosts               BlogPost[]           @relation("PostAuthor")
-  contentBlocksEdited     ContentBlock[]       @relation("ContentBlockEditor")
-  contentRevisions        ContentRevision[]    @relation("ContentReviser")
+  blogPosts               BlogPost[]             @relation("PostAuthor")
+  contentBlocksEdited     ContentBlock[]         @relation("ContentBlockEditor")
+  contentRevisions        ContentRevision[]      @relation("ContentReviser")
 
   @@index([gradeId])
   @@index([departmentId])
@@ -541,6 +547,7 @@ model Customer {
   ledgerAccounts    LedgerAccount[]
   verificationTasks VerificationTask[]
   guarantorFor      Guarantor[]
+  marketingSales    MarketingSale[]
 
   notifications CustomerNotification[]
 
@@ -691,6 +698,7 @@ model Loan {
   verificationTasks VerificationTask[]
   restructurings    LoanRestructuring[]
   guarantors        Guarantor[]
+  marketingSales    MarketingSale[]
 
   @@index([loanNumber])
   @@index([customerId])
@@ -1218,6 +1226,7 @@ model SavingsAccount {
   terminations       SavingsTermination[]
   journalEntries     JournalEntry[]
   interestPostings   SavingsInterest[]
+  marketingSales     MarketingSale[]
 
   @@index([accountNumber])
   @@index([customerId])
@@ -1541,6 +1550,7 @@ model FixedDeposit {
 
   interestPayments FixedDepositInterest[]
   journalEntries   JournalEntry[]
+  marketingSales   MarketingSale[]
 
   @@index([certificateNumber])
   @@index([customerId])
@@ -2776,7 +2786,7 @@ model StaffTask {
 
   title       String
   description String?
-  category    String @default("GENERAL")
+  category    String  @default("GENERAL")
 
   assigneeId   String
   assignedById String
@@ -3276,4 +3286,100 @@ model ContentRevision {
 
   @@index([entityType, entityId])
   @@index([changedAt])
+}
+
+// ============================================================================
+// MARKETING — SALES REPORTED BY MARKETERS, CONFIRMED BY SENIOR STAFF
+// ============================================================================
+
+enum MarketingSaleType {
+  SAVINGS // brought in a savings account (already opened)
+  LOAN // brought in a loan (already booked)
+  FIXED_DEPOSIT // brought in a fixed deposit (already booked)
+  FIELD_COLLECTION // collected money in the field, posted on confirmation
+}
+
+enum MarketingSaleStatus {
+  PENDING
+  CONFIRMING // claimed by a confirmer while the money is being posted
+  CONFIRMED
+  REJECTED
+}
+
+/// A sale reported by a marketer. Nothing touches a balance until a senior
+/// reviewer confirms it; a field collection is then posted as a savings
+/// deposit or loan repayment, and every confirmed sale records commission.
+model MarketingSale {
+  id        String @id @default(uuid())
+  reference String @unique
+
+  type   MarketingSaleType
+  status MarketingSaleStatus @default(PENDING)
+
+  marketerId String
+  branchId   String?
+  customerId String
+
+  // Exactly one of these, matching the type. A field collection targets a
+  // savings account (deposit) or a loan (repayment).
+  savingsAccountId String?
+  loanId           String?
+  fixedDepositId   String?
+
+  amount           Decimal     @db.Decimal(18, 2)
+  paymentMode      PaymentMode @default(CASH)
+  paymentReference String?
+  collectedAt      DateTime    @default(now())
+  notes            String?
+
+  reviewedById String?
+  reviewedAt   DateTime?
+  reviewNote   String?
+
+  /// Ref of the savings transaction or loan receipt posted on confirmation.
+  postedReference String?
+
+  commissionRate     Decimal?  @db.Decimal(5, 2)
+  commissionAmount   Decimal?  @db.Decimal(18, 2)
+  commissionPaidAt   DateTime?
+  commissionPaidById String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  marketer         Staff           @relation("SaleMarketer", fields: [marketerId], references: [id])
+  reviewedBy       Staff?          @relation("SaleReviewer", fields: [reviewedById], references: [id])
+  commissionPaidBy Staff?          @relation("SaleCommissionPayer", fields: [commissionPaidById], references: [id])
+  branch           Branch?         @relation(fields: [branchId], references: [id])
+  customer         Customer        @relation(fields: [customerId], references: [id])
+  savingsAccount   SavingsAccount? @relation(fields: [savingsAccountId], references: [id])
+  loan             Loan?           @relation(fields: [loanId], references: [id])
+  fixedDeposit     FixedDeposit?   @relation(fields: [fixedDepositId], references: [id])
+
+  @@index([marketerId, status])
+  @@index([status])
+  @@index([collectedAt])
+  @@index([branchId])
+  @@index([savingsAccountId])
+  @@index([loanId])
+  @@index([fixedDepositId])
+}
+
+/// A marketer's target for one calendar month, set by senior staff.
+model MarketingTarget {
+  id           String  @id @default(uuid())
+  marketerId   String
+  month        String // YYYY-MM
+  targetAmount Decimal @db.Decimal(18, 2)
+  targetCount  Int?
+  setById      String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  marketer Staff @relation("TargetMarketer", fields: [marketerId], references: [id])
+  setBy    Staff @relation("TargetSetter", fields: [setById], references: [id])
+
+  @@unique([marketerId, month])
+  @@index([month])
 }

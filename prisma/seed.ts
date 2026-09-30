@@ -18,6 +18,7 @@ async function main() {
     { code: 'EMPLOYEE', prefix: 'EMP', padLength: 4 },
     { code: 'DOCUMENT', prefix: 'DOC', padLength: 4 },
     { code: 'RESTRUCTURING', prefix: 'RST', padLength: 4 },
+    { code: 'MARKETING_SALE', prefix: 'MKT', padLength: 4 },
     { code: 'WITHDRAWAL_REQ', prefix: 'WDR', padLength: 4 },
   ];
 
@@ -105,6 +106,32 @@ async function main() {
       // Officers. Separation of duties is still enforced per record — the
       // approver of a payroll run may not be the person who processed it.
       perms: permissionCodes.filter((p) => p !== 'LOANS:CREATE'),
+    },
+    {
+      name: 'General Manager',
+      code: 'GENERAL_MANAGER',
+      level: 85,
+      // Company-wide operations oversight: every branch (level 80+) and the
+      // marketing confirmation queue (level 85+), without system administration.
+      perms: [
+        'CUSTOMERS:READ', 'CUSTOMERS:UPDATE',
+        'LOANS:READ', 'LOANS:APPROVE', 'LOANS:APPROVE_L1', 'LOANS:APPROVE_L2',
+        'LOANS:DISBURSE', 'LOANS:MANAGE_ALL', 'LOANS:RESTRUCTURE', 'LOANS:COLLECT',
+        'SAVINGS:READ', 'SAVINGS:APPROVE', 'SAVINGS:DEPOSIT',
+        'FIXED_DEPOSITS:READ', 'FIXED_DEPOSITS:MANAGE', 'FIXED_DEPOSITS:LIQUIDATE',
+        'ACCOUNTS:REPORTS_VIEW',
+        'HR:STAFF_READ', 'HR:ANALYTICS_VIEW', 'HR:LEAVE_MANAGE', 'HR:PERFORMANCE_MANAGE', 'HR:PAYROLL_READ',
+        'AUDIT:READ',
+        'DOCUMENTS:READ', 'DOCUMENTS:APPROVE',
+        'VERIFICATION:READ',
+      ],
+    },
+    {
+      name: 'Marketing Officer',
+      code: 'MARKETING_OFFICER',
+      level: 35,
+      // Marketing access comes from the MARKETING department, not a permission.
+      perms: [],
     },
     {
       name: 'HR Administrator',
@@ -265,6 +292,7 @@ async function main() {
     { name: 'Accounts', code: 'ACCOUNTS' },
     { name: 'Management', code: 'MANAGEMENT' },
     { name: 'Information Technology', code: 'IT' },
+    { name: 'Marketing', code: 'MARKETING' },
   ];
 
   let adminDeptId = '';

@@ -22,7 +22,7 @@ import {
   Briefcase, GraduationCap, Laptop, Megaphone, Network, ArrowRightLeft,
   ClipboardList, Receipt, HeartHandshake, Package, Percent, Layers,
   CalendarDays, XCircle, LayoutTemplate, Newspaper, ShieldCheck,
-  MonitorSmartphone, Building2, SlidersHorizontal,
+  MonitorSmartphone, Building2, SlidersHorizontal, TrendingUp,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -38,6 +38,12 @@ export interface NavItem {
   minRoleLevel?: number;
   /** Hidden from staff who are not posted to a branch. */
   requiresBranch?: boolean;
+  /**
+   * Shown when the viewer meets ANY of these, in place of a permission gate:
+   * belongs to one of the departments, holds the role level, or holds one of
+   * the permissions. For modules owned by a department rather than a grant.
+   */
+  anyOf?: { departments?: string[]; minRoleLevel?: number; permissions?: string[] };
 }
 
 export const navItems: NavItem[] = [
@@ -65,6 +71,11 @@ export const navItems: NavItem[] = [
   // ── Fixed deposits ───────────────────────────────────────────────────────
   { label: 'Fixed Deposits', href: '/fixed-deposits',  icon: Wallet,  color: 'purple', permissions: ['FIXED_DEPOSITS:CREATE', 'FIXED_DEPOSITS:MANAGE', 'FIXED_DEPOSITS:LIQUIDATE'], section: 'Fixed Deposits' },
   { label: 'Deposit Rates',  href: '/settings/deposit-rates', icon: Percent, color: 'purple', permission: 'SYSTEM:CONFIG_MANAGE' },
+
+  // ── Marketing ────────────────────────────────────────────────────────────
+  // Owned by the Marketing department, who report sales; senior staff (level
+  // 85+, see lib/marketing-access) confirm them. The server applies the same rule.
+  { label: 'Sales',            href: '/marketing', icon: TrendingUp, color: 'fuchsia', section: 'Marketing', anyOf: { departments: ['MARKETING'], minRoleLevel: 85, permissions: ['ADMIN:SYSTEM'] } },
 
   // ── Accounting ───────────────────────────────────────────────────────────
   { label: 'Accounting',       href: '/accounting',                     icon: BookOpen,  color: 'sky', permissions: ['ACCOUNTS:COA_MANAGE', 'ACCOUNTS:JOURNAL_CREATE', 'ACCOUNTS:REPORTS_VIEW'], section: 'Accounting' },
@@ -123,12 +134,21 @@ export interface NavViewer {
   permissions: string[];
   roleLevel?: number;
   branchId?: string | null;
+  departmentCode?: string;
 }
 
 /** Whether a viewer may see one entry. */
 export function canSee(item: NavItem, viewer: NavViewer): boolean {
   if (item.minRoleLevel && (viewer.roleLevel ?? 0) < item.minRoleLevel) return false;
   if (item.requiresBranch && !viewer.branchId) return false;
+  if (item.anyOf) {
+    const { departments, minRoleLevel, permissions } = item.anyOf;
+    return (
+      (!!viewer.departmentCode && !!departments?.includes(viewer.departmentCode)) ||
+      (minRoleLevel !== undefined && (viewer.roleLevel ?? 0) >= minRoleLevel) ||
+      !!permissions?.some((p) => viewer.permissions.includes(p))
+    );
+  }
   if (!item.permission && !item.permissions) return true;
   if (item.permission) return viewer.permissions.includes(item.permission);
   if (item.permissions) return item.permissions.some((p) => viewer.permissions.includes(p));

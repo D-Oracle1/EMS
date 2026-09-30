@@ -47,6 +47,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   PAYROLL: 'Payroll',
   SECURITY: 'Security',
   OPERATIONS: 'Operations',
+  MARKETING: 'Marketing',
 };
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
