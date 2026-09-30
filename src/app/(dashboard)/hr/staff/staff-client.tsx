@@ -62,7 +62,8 @@ import { getStaffMovements } from '@/actions/hr-lifecycle.actions';
 import { Textarea } from '@/components/ui/textarea';
 import { formatDate, formatDateTime, formatCurrency } from '@/lib/utils';
 import { getStaffList } from '@/actions/hr.actions';
-import { resetStaffPassword, unlockAccount } from '@/actions/auth.actions';
+import { resetStaffPassword, unlockAccount, type IssuedLogin } from '@/actions/auth.actions';
+import { LoginDetailsDialog } from '@/components/hr/login-details-dialog';
 import {
   createStaff,
   updateStaff,
@@ -258,6 +259,10 @@ export function StaffClient({ user }: { user: SessionUser }) {
   const [resetPasswordOpen, setResetPasswordOpen] = useState(false);
   const [resetPasswordTarget, setResetPasswordTarget] = useState<StaffMember | null>(null);
   const [tempPassword, setTempPassword] = useState('');
+
+  // ---- login details (bulk issue, and the one just created) ----
+  const [loginDetailsOpen, setLoginDetailsOpen] = useState(false);
+  const [newLogin, setNewLogin] = useState<IssuedLogin[] | null>(null);
 
   /* ---------------------------------------------------------------- */
   /*  Data fetching                                                    */
@@ -457,7 +462,21 @@ export function StaffClient({ user }: { user: SessionUser }) {
         address: newStaff.address || undefined,
       });
       if (result.success) {
-        toast.success(result.message);
+        // Keep the new login on screen with a copy button; a toast vanishes
+        // before anyone can write the password down.
+        const issued = result.data as { employeeId: string; tempPassword: string } | undefined;
+        if (issued?.tempPassword) {
+          setNewLogin([{
+            staffId: issued.employeeId,
+            name: `${newStaff.firstName} ${newStaff.lastName}`,
+            employeeId: issued.employeeId,
+            email: newStaff.email,
+            role: roles.find((r) => r.id === newStaff.roleId)?.name ?? null,
+            branch: branches.find((b) => b.id === newStaff.branchId)?.name ?? null,
+            tempPassword: issued.tempPassword,
+          }]);
+        }
+        toast.success(`Staff created: ${newStaff.firstName} ${newStaff.lastName}`);
         setCreateOpen(false);
         setNewStaff({ ...emptyStaffForm });
         fetchStaff();
@@ -612,6 +631,13 @@ export function StaffClient({ user }: { user: SessionUser }) {
             View, create, and manage staff accounts
           </p>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+        {canManageUsers && (
+          <Button variant="outline" onClick={() => setLoginDetailsOpen(true)}>
+            <KeyRound className="mr-2 h-4 w-4" />
+            Login details
+          </Button>
+        )}
         {canCreateStaff && (
           <Dialog open={createOpen} onOpenChange={setCreateOpen}>
             <DialogTrigger asChild>
@@ -811,7 +837,21 @@ export function StaffClient({ user }: { user: SessionUser }) {
             </DialogContent>
           </Dialog>
         )}
+        </div>
       </div>
+
+      <LoginDetailsDialog
+        open={loginDetailsOpen}
+        onOpenChange={setLoginDetailsOpen}
+        staff={staffList}
+        currentUserId={user.id}
+      />
+      <LoginDetailsDialog
+        open={newLogin !== null}
+        onOpenChange={(open) => { if (!open) setNewLogin(null); }}
+        results={newLogin}
+        currentUserId={user.id}
+      />
 
       {/* Filters Card */}
       <Card>

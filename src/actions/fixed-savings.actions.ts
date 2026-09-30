@@ -7,6 +7,7 @@
 
 import Decimal from 'decimal.js';
 import { prisma, withTransaction } from '@/lib/prisma';
+import { branchScopeFor, inScope } from '@/lib/branch-scope';
 import { requirePermission, requireAnyPermission } from '@/lib/auth-utils';
 import { auditLog } from '@/lib/audit';
 import {
@@ -535,7 +536,7 @@ export async function fixedSavingsDeposit(data: {
       where: { id: data.accountId },
       include: { product: true, customer: true },
     });
-    if (!account) return { success: false, error: 'Account not found' };
+    if (!account || !inScope(await branchScopeFor(user), account.branchId)) return { success: false, error: 'Account not found' };
     if (account.status !== 'ACTIVE') {
       return { success: false, error: `Account is ${account.status}. Only ACTIVE accounts accept deposits.` };
     }
@@ -640,13 +641,15 @@ export async function getSavingsAccountsList(filters?: {
   page?: number;
   limit?: number;
 }) {
-  await requireAnyPermission(['SAVINGS:READ', 'SAVINGS:CREATE']);
+  const user = await requireAnyPermission(['SAVINGS:READ', 'SAVINGS:CREATE']);
+  const scope = await branchScopeFor(user);
 
   const page = filters?.page || 1;
   const limit = filters?.limit || 20;
   const skip = (page - 1) * limit;
 
   const where: any = { isDeleted: false };
+  if (scope) where.branchId = scope;
   if (filters?.kind === 'FIXED') where.maturityDate = { not: null };
   if (filters?.kind === 'ORDINARY') where.maturityDate = null;
   if (filters?.customerId) where.customerId = filters.customerId;
@@ -695,7 +698,7 @@ export async function getSavingsAccountsList(filters?: {
 }
 
 export async function getFixedSavingsAccount(id: string) {
-  await requirePermission('SAVINGS:READ');
+  const user = await requirePermission('SAVINGS:READ');
 
   const account: any = await prisma.savingsAccount.findUnique({
     where: { id },
@@ -713,7 +716,9 @@ export async function getFixedSavingsAccount(id: string) {
     },
   });
 
-  if (!account) throw new Error('Savings account not found');
+  if (!account || !inScope(await branchScopeFor(user), account.branchId)) {
+    throw new Error('Savings account not found');
+  }
 
   const today = new Date();
   const monthsRemaining = account.maturityDate
@@ -828,7 +833,7 @@ export async function requestEarlyTermination(accountId: string): Promise<Action
       where: { id: accountId },
       include: { product: true, customer: true },
     });
-    if (!account) return { success: false, error: 'Account not found' };
+    if (!account || !inScope(await branchScopeFor(user), account.branchId)) return { success: false, error: 'Account not found' };
     if (account.status !== 'ACTIVE') return { success: false, error: `Account is ${account.status} and cannot be terminated` };
     if (!account.maturityDate) return { success: false, error: 'Only fixed-term savings accounts can be terminated' };
     if (!account.product.allowEarlyTermination) return { success: false, error: 'Early termination is not allowed for this product' };
@@ -884,13 +889,15 @@ export async function requestEarlyTermination(accountId: string): Promise<Action
 }
 
 export async function getTerminationRequests(filters?: { status?: string; page?: number; limit?: number }) {
-  await requireAnyPermission(['SAVINGS:APPROVE', 'SAVINGS:READ']);
+  const user = await requireAnyPermission(['SAVINGS:APPROVE', 'SAVINGS:READ']);
+  const scope = await branchScopeFor(user);
 
   const page = filters?.page || 1;
   const limit = filters?.limit || 20;
   const skip = (page - 1) * limit;
 
   const where: any = {};
+  if (scope) where.account = { branchId: scope };
   if (filters?.status && filters.status !== 'ALL') where.status = filters.status;
 
   const [data, total]: [any[], number] = await Promise.all([
@@ -962,7 +969,7 @@ export async function decideTermination(data: {
       where: { id: data.terminationId },
       include: { account: { include: { product: true, customer: true } } },
     });
-    if (!termination) return { success: false, error: 'Termination request not found' };
+    if (!termination || !inScope(await branchScopeFor(user), termination.account.branchId)) return { success: false, error: 'Termination request not found' };
     if (termination.status !== 'PENDING') return { success: false, error: 'Request is not in PENDING status' };
     if (termination.requestedById === user.id) return { success: false, error: 'You cannot approve your own termination request' };
 
@@ -1015,7 +1022,7 @@ export async function processTerminationPayout(terminationId: string): Promise<A
       where: { id: terminationId },
       include: { account: { include: { product: true, customer: true } } },
     });
-    if (!termination) return { success: false, error: 'Termination not found' };
+    if (!termination || !inScope(await branchScopeFor(user), termination.account.branchId)) return { success: false, error: 'Termination not found' };
     if (termination.status !== 'APPROVED') return { success: false, error: 'Termination must be APPROVED before payout' };
     if (!termination.payoutAmount) return { success: false, error: 'Payout amount not set. Re-approve with payout details.' };
 
@@ -1093,16 +1100,18 @@ export async function processTerminationPayout(terminationId: string): Promise<A
 // ============================================================================
 
 export async function getFixedSavingsDashboard() {
-  await requireAnyPermission(['SAVINGS:READ', 'SAVINGS:CREATE']);
+  const user = await requireAnyPermission(['SAVINGS:READ', 'SAVINGS:CREATE']);
+  const scope = await branchScopeFor(user);
+  const fixed = { maturityDate: { not: null }, ...(scope && { branchId: scope }) };
 
   const [active, terminated, completed, termRequested, pendingTerminations, totalStats] = await Promise.all([
-    prisma.savingsAccount.count({ where: { maturityDate: { not: null }, status: 'ACTIVE' } }),
-    prisma.savingsAccount.count({ where: { maturityDate: { not: null }, status: 'TERMINATED' } }),
-    prisma.savingsAccount.count({ where: { maturityDate: { not: null }, status: 'COMPLETED' } }),
-    prisma.savingsAccount.count({ where: { maturityDate: { not: null }, status: 'TERMINATION_REQUESTED' } }),
-    prisma.savingsTermination.count({ where: { status: 'PENDING' } }),
+    prisma.savingsAccount.count({ where: { ...fixed, status: 'ACTIVE' } }),
+    prisma.savingsAccount.count({ where: { ...fixed, status: 'TERMINATED' } }),
+    prisma.savingsAccount.count({ where: { ...fixed, status: 'COMPLETED' } }),
+    prisma.savingsAccount.count({ where: { ...fixed, status: 'TERMINATION_REQUESTED' } }),
+    prisma.savingsTermination.count({ where: { status: 'PENDING', ...(scope && { account: { branchId: scope } }) } }),
     prisma.savingsAccount.aggregate({
-      where: { maturityDate: { not: null }, status: { in: ['ACTIVE', 'TERMINATION_REQUESTED'] } },
+      where: { ...fixed, status: { in: ['ACTIVE', 'TERMINATION_REQUESTED'] } },
       _sum: { totalDeposits: true, interestAccrued: true, eligibleBalance: true },
     }),
   ]);

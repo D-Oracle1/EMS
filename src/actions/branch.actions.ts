@@ -7,15 +7,43 @@
  * One window per branch onto everything that happened there: the staff posted
  * to it, the customers it registered, its loans, savings and deposits, the
  * money that moved through them, its journal entries and every audited action
- * its staff took. Read-only, and gated on ADMIN:SYSTEM — this is the
- * superuser's cross-branch view, so it must never reach a departmental role
- * (IT holds SYSTEM:CONFIG_MANAGE but touches no customer or money data).
+ * its staff took. Read-only.
+ *
+ * The index of every branch is the superuser's alone (ADMIN:SYSTEM) — IT holds
+ * SYSTEM:CONFIG_MANAGE but touches no customer or money data. A single branch
+ * can also be opened by the manager posted to it (My Branch), and only that one.
  */
 
 import { prisma } from '@/lib/prisma';
-import { requirePermission } from '@/lib/auth-utils';
+import { getSession, requirePermission } from '@/lib/auth-utils';
+import { overseesOwnBranch } from '@/lib/branch-scope';
 
 const PERMISSION = 'ADMIN:SYSTEM';
+
+/**
+ * Allow the superuser into any branch, and a branch manager into their own.
+ * Throws for anyone else, and for a manager reaching for another branch.
+ */
+async function authorizeBranch(branchId: string) {
+  const { user } = await getSession();
+  if (user.permissions.includes(PERMISSION)) return user;
+  if (overseesOwnBranch(user)) {
+    const staff = await prisma.staff.findUnique({ where: { id: user.id }, select: { branchId: true } });
+    if (staff?.branchId && staff.branchId === branchId) return user;
+  }
+  throw new Error('Permission denied');
+}
+
+/**
+ * The branch the signed-in manager runs, or null when they have none or are
+ * not a branch manager. Drives the My Branch page.
+ */
+export async function getMyBranchId(): Promise<string | null> {
+  const { user } = await getSession();
+  if (!overseesOwnBranch(user)) return null;
+  const staff = await prisma.staff.findUnique({ where: { id: user.id }, select: { branchId: true } });
+  return staff?.branchId ?? null;
+}
 
 /** Loans that are out with the customer and still owed. */
 const LIVE_LOAN_STATUSES = ['DISBURSED', 'ACTIVE', 'OVERDUE'] as const;
@@ -100,7 +128,7 @@ export async function getBranchOverview() {
 
 /** One branch: its details and headline figures. Null when it doesn't exist. */
 export async function getBranchSummary(id: string) {
-  await requirePermission(PERMISSION);
+  await authorizeBranch(id);
 
   const branch = await prisma.branch.findUnique({ where: { id } });
   if (!branch) return null;
@@ -155,7 +183,7 @@ export async function getBranchRecords(
   kind: BranchRecordKind,
   filters: BranchRecordFilters = {}
 ) {
-  await requirePermission(PERMISSION);
+  await authorizeBranch(branchId);
 
   const page = Math.max(1, filters.page || 1);
   const limit = Math.min(100, filters.limit || 25);

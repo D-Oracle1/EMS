@@ -3,6 +3,7 @@
 import { createHmac } from 'crypto';
 import QRCode from 'qrcode';
 import { prisma, withTransaction } from '@/lib/prisma';
+import { staffScopeFor } from '@/lib/branch-scope';
 import { getSession, requirePermission, requireAnyPermission } from '@/lib/auth-utils';
 import { auditLog } from '@/lib/audit';
 import { createNotification } from '@/lib/notifications';
@@ -648,9 +649,11 @@ export async function getLeaveRequests(filters?: { staffId?: string; status?: st
 }
 
 export async function getStaffList(filters?: { search?: string; status?: string; departmentId?: string }) {
-  await requirePermission('HR:STAFF_READ');
+  const user = await requirePermission('HR:STAFF_READ');
+  const scope = await staffScopeFor(user);
 
   const where: Record<string, unknown> = { isDeleted: false };
+  if (scope) where.branchId = scope;
   if (filters?.status) where.status = filters.status;
   if (filters?.departmentId) where.departmentId = filters.departmentId;
   if (filters?.search) {
@@ -677,20 +680,23 @@ export async function getStaffList(filters?: { search?: string; status?: string;
 }
 
 export async function getHRDashboard() {
-  await requirePermission('HR:STAFF_READ');
+  const user = await requirePermission('HR:STAFF_READ');
+  const scope = await staffScopeFor(user);
+  const B = scope ? { branchId: scope } : {};
+  const onStaff = scope ? { staff: { branchId: scope } } : {};
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   const [activeStaff, totalStaff, presentToday, absentToday, lateToday, onLeave, pendingLeave, byDepartment] = await Promise.all([
-    prisma.staff.count({ where: { status: 'ACTIVE' } }),
-    prisma.staff.count(),
-    prisma.attendance.count({ where: { date: today, status: 'PRESENT' } }),
-    prisma.attendance.count({ where: { date: today, status: 'ABSENT' } }),
-    prisma.attendance.count({ where: { date: today, status: 'LATE' } }),
-    prisma.attendance.count({ where: { date: today, status: 'ON_LEAVE' } }),
-    prisma.leaveRequest.count({ where: { status: 'PENDING' } }),
-    prisma.staff.groupBy({ by: ['departmentId'], where: { status: 'ACTIVE' }, _count: true }),
+    prisma.staff.count({ where: { status: 'ACTIVE', ...B } }),
+    prisma.staff.count({ where: B }),
+    prisma.attendance.count({ where: { date: today, status: 'PRESENT', ...onStaff } }),
+    prisma.attendance.count({ where: { date: today, status: 'ABSENT', ...onStaff } }),
+    prisma.attendance.count({ where: { date: today, status: 'LATE', ...onStaff } }),
+    prisma.attendance.count({ where: { date: today, status: 'ON_LEAVE', ...onStaff } }),
+    prisma.leaveRequest.count({ where: { status: 'PENDING', ...onStaff } }),
+    prisma.staff.groupBy({ by: ['departmentId'], where: { status: 'ACTIVE', ...B }, _count: true }),
   ]);
 
   return { activeStaff, totalStaff, presentToday, absentToday, lateToday, onLeave, pendingLeave, byDepartment };

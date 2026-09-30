@@ -10,6 +10,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
+import { branchScopeFor } from '@/lib/branch-scope';
 import { getSession, hasAnyPermission } from '@/lib/auth-utils';
 
 export type SearchResultKind = 'customer' | 'savings' | 'loan';
@@ -31,6 +32,8 @@ export async function globalSearch(rawQuery: string): Promise<SearchResult[]> {
   if (query.length < MIN_QUERY) return [];
 
   const like = { contains: query, mode: 'insensitive' as const };
+  const scope = await branchScopeFor(user);
+  const B = scope ? { branchId: scope } : {};
 
   const canSeeCustomers = hasAnyPermission(user, ['CUSTOMERS:READ', 'CUSTOMERS:CREATE']);
   const canSeeSavings = hasAnyPermission(user, [
@@ -45,6 +48,7 @@ export async function globalSearch(rawQuery: string): Promise<SearchResult[]> {
     canSeeCustomers
       ? prisma.customer.findMany({
           where: {
+            ...B,
             OR: [
               { firstName: like }, { lastName: like },
               { customerNumber: like }, { phone: like }, { email: like },
@@ -60,6 +64,7 @@ export async function globalSearch(rawQuery: string): Promise<SearchResult[]> {
       ? prisma.savingsAccount.findMany({
           where: {
             isDeleted: false,
+            ...B,
             OR: [
               { accountNumber: like },
               { customer: { firstName: like } },
@@ -80,6 +85,7 @@ export async function globalSearch(rawQuery: string): Promise<SearchResult[]> {
       ? prisma.loan.findMany({
           where: {
             isDeleted: false,
+            ...B,
             OR: [
               { loanNumber: like },
               { customer: { firstName: like } },

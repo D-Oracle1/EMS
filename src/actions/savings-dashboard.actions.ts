@@ -6,6 +6,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
+import { branchScopeFor } from '@/lib/branch-scope';
 import { requireAnyPermission } from '@/lib/auth-utils';
 
 const READ_PERMS = ['SAVINGS:READ', 'SAVINGS:CREATE', 'SAVINGS:DEPOSIT', 'SAVINGS:MANAGE'];
@@ -70,7 +71,10 @@ export interface SavingsDashboard {
 }
 
 export async function getSavingsDashboard(): Promise<SavingsDashboard> {
-  await requireAnyPermission(READ_PERMS);
+  const user = await requireAnyPermission(READ_PERMS);
+  const scope = await branchScopeFor(user);
+  const B = scope ? { branchId: scope } : {};
+  const onAccount = scope ? { account: { branchId: scope } } : {};
 
   const today = startOfToday();
   const monthStart = startOfMonth();
@@ -109,48 +113,48 @@ export async function getSavingsDashboard(): Promise<SavingsDashboard> {
     ...monthDeposits
   ] = await Promise.all([
     prisma.savingsAccount.aggregate({
-      where: { status: 'ACTIVE', isDeleted: false },
+      where: { status: 'ACTIVE', isDeleted: false, ...B },
       _count: true,
       _sum: { currentBalance: true },
     }),
     prisma.savingsAccount.aggregate({
-      where: { status: 'ACTIVE', isDeleted: false },
+      where: { status: 'ACTIVE', isDeleted: false, ...B },
       _sum: { pendingDeposits: true },
     }),
     prisma.savingsAccount.aggregate({
-      where: { status: 'ACTIVE', isDeleted: false },
+      where: { status: 'ACTIVE', isDeleted: false, ...B },
       _sum: { eligibleBalance: true },
     }),
-    prisma.savingsDailyInterest.aggregate({ _sum: { amount: true } }),
+    prisma.savingsDailyInterest.aggregate({ where: onAccount, _sum: { amount: true } }),
     // What is still owed to savers. Daily interest is credited straight to the
     // balance, so interestAccrued sits at zero and the liability is the gap
     // between what each account was promised and what it has been paid.
     prisma.savingsAccount.aggregate({
-      where: { status: 'ACTIVE', isDeleted: false, maturityDate: { not: null } },
+      where: { status: 'ACTIVE', isDeleted: false, maturityDate: { not: null }, ...B },
       _sum: { interestTargetTotal: true, interestPaidToDate: true },
     }),
     prisma.savingsDailyInterest.aggregate({
-      where: { date: { gte: monthStart } },
+      where: { date: { gte: monthStart }, ...onAccount },
       _sum: { amount: true },
     }),
     prisma.savingsTransaction.aggregate({
-      where: { transactionType: 'DEPOSIT', processedAt: { gte: today } },
+      where: { transactionType: 'DEPOSIT', processedAt: { gte: today }, ...onAccount },
       _count: true,
       _sum: { amount: true },
     }),
     prisma.savingsTransaction.aggregate({
-      where: { transactionType: 'DEPOSIT', processedAt: { gte: monthStart } },
+      where: { transactionType: 'DEPOSIT', processedAt: { gte: monthStart }, ...onAccount },
       _count: true,
       _sum: { amount: true },
     }),
     prisma.savingsAccount.groupBy({
       by: ['status'],
-      where: { isDeleted: false },
+      where: { isDeleted: false, ...B },
       _count: true,
     }),
-    prisma.savingsAccount.count({ where: { status: 'COMPLETED', isDeleted: false } }),
+    prisma.savingsAccount.count({ where: { status: 'COMPLETED', isDeleted: false, ...B } }),
     prisma.savingsTransaction.aggregate({
-      where: { transactionType: 'MATURITY_PAYOUT' },
+      where: { transactionType: 'MATURITY_PAYOUT', ...onAccount },
       _sum: { amount: true },
     }),
     prisma.savingsAccount.findMany({
@@ -158,6 +162,7 @@ export async function getSavingsDashboard(): Promise<SavingsDashboard> {
         status: 'ACTIVE',
         isDeleted: false,
         maturityDate: { not: null, lte: maturityHorizon, gte: today },
+        ...B,
       },
       include: {
         customer: { select: { firstName: true, lastName: true } },
@@ -168,13 +173,13 @@ export async function getSavingsDashboard(): Promise<SavingsDashboard> {
     }),
     prisma.savingsAccount.groupBy({
       by: ['productId'],
-      where: { status: 'ACTIVE', isDeleted: false },
+      where: { status: 'ACTIVE', isDeleted: false, ...B },
       _count: true,
       _sum: { currentBalance: true },
     }),
     ...monthWindows.map((w) =>
       prisma.savingsTransaction.aggregate({
-        where: { transactionType: 'DEPOSIT', processedAt: { gte: w.from, lt: w.to } },
+        where: { transactionType: 'DEPOSIT', processedAt: { gte: w.from, lt: w.to }, ...onAccount },
         _sum: { amount: true },
       })
     ),

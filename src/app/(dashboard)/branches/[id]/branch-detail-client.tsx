@@ -60,7 +60,11 @@ function StatusBadge({ status }: { status: string }) {
   return <Badge variant={statusVariant(status)}>{label(status)}</Badge>;
 }
 
-export function BranchDetailClient({ branch }: { branch: Branch }) {
+/**
+ * One branch's figures and records. `mine` renders it as a manager's own
+ * My Branch page: no route back to the all-branches index they cannot open.
+ */
+export function BranchDetailClient({ branch, mine = false }: { branch: Branch; mine?: boolean }) {
   const [tab, setTab] = useState<BranchRecordKind>('activity');
   const [rows, setRows] = useState<Row[]>([]);
   const [pagination, setPagination] = useState({ page: 1, limit: 25, total: 0, totalPages: 1 });
@@ -105,9 +109,13 @@ export function BranchDetailClient({ branch }: { branch: Branch }) {
     <div className="space-y-6">
       {/* Header */}
       <div className="space-y-3">
-        <Link href="/branches" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="h-4 w-4" /> All branches
-        </Link>
+        {mine ? (
+          <p className="text-sm font-medium text-muted-foreground">My Branch</p>
+        ) : (
+          <Link href="/branches" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+            <ArrowLeft className="h-4 w-4" /> All branches
+          </Link>
+        )}
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="flex flex-wrap items-center gap-2">

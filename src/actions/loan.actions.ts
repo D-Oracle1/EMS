@@ -3,6 +3,7 @@
 import { LoanStatus, ScheduleStatus } from '@prisma/client';
 import Decimal from 'decimal.js';
 import { prisma, withTransaction } from '@/lib/prisma';
+import { branchScopeFor, inScope } from '@/lib/branch-scope';
 import { requirePermission, requireAnyPermission, getSession } from '@/lib/auth-utils';
 import { auditLog } from '@/lib/audit';
 import {
@@ -48,8 +49,11 @@ export async function getLoans(filters?: {
     user.permissions.includes('LOANS:CREATE') &&
     !user.permissions.includes('LOANS:MANAGE_ALL');
 
+  const scope = await branchScopeFor(user);
+
   const where: Record<string, unknown> = {};
   if (isLoanOfficerOnly) where.createdById = user.id;
+  if (scope) where.branchId = scope;
   if (filters?.status?.length) where.status = { in: filters.status };
   if (filters?.customerId) where.customerId = filters.customerId;
   if (filters?.search) {
@@ -128,7 +132,7 @@ export async function getLoan(id: string) {
     },
   });
 
-  if (!loan) throw new Error('Loan not found');
+  if (!loan || !inScope(await branchScopeFor(user), loan.branchId)) throw new Error('Loan not found');
 
   // Loan Officers can only view loans they created
   const isLoanOfficerOnly =
@@ -571,7 +575,7 @@ export async function submitForVerification(loanId: string, verificationOfficerI
         customer: { select: { id: true, firstName: true, lastName: true, address: true, city: true } },
       },
     });
-    if (!loan) return { success: false, error: 'Loan not found' };
+    if (!loan || !inScope(await branchScopeFor(user), loan.branchId)) return { success: false, error: 'Loan not found' };
     if (loan.status !== 'DRAFT') return { success: false, error: `Cannot submit loan with status ${loan.status}` };
 
     await withTransaction(async (tx) => {
@@ -669,7 +673,7 @@ export async function submitVerification(data: {
     const user = await requirePermission('LOANS:VERIFY');
 
     const loan = await prisma.loan.findUnique({ where: { id: data.loanId } });
-    if (!loan) return { success: false, error: 'Loan not found' };
+    if (!loan || !inScope(await branchScopeFor(user), loan.branchId)) return { success: false, error: 'Loan not found' };
     if (loan.status !== 'PENDING_VERIFICATION' && loan.status !== 'VERIFICATION_IN_PROGRESS') {
       return { success: false, error: `Cannot verify loan with status ${loan.status}` };
     }
@@ -749,7 +753,7 @@ export async function submitForApproval(loanId: string): Promise<ActionResult> {
     const user = await requirePermission('LOANS:CREATE');
 
     const loan = await prisma.loan.findUnique({ where: { id: loanId } });
-    if (!loan) return { success: false, error: 'Loan not found' };
+    if (!loan || !inScope(await branchScopeFor(user), loan.branchId)) return { success: false, error: 'Loan not found' };
     if (loan.status !== 'VERIFIED') return { success: false, error: `Cannot submit for approval with status ${loan.status}` };
 
     await prisma.loan.update({
@@ -803,7 +807,7 @@ export async function processApproval(data: {
     const user = await requireAnyPermission(['LOANS:APPROVE_L1', 'LOANS:APPROVE_L2']);
 
     const loan = await prisma.loan.findUnique({ where: { id: data.loanId } });
-    if (!loan) return { success: false, error: 'Loan not found' };
+    if (!loan || !inScope(await branchScopeFor(user), loan.branchId)) return { success: false, error: 'Loan not found' };
     if (loan.status !== 'PENDING_APPROVAL') return { success: false, error: `Cannot approve loan with status ${loan.status}` };
 
     // Segregation of duties: creator cannot approve
@@ -910,7 +914,7 @@ export async function disburseLoan(data: {
         },
       },
     });
-    if (!loan) return { success: false, error: 'Loan not found' };
+    if (!loan || !inScope(await branchScopeFor(user), loan.branchId)) return { success: false, error: 'Loan not found' };
     if (loan.status !== 'PENDING_DISBURSEMENT' && loan.status !== 'APPROVED') {
       return { success: false, error: `Cannot disburse loan with status ${loan.status}` };
     }
@@ -1070,7 +1074,7 @@ export async function processRepayment(data: {
         schedule: { where: { status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] } }, orderBy: { installmentNumber: 'asc' } },
       },
     });
-    if (!loan) return { success: false, error: 'Loan not found' };
+    if (!loan || !inScope(await branchScopeFor(user), loan.branchId)) return { success: false, error: 'Loan not found' };
     if (loan.status !== 'ACTIVE' && loan.status !== 'OVERDUE') {
       return { success: false, error: `Cannot process repayment for loan with status ${loan.status}` };
     }
@@ -1363,7 +1367,7 @@ export async function requestRestructuring(data: {
         schedule: { where: { status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] } } },
       },
     });
-    if (!loan) return { success: false, error: 'Loan not found' };
+    if (!loan || !inScope(await branchScopeFor(user), loan.branchId)) return { success: false, error: 'Loan not found' };
     if (loan.status !== 'ACTIVE' && loan.status !== 'OVERDUE') {
       return { success: false, error: `Cannot restructure loan with status ${loan.status}` };
     }
@@ -1673,7 +1677,7 @@ export async function writeOffLoan(data: {
         schedule: { where: { status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] } } },
       },
     });
-    if (!loan) return { success: false, error: 'Loan not found' };
+    if (!loan || !inScope(await branchScopeFor(user), loan.branchId)) return { success: false, error: 'Loan not found' };
     if (loan.status !== 'DEFAULTED' && loan.status !== 'OVERDUE') {
       return { success: false, error: `Only DEFAULTED or OVERDUE loans can be written off. Current status: ${loan.status}` };
     }

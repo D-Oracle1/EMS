@@ -5,6 +5,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
+import { branchScopeFor, inScope } from '@/lib/branch-scope';
 import { requireAnyPermission } from '@/lib/auth-utils';
 
 const READ_PERMS = ['SAVINGS:READ', 'SAVINGS:CREATE', 'SAVINGS:DEPOSIT', 'SAVINGS:MANAGE'];
@@ -46,7 +47,7 @@ export async function getSavingsStatement(
   from?: string,
   to?: string
 ): Promise<SavingsStatement> {
-  await requireAnyPermission(READ_PERMS);
+  const user = await requireAnyPermission(READ_PERMS);
 
   const account = await prisma.savingsAccount.findUnique({
     where: { id: accountId },
@@ -56,7 +57,9 @@ export async function getSavingsStatement(
       transactions: { orderBy: [{ processedAt: 'asc' }, { createdAt: 'asc' }] },
     },
   });
-  if (!account) throw new Error('Savings account not found');
+  if (!account || !inScope(await branchScopeFor(user), account.branchId)) {
+    throw new Error('Savings account not found');
+  }
 
   const fromDate = from ? new Date(from) : null;
   const toDate = to ? new Date(`${to}T23:59:59.999`) : null;
@@ -178,12 +181,14 @@ export async function getSavingsReport(filters?: SavingsReportFilters): Promise<
   rows: SavingsReportRow[];
   summary: { count: number; totalBalance: number; totalInterest: number; totalDeposits: number };
 }> {
-  await requireAnyPermission(READ_PERMS);
+  const user = await requireAnyPermission(READ_PERMS);
+  const scope = await branchScopeFor(user);
 
   const where: Record<string, unknown> = { isDeleted: false };
   if (filters?.productId) where.productId = filters.productId;
   if (filters?.status) where.status = filters.status;
   if (filters?.branchId) where.branchId = filters.branchId;
+  if (scope) where.branchId = scope;
   if (filters?.officerId) where.createdById = filters.officerId;
   if (filters?.dateFrom || filters?.dateTo) {
     where.openedAt = {
@@ -308,7 +313,8 @@ const MONTH_NAMES = [
 ];
 
 export async function getSavingsMonthDetail(month: string): Promise<SavingsMonthDetail> {
-  await requireAnyPermission(READ_PERMS);
+  const user = await requireAnyPermission(READ_PERMS);
+  const scope = await branchScopeFor(user);
 
   const match = /^(\d{4})-(\d{2})$/.exec(month ?? '');
   if (!match) throw new Error('Month must be given as YYYY-MM');
@@ -323,6 +329,7 @@ export async function getSavingsMonthDetail(month: string): Promise<SavingsMonth
     valueDate: { gte: from, lt: to },
     isReversed: false,
     transactionType: { in: ['DEPOSIT' as const, 'WITHDRAWAL' as const] },
+    ...(scope && { account: { branchId: scope } }),
   };
 
   // The summary is computed over the whole month regardless of the row cap, so

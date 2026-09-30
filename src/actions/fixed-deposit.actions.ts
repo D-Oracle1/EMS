@@ -2,6 +2,7 @@
 
 import Decimal from 'decimal.js';
 import { prisma, withTransaction } from '@/lib/prisma';
+import { branchScopeFor, inScope } from '@/lib/branch-scope';
 import { requirePermission, requireAnyPermission } from '@/lib/auth-utils';
 import { auditLog } from '@/lib/audit';
 import { generateReference } from '@/lib/utils';
@@ -23,13 +24,15 @@ export async function getFixedDeposits(filters?: {
   page?: number;
   limit?: number;
 }) {
-  await requirePermission('FIXED_DEPOSITS:READ');
+  const user = await requirePermission('FIXED_DEPOSITS:READ');
+  const scope = await branchScopeFor(user);
 
   const page = filters?.page || 1;
   const limit = filters?.limit || 20;
   const skip = (page - 1) * limit;
 
   const where: Record<string, unknown> = {};
+  if (scope) where.branchId = scope;
   if (filters?.customerId) where.customerId = filters.customerId;
   if (filters?.status) where.status = filters.status;
   if (filters?.search) {
@@ -68,7 +71,7 @@ export async function getFixedDeposits(filters?: {
 }
 
 export async function getFixedDeposit(id: string) {
-  await requirePermission('FIXED_DEPOSITS:READ');
+  const user = await requirePermission('FIXED_DEPOSITS:READ');
 
   const fd = await prisma.fixedDeposit.findUnique({
     where: { id },
@@ -80,7 +83,7 @@ export async function getFixedDeposit(id: string) {
     },
   });
 
-  if (!fd) throw new Error('Fixed deposit not found');
+  if (!fd || !inScope(await branchScopeFor(user), fd.branchId)) throw new Error('Fixed deposit not found');
 
   return {
     ...fd,
@@ -203,7 +206,7 @@ export async function withdrawFixedDeposit(
       where: { id: fdId },
       include: { customer: true },
     });
-    if (!fd) return { success: false, error: 'Fixed deposit not found' };
+    if (!fd || !inScope(await branchScopeFor(user), fd.branchId)) return { success: false, error: 'Fixed deposit not found' };
     if (fd.status !== 'ACTIVE') return { success: false, error: 'FD is not active' };
 
     // Calculate penalty (50% of earned interest)
@@ -278,7 +281,7 @@ export async function matureFixedDeposit(fdId: string): Promise<ActionResult> {
       where: { id: fdId },
       include: { customer: true },
     });
-    if (!fd) return { success: false, error: 'Fixed deposit not found' };
+    if (!fd || !inScope(await branchScopeFor(user), fd.branchId)) return { success: false, error: 'Fixed deposit not found' };
     if (fd.status !== 'MATURED') return { success: false, error: 'FD has not matured yet' };
 
     const principalAmount = fd.principalAmount.toNumber();

@@ -2,6 +2,7 @@
 
 import Decimal from 'decimal.js';
 import { prisma, withTransaction } from '@/lib/prisma';
+import { branchScopeFor, inScope } from '@/lib/branch-scope';
 import { requirePermission, requireAnyPermission } from '@/lib/auth-utils';
 import { auditLog } from '@/lib/audit';
 import { createNotification } from '@/lib/notifications';
@@ -29,13 +30,15 @@ export async function getSavingsAccounts(filters?: {
   page?: number;
   limit?: number;
 }) {
-  await requireAnyPermission(['SAVINGS:READ', 'SAVINGS:CREATE']);
+  const user = await requireAnyPermission(['SAVINGS:READ', 'SAVINGS:CREATE']);
+  const scope = await branchScopeFor(user);
 
   const page = filters?.page || 1;
   const limit = filters?.limit || 20;
   const skip = (page - 1) * limit;
 
   const where: Record<string, unknown> = {};
+  if (scope) where.branchId = scope;
   if (filters?.customerId) where.customerId = filters.customerId;
   if (filters?.status) where.status = filters.status;
   if (filters?.productId) where.productId = filters.productId;
@@ -84,7 +87,7 @@ export async function getSavingsAccounts(filters?: {
 }
 
 export async function getSavingsAccount(id: string) {
-  await requirePermission('SAVINGS:READ');
+  const user = await requirePermission('SAVINGS:READ');
 
   const account = await prisma.savingsAccount.findUnique({
     where: { id },
@@ -103,7 +106,9 @@ export async function getSavingsAccount(id: string) {
     },
   });
 
-  if (!account) throw new Error('Savings account not found');
+  if (!account || !inScope(await branchScopeFor(user), account.branchId)) {
+    throw new Error('Savings account not found');
+  }
 
   return {
     ...account,
@@ -249,7 +254,7 @@ export async function processDeposit(data: {
       where: { id: data.accountId },
       include: { product: true, customer: true },
     });
-    if (!account) return { success: false, error: 'Account not found' };
+    if (!account || !inScope(await branchScopeFor(user), account.branchId)) return { success: false, error: 'Account not found' };
     if (account.status !== 'ACTIVE') return { success: false, error: 'Account is not active' };
 
     if (data.amount < account.product.minDeposit.toNumber()) {
@@ -335,7 +340,7 @@ export async function processWithdrawal(data: {
       where: { id: data.accountId },
       include: { product: true, customer: true },
     });
-    if (!account) return { success: false, error: 'Account not found' };
+    if (!account || !inScope(await branchScopeFor(user), account.branchId)) return { success: false, error: 'Account not found' };
     if (account.status !== 'ACTIVE') return { success: false, error: 'Account is not active' };
 
     // Check withdrawal allowed
@@ -481,7 +486,7 @@ export async function requestWithdrawal(data: {
       where: { id: data.accountId },
       include: { product: true, customer: true },
     });
-    if (!account) return { success: false, error: 'Account not found' };
+    if (!account || !inScope(await branchScopeFor(user), account.branchId)) return { success: false, error: 'Account not found' };
     if (account.status !== 'ACTIVE') return { success: false, error: 'Account is not active' };
     if (!account.product.allowWithdrawal) {
       return { success: false, error: 'Withdrawals not allowed on this account type' };
@@ -576,13 +581,15 @@ export async function getPendingWithdrawals(filters?: {
   page?: number;
   limit?: number;
 }) {
-  await requireAnyPermission(['SAVINGS:WITHDRAW', 'SAVINGS:APPROVE', 'SAVINGS:READ']);
+  const user = await requireAnyPermission(['SAVINGS:WITHDRAW', 'SAVINGS:APPROVE', 'SAVINGS:READ']);
+  const scope = await branchScopeFor(user);
 
   const page = filters?.page || 1;
   const limit = filters?.limit || 20;
   const skip = (page - 1) * limit;
 
   const where: Record<string, unknown> = {};
+  if (scope) where.account = { branchId: scope };
   if (filters?.status) where.status = filters.status;
   else where.status = 'PENDING'; // Default to pending
   if (filters?.accountId) where.accountId = filters.accountId;
@@ -639,7 +646,7 @@ export async function processWithdrawalRequest(data: {
         account: { include: { product: true, customer: true } },
       },
     });
-    if (!request) return { success: false, error: 'Request not found' };
+    if (!request || !inScope(await branchScopeFor(user), request.account.branchId)) return { success: false, error: 'Request not found' };
     if (request.status !== 'PENDING') return { success: false, error: 'Request is not pending' };
 
     // Segregation of duties: requester cannot approve their own request
@@ -780,24 +787,26 @@ export async function processWithdrawalRequest(data: {
  * Get savings dashboard stats for today's activity.
  */
 export async function getSavingsDashboardStats() {
-  await requireAnyPermission(['SAVINGS:READ', 'SAVINGS:CREATE', 'SAVINGS:DEPOSIT']);
+  const user = await requireAnyPermission(['SAVINGS:READ', 'SAVINGS:CREATE', 'SAVINGS:DEPOSIT']);
+  const scope = await branchScopeFor(user);
+  const onAccount = scope ? { account: { branchId: scope } } : {};
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   const [deposits, withdrawals, pendingRequests, activeAccounts] = await Promise.all([
     prisma.savingsTransaction.aggregate({
-      where: { transactionType: 'DEPOSIT', processedAt: { gte: today } },
+      where: { transactionType: 'DEPOSIT', processedAt: { gte: today }, ...onAccount },
       _count: true,
       _sum: { amount: true },
     }),
     prisma.savingsTransaction.aggregate({
-      where: { transactionType: 'WITHDRAWAL', processedAt: { gte: today } },
+      where: { transactionType: 'WITHDRAWAL', processedAt: { gte: today }, ...onAccount },
       _count: true,
       _sum: { amount: true },
     }),
-    prisma.withdrawalRequest.count({ where: { status: 'PENDING' } }),
-    prisma.savingsAccount.count({ where: { status: 'ACTIVE' } }),
+    prisma.withdrawalRequest.count({ where: { status: 'PENDING', ...onAccount } }),
+    prisma.savingsAccount.count({ where: { status: 'ACTIVE', ...(scope && { branchId: scope }) } }),
   ]);
 
   return {

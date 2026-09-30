@@ -34,10 +34,17 @@ export interface NavItem {
   color: string;
   /** Heading rendered above this item, opening a new section of the nav. */
   section?: string;
+  /** Hidden below this role level, on top of any permission gate. */
+  minRoleLevel?: number;
+  /** Hidden from staff who are not posted to a branch. */
+  requiresBranch?: boolean;
 }
 
 export const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, color: 'blue' },
+  // A branch manager's window onto their own branch. The server applies the
+  // same rule (overseesOwnBranch in lib/branch-scope) and locks it to their branch.
+  { label: 'My Branch', href: '/my-branch', icon: Building2, color: 'indigo', permissions: ['LOANS:APPROVE_L1', 'SAVINGS:APPROVE'], minRoleLevel: 70, requiresBranch: true },
 
   // ── Customers ────────────────────────────────────────────────────────────
   { label: 'Customers',      href: '/customers',      icon: Users,          color: 'cyan',    permission: 'CUSTOMERS:READ', section: 'Customers' },
@@ -114,10 +121,14 @@ export const navItems: NavItem[] = [
 
 export interface NavViewer {
   permissions: string[];
+  roleLevel?: number;
+  branchId?: string | null;
 }
 
 /** Whether a viewer may see one entry. */
 export function canSee(item: NavItem, viewer: NavViewer): boolean {
+  if (item.minRoleLevel && (viewer.roleLevel ?? 0) < item.minRoleLevel) return false;
+  if (item.requiresBranch && !viewer.branchId) return false;
   if (!item.permission && !item.permissions) return true;
   if (item.permission) return viewer.permissions.includes(item.permission);
   if (item.permissions) return item.permissions.some((p) => viewer.permissions.includes(p));

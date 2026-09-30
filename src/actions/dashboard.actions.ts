@@ -1,6 +1,7 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
+import { branchScopeFor } from '@/lib/branch-scope';
 import { getSession, hasPermission, hasAnyPermission, hasModuleAccess } from '@/lib/auth-utils';
 import type { DashboardData } from '@/types';
 
@@ -14,6 +15,15 @@ export async function getDashboardData(): Promise<DashboardData> {
   // Determine if user is a manager/approver (sees all loans) or a loan officer (sees only their own)
   const isApprover = hasAnyPermission(user, ['LOANS:APPROVE_L1', 'LOANS:APPROVE_L2']);
   const isLoanOfficer = hasPermission(user, 'LOANS:CREATE') && !isApprover;
+
+  // Branch staff see their own branch's figures; head office and directors see
+  // the whole company. HR administrators keep the company-wide people figures.
+  const scope = await branchScopeFor(user);
+  const B = scope ? { branchId: scope } : {};
+  const onAccount = scope ? { account: { branchId: scope } } : {};
+  const onLoan = scope ? { loan: { branchId: scope } } : {};
+  const hrScope = hasPermission(user, 'HR:STAFF_CREATE') ? null : scope;
+  const onStaff = hrScope ? { staff: { branchId: hrScope } } : {};
 
   // Build all queries in parallel for speed
   const queries: Array<{ key: string; promise: Promise<unknown> }> = [];
@@ -35,8 +45,8 @@ export async function getDashboardData(): Promise<DashboardData> {
     // For loan officers, scope loan stats to their own loans
     // For managers/admins, show all loans
     const loanWhere = isLoanOfficer
-      ? { createdById: user.id, isDeleted: false }
-      : { isDeleted: false };
+      ? { createdById: user.id, isDeleted: false, ...B }
+      : { isDeleted: false, ...B };
 
     queries.push({
       key: 'loanCounts',
@@ -47,12 +57,12 @@ export async function getDashboardData(): Promise<DashboardData> {
   if (hasModuleAccess(user, 'SAVINGS')) {
     queries.push({
       key: 'savingsStats',
-      promise: prisma.savingsAccount.aggregate({ where: { status: 'ACTIVE' }, _count: true, _sum: { currentBalance: true } }),
+      promise: prisma.savingsAccount.aggregate({ where: { status: 'ACTIVE', ...B }, _count: true, _sum: { currentBalance: true } }),
     });
     queries.push({
       key: 'todayDeposits',
       promise: prisma.savingsTransaction.aggregate({
-        where: { transactionType: 'DEPOSIT', createdAt: { gte: today } },
+        where: { transactionType: 'DEPOSIT', createdAt: { gte: today }, ...onAccount },
         _count: true,
         _sum: { amount: true },
       }),
@@ -60,14 +70,14 @@ export async function getDashboardData(): Promise<DashboardData> {
     queries.push({
       key: 'todayWithdrawals',
       promise: prisma.savingsTransaction.aggregate({
-        where: { transactionType: 'WITHDRAWAL', createdAt: { gte: today } },
+        where: { transactionType: 'WITHDRAWAL', createdAt: { gte: today }, ...onAccount },
         _count: true,
         _sum: { amount: true },
       }),
     });
     queries.push({
       key: 'pendingWithdrawalRequests',
-      promise: prisma.withdrawalRequest.count({ where: { status: 'PENDING' } }),
+      promise: prisma.withdrawalRequest.count({ where: { status: 'PENDING', ...onAccount } }),
     });
 
     // Twelve months of savings movement for the dashboard chart. Bucketed in
@@ -85,6 +95,7 @@ export async function getDashboardData(): Promise<DashboardData> {
           valueDate: { gte: savingsFrom },
           isReversed: false,
           transactionType: { in: ['DEPOSIT', 'WITHDRAWAL'] },
+          ...onAccount,
         },
         select: { valueDate: true, amount: true, transactionType: true },
       }),
@@ -94,30 +105,30 @@ export async function getDashboardData(): Promise<DashboardData> {
   if (hasModuleAccess(user, 'FIXED_DEPOSITS')) {
     queries.push({
       key: 'fdStats',
-      promise: prisma.fixedDeposit.aggregate({ where: { status: 'ACTIVE' }, _count: true, _sum: { principalAmount: true } }),
+      promise: prisma.fixedDeposit.aggregate({ where: { status: 'ACTIVE', ...B }, _count: true, _sum: { principalAmount: true } }),
     });
   }
 
   if (hasModuleAccess(user, 'CUSTOMERS')) {
     queries.push({
       key: 'customerCount',
-      promise: prisma.customer.count({ where: { status: 'ACTIVE' } }),
+      promise: prisma.customer.count({ where: { status: 'ACTIVE', ...B } }),
     });
   }
 
   if (hasModuleAccess(user, 'HR')) {
     queries.push(
-      { key: 'activeStaff', promise: prisma.staff.count({ where: { status: 'ACTIVE' } }) },
-      { key: 'presentToday', promise: prisma.attendance.count({ where: { date: today, status: 'PRESENT' } }) },
-      { key: 'absentToday', promise: prisma.attendance.count({ where: { date: today, status: 'ABSENT' } }) },
-      { key: 'pendingLeave', promise: prisma.leaveRequest.count({ where: { status: 'PENDING' } }) },
+      { key: 'activeStaff', promise: prisma.staff.count({ where: { status: 'ACTIVE', ...(hrScope && { branchId: hrScope }) } }) },
+      { key: 'presentToday', promise: prisma.attendance.count({ where: { date: today, status: 'PRESENT', ...onStaff } }) },
+      { key: 'absentToday', promise: prisma.attendance.count({ where: { date: today, status: 'ABSENT', ...onStaff } }) },
+      { key: 'pendingLeave', promise: prisma.leaveRequest.count({ where: { status: 'PENDING', ...onStaff } }) },
     );
   }
 
   if (hasPermission(user, 'LOANS:VERIFY')) {
     queries.push(
       { key: 'myVerificationTasks', promise: prisma.verificationTask.count({ where: { assignedToId: user.id, status: { in: ['ASSIGNED', 'IN_PROGRESS'] } } }) },
-      { key: 'allPendingVerification', promise: prisma.verificationTask.count({ where: { status: { in: ['PENDING', 'ASSIGNED', 'IN_PROGRESS'] } } }) },
+      { key: 'allPendingVerification', promise: prisma.verificationTask.count({ where: { status: { in: ['PENDING', 'ASSIGNED', 'IN_PROGRESS'] }, ...onLoan } }) },
     );
 
     // Active verification task list for verification officers (only assigned to them)
@@ -154,9 +165,9 @@ export async function getDashboardData(): Promise<DashboardData> {
 
   if (hasPermission(user, 'ACCOUNTS:REPORTS_VIEW')) {
     queries.push(
-      { key: 'execLoans', promise: prisma.loan.aggregate({ where: { status: { in: ['ACTIVE', 'OVERDUE'] } }, _sum: { principalAmount: true } }) },
-      { key: 'execSavings', promise: prisma.savingsAccount.aggregate({ where: { status: 'ACTIVE' }, _sum: { currentBalance: true } }) },
-      { key: 'execFDs', promise: prisma.fixedDeposit.aggregate({ where: { status: 'ACTIVE' }, _sum: { principalAmount: true } }) },
+      { key: 'execLoans', promise: prisma.loan.aggregate({ where: { status: { in: ['ACTIVE', 'OVERDUE'] }, ...B }, _sum: { principalAmount: true } }) },
+      { key: 'execSavings', promise: prisma.savingsAccount.aggregate({ where: { status: 'ACTIVE', ...B }, _sum: { currentBalance: true } }) },
+      { key: 'execFDs', promise: prisma.fixedDeposit.aggregate({ where: { status: 'ACTIVE', ...B }, _sum: { principalAmount: true } }) },
     );
 
     // Risk indicators
@@ -164,9 +175,9 @@ export async function getDashboardData(): Promise<DashboardData> {
     monthStart.setDate(1);
     monthStart.setHours(0, 0, 0, 0);
     queries.push(
-      { key: 'riskOverdue', promise: prisma.loan.aggregate({ where: { status: 'OVERDUE', isDeleted: false }, _sum: { principalAmount: true }, _count: { _all: true } }) },
-      { key: 'riskActive', promise: prisma.loan.aggregate({ where: { status: { in: ['ACTIVE', 'OVERDUE', 'DEFAULTED'] }, isDeleted: false }, _sum: { principalAmount: true }, _count: { _all: true } }) },
-      { key: 'riskCollection', promise: prisma.loanSchedule.aggregate({ where: { dueDate: { gte: monthStart, lte: new Date() } }, _sum: { totalDue: true, totalPaid: true } }) },
+      { key: 'riskOverdue', promise: prisma.loan.aggregate({ where: { status: 'OVERDUE', isDeleted: false, ...B }, _sum: { principalAmount: true }, _count: { _all: true } }) },
+      { key: 'riskActive', promise: prisma.loan.aggregate({ where: { status: { in: ['ACTIVE', 'OVERDUE', 'DEFAULTED'] }, isDeleted: false, ...B }, _sum: { principalAmount: true }, _count: { _all: true } }) },
+      { key: 'riskCollection', promise: prisma.loanSchedule.aggregate({ where: { dueDate: { gte: monthStart, lte: new Date() }, ...onLoan }, _sum: { totalDue: true, totalPaid: true } }) },
     );
   }
 
@@ -218,7 +229,7 @@ export async function getDashboardData(): Promise<DashboardData> {
     queries.push({
       key: 'pendingApprovalLoans',
       promise: prisma.loan.findMany({
-        where: { status: 'PENDING_APPROVAL', isDeleted: false },
+        where: { status: 'PENDING_APPROVAL', isDeleted: false, ...B },
         include: {
           customer: { select: { firstName: true, lastName: true, customerNumber: true } },
           createdBy: { select: { firstName: true, lastName: true } },
@@ -259,6 +270,7 @@ export async function getDashboardData(): Promise<DashboardData> {
           disbursedAt: { gte: twelveMonthsAgo },
           status: { in: ['ACTIVE', 'OVERDUE', 'DEFAULTED', 'CLOSED', 'WRITTEN_OFF'] },
           isDeleted: false,
+          ...B,
         },
         select: { disbursedAt: true, principalAmount: true },
       }),
@@ -269,7 +281,7 @@ export async function getDashboardData(): Promise<DashboardData> {
       key: 'loansByProduct',
       promise: prisma.loan.groupBy({
         by: ['productId'],
-        where: { isDeleted: false, status: { notIn: ['DRAFT', 'REJECTED'] } },
+        where: { isDeleted: false, status: { notIn: ['DRAFT', 'REJECTED'] }, ...B },
         _count: true,
         _sum: { principalAmount: true },
       }),
@@ -285,7 +297,7 @@ export async function getDashboardData(): Promise<DashboardData> {
       key: 'loansByOfficer',
       promise: prisma.loan.groupBy({
         by: ['createdById'],
-        where: { isDeleted: false, status: { notIn: ['DRAFT', 'REJECTED'] } },
+        where: { isDeleted: false, status: { notIn: ['DRAFT', 'REJECTED'] }, ...B },
         _count: true,
         _sum: { principalAmount: true },
       }),

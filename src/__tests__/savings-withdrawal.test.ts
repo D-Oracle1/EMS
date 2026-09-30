@@ -91,6 +91,12 @@ vi.mock('@/lib/utils', async (importOriginal) => ({
 }));
 
 vi.mock('@/lib/audit', () => ({ auditLog: vi.fn(async () => undefined) }));
+// Branch scoping is covered in branch-scope.test.ts; here every viewer is head office.
+vi.mock('@/lib/branch-scope', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/branch-scope')>()),
+  branchScopeFor: vi.fn(async () => null),
+  staffScopeFor: vi.fn(async () => null),
+}));
 vi.mock('@/lib/email', () => ({ notifyCustomerByEmail: vi.fn(async () => undefined) }));
 vi.mock('@/lib/customer-auth', () => ({ provisionCustomerLogin: vi.fn(async () => undefined) }));
 vi.mock('@/lib/customer-registration', () => ({

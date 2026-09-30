@@ -38,6 +38,12 @@ vi.mock('@/lib/auth-utils', () => ({
 }));
 
 vi.mock('@/lib/audit', () => ({ auditLog: vi.fn(async () => undefined) }));
+// Branch scoping is covered in branch-scope.test.ts; here every viewer is head office.
+vi.mock('@/lib/branch-scope', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/branch-scope')>()),
+  branchScopeFor: vi.fn(async () => null),
+  staffScopeFor: vi.fn(async () => null),
+}));
 vi.mock('@/lib/email', () => ({ notifyCustomerByEmail: vi.fn(async () => undefined) }));
 vi.mock('@/lib/customer-auth', () => ({ provisionCustomerLogin: vi.fn(async () => undefined) }));
 vi.mock('@/lib/customer-registration', () => ({
@@ -60,6 +66,7 @@ vi.mock('@/lib/utils', async (importOriginal) => ({
 }));
 
 import { getSavingsAccountsList } from '@/actions/fixed-savings.actions';
+import { branchScopeFor } from '@/lib/branch-scope';
 
 const { state } = h;
 
@@ -121,5 +128,16 @@ describe('getSavingsAccountsList', () => {
     expect(state.lastWhere.customerId).toBe('c1');
     expect(state.lastWhere.productId).toBe('p1');
     expect(state.lastWhere.status).toBe('ACTIVE');
+  });
+
+  it('confines branch staff to their own branch', async () => {
+    vi.mocked(branchScopeFor).mockResolvedValueOnce('branch-a');
+    await getSavingsAccountsList();
+    expect(state.lastWhere.branchId).toBe('branch-a');
+  });
+
+  it('does not filter by branch for head office', async () => {
+    await getSavingsAccountsList();
+    expect(state.lastWhere.branchId).toBeUndefined();
   });
 });

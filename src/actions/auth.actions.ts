@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/auth-utils';
 import { auditLog } from '@/lib/audit';
+import { generateTempPassword } from '@/lib/temp-password';
 import type { ActionResult } from '@/types';
 
 export async function changePassword(
@@ -135,7 +136,7 @@ export async function resetStaffPassword(
       return { success: false, error: 'Staff member not found' };
     }
 
-    const tempPassword = 'Reset@' + Math.random().toString(36).slice(-6);
+    const tempPassword = generateTempPassword('Reset@');
     const passwordHash = await bcrypt.hash(tempPassword, 12);
 
     await prisma.staff.update({
@@ -166,6 +167,95 @@ export async function resetStaffPassword(
     };
   } catch (error) {
     return { success: false, error: 'Failed to reset password' };
+  }
+}
+
+/** One staff member's freshly issued sign-in details. */
+export interface IssuedLogin {
+  staffId: string;
+  name: string;
+  employeeId: string;
+  email: string;
+  role: string | null;
+  branch: string | null;
+  tempPassword: string;
+}
+
+/** Most accounts one call will reissue, so a slip cannot reset the company. */
+const MAX_BULK_LOGINS = 200;
+
+/**
+ * Issue fresh temporary passwords to several staff at once and hand them back
+ * so they can be sent out. Existing passwords cannot be shown — they are stored
+ * only as one-way hashes — so this is the way to produce a list. Each person
+ * must change the password at their next sign-in. The passwords are returned
+ * once and never stored in readable form.
+ */
+export async function issueLoginDetails(
+  staffIds: string[]
+): Promise<ActionResult<IssuedLogin[]>> {
+  try {
+    const user = await getSession().then((s) => s.user);
+    if (!user.permissions.includes('SYSTEM:USER_MANAGE')) {
+      return { success: false, error: 'Permission denied' };
+    }
+
+    const ids = Array.from(new Set(staffIds)).filter((id) => id !== user.id);
+    if (ids.length === 0) return { success: false, error: 'Select at least one staff member' };
+    if (ids.length > MAX_BULK_LOGINS) {
+      return { success: false, error: `Select at most ${MAX_BULK_LOGINS} staff at a time` };
+    }
+
+    const staff = await prisma.staff.findMany({
+      where: { id: { in: ids }, isDeleted: false, status: { not: 'TERMINATED' } },
+      select: {
+        id: true, firstName: true, lastName: true, employeeId: true, email: true,
+        role: { select: { name: true } },
+        branch: { select: { name: true } },
+      },
+      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+    });
+
+    const issued: IssuedLogin[] = [];
+    for (const s of staff) {
+      const tempPassword = generateTempPassword();
+      await prisma.staff.update({
+        where: { id: s.id },
+        data: {
+          passwordHash: await bcrypt.hash(tempPassword, 12),
+          mustChangePassword: true,
+          failedLoginAttempts: 0,
+          lockedUntil: null,
+        },
+      });
+      await auditLog({
+        userId: user.id,
+        userEmail: user.email,
+        userRole: user.roleCode,
+        action: 'UPDATE',
+        module: 'AUTH',
+        entityType: 'STAFF',
+        entityId: s.id,
+        description: `Login details issued for ${s.firstName} ${s.lastName} (${s.employeeId}) by ${user.firstName} ${user.lastName}`,
+      });
+      issued.push({
+        staffId: s.id,
+        name: `${s.firstName} ${s.lastName}`,
+        employeeId: s.employeeId,
+        email: s.email,
+        role: s.role?.name ?? null,
+        branch: s.branch?.name ?? null,
+        tempPassword,
+      });
+    }
+
+    return {
+      success: true,
+      message: `Issued login details for ${issued.length} staff`,
+      data: issued,
+    };
+  } catch {
+    return { success: false, error: 'Failed to issue login details' };
   }
 }
 

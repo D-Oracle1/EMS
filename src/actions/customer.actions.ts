@@ -5,6 +5,7 @@ import { requirePermission, getSession } from '@/lib/auth-utils';
 import { auditLog } from '@/lib/audit';
 import { generateReference } from '@/lib/utils';
 import { provisionCustomerLogin } from '@/lib/customer-auth';
+import { branchScopeFor, inScope } from '@/lib/branch-scope';
 import type { ActionResult } from '@/types';
 
 /**
@@ -68,7 +69,8 @@ export async function getCustomers(filters?: {
   page?: number;
   limit?: number;
 }) {
-  await requirePermission('CUSTOMERS:READ');
+  const user = await requirePermission('CUSTOMERS:READ');
+  const scope = await branchScopeFor(user);
 
   const page = filters?.page || 1;
   const limit = filters?.limit || 20;
@@ -78,6 +80,7 @@ export async function getCustomers(filters?: {
   if (filters?.status) where.status = filters.status;
   if (filters?.type) where.customerType = filters.type;
   if (filters?.branchId) where.branchId = filters.branchId;
+  if (scope) where.branchId = scope;
   if (filters?.search) {
     where.OR = [
       { firstName: { contains: filters.search, mode: 'insensitive' } },
@@ -112,13 +115,15 @@ export async function getCustomers(filters?: {
 }
 
 export async function searchCustomers(query: string) {
-  await requirePermission('CUSTOMERS:READ');
+  const user = await requirePermission('CUSTOMERS:READ');
+  const scope = await branchScopeFor(user);
 
   if (!query || query.length < 2) return [];
 
   return prisma.customer.findMany({
     where: {
       status: 'ACTIVE',
+      ...(scope && { branchId: scope }),
       OR: [
         { firstName: { contains: query, mode: 'insensitive' } },
         { lastName: { contains: query, mode: 'insensitive' } },
@@ -140,7 +145,8 @@ export async function searchCustomers(query: string) {
 }
 
 export async function getCustomer(id: string) {
-  await requirePermission('CUSTOMERS:READ');
+  const user = await requirePermission('CUSTOMERS:READ');
+  const scope = await branchScopeFor(user);
 
   const customer = await prisma.customer.findUnique({
     where: { id },
@@ -160,7 +166,7 @@ export async function getCustomer(id: string) {
     },
   });
 
-  if (!customer) throw new Error('Customer not found');
+  if (!customer || !inScope(scope, customer.branchId)) throw new Error('Customer not found');
 
   return {
     ...customer,
@@ -341,7 +347,7 @@ export async function updateCustomer(
     const user = await requirePermission('CUSTOMERS:UPDATE');
 
     const existing = await prisma.customer.findUnique({ where: { id } });
-    if (!existing) return { success: false, error: 'Customer not found' };
+    if (!existing || !inScope(await branchScopeFor(user), existing.branchId)) return { success: false, error: 'Customer not found' };
 
     const sanitized: Record<string, unknown> = {};
     for (const key of ALLOWED_UPDATE_FIELDS) {
@@ -378,6 +384,9 @@ export async function verifyCustomerKYC(
 ): Promise<ActionResult> {
   try {
     const user = await requirePermission('CUSTOMERS:UPDATE');
+
+    const customer = await prisma.customer.findUnique({ where: { id: customerId }, select: { branchId: true } });
+    if (!customer || !inScope(await branchScopeFor(user), customer.branchId)) return { success: false, error: 'Customer not found' };
 
     await prisma.customer.update({
       where: { id: customerId },

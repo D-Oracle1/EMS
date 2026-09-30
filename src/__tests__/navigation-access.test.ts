@@ -318,8 +318,34 @@ describe('super admin', () => {
     );
   });
 
-  it('sees every entry in the nav', () => {
-    expect(hrefsFor('SUPER_ADMIN')).toHaveLength(navItems.length);
+  it('sees every entry in the nav that is not tied to a branch posting', () => {
+    // My Branch belongs to whoever runs a branch; the superuser has Branches.
+    expect(hrefsFor('SUPER_ADMIN')).toHaveLength(navItems.filter((i) => !i.requiresBranch).length);
+  });
+});
+
+// ── Branch manager ──────────────────────────────────────────────────────────
+
+describe('My Branch', () => {
+  const MANAGER = ['LOANS:APPROVE_L1', 'SAVINGS:APPROVE', 'CUSTOMERS:READ'];
+  const sees = (v: { permissions: string[]; roleLevel?: number; branchId?: string | null }) =>
+    resolveNav(v).items.some((i) => i.href === '/my-branch');
+
+  it('is shown to a manager posted to a branch', () => {
+    expect(sees({ permissions: MANAGER, roleLevel: 70, branchId: 'b1' })).toBe(true);
+  });
+
+  it('is hidden from a manager with no branch (head office)', () => {
+    expect(sees({ permissions: MANAGER, roleLevel: 70, branchId: null })).toBe(false);
+  });
+
+  it('is hidden below manager level, even with a branch', () => {
+    expect(sees({ permissions: [...ROLES.SAVINGS_OFFICER], roleLevel: 40, branchId: 'b1' })).toBe(false);
+    expect(sees({ permissions: MANAGER, roleLevel: 60, branchId: 'b1' })).toBe(false);
+  });
+
+  it('is hidden from a senior role that approves nothing at the branch', () => {
+    expect(sees({ permissions: [...ROLES.HR_ADMIN], roleLevel: 80, branchId: 'b1' })).toBe(false);
   });
 });
 

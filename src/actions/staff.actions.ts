@@ -1,10 +1,12 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
+import { staffScopeFor, inScope } from '@/lib/branch-scope';
 import { requirePermission, getSession } from '@/lib/auth-utils';
 import { auditLog } from '@/lib/audit';
 import { generateReference } from '@/lib/utils';
 import { hash } from 'bcryptjs';
+import { generateTempPassword } from '@/lib/temp-password';
 import type { ActionResult } from '@/types';
 
 export async function createStaff(data: {
@@ -30,7 +32,7 @@ export async function createStaff(data: {
     if (existing) return { success: false, error: 'Email already in use' };
 
     const employeeId = await generateReference('EMPLOYEE');
-    const tempPassword = `Hylink@${Math.random().toString(36).slice(-6)}`;
+    const tempPassword = generateTempPassword();
     const passwordHash = await hash(tempPassword, 12);
 
     const staff = await prisma.staff.create({
@@ -132,7 +134,7 @@ export async function updateStaff(
 }
 
 export async function getStaffDetail(staffId: string) {
-  await requirePermission('HR:STAFF_READ');
+  const user = await requirePermission('HR:STAFF_READ');
 
   const staff = await prisma.staff.findUnique({
     where: { id: staffId },
@@ -145,7 +147,7 @@ export async function getStaffDetail(staffId: string) {
     },
   });
 
-  if (!staff) throw new Error('Staff not found');
+  if (!staff || !inScope(await staffScopeFor(user), staff.branchId)) throw new Error('Staff not found');
   return {
     ...staff,
     role: {
