@@ -10,19 +10,23 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import bcrypt from 'bcryptjs';
 
-const h = vi.hoisted(() => ({
-  session: { user: {} as any },
-  staff: [] as any[],
-  updates: [] as any[],
-  findManyWhere: null as any,
-}));
+const h = vi.hoisted(() => {
+  process.env.AUTH_SECRET = 'test-secret';
+  return {
+    session: { user: {} as any },
+    staff: [] as any[],
+    directory: [] as any[],
+    updates: [] as any[],
+    findManyWhere: null as any,
+  };
+});
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {
     staff: {
       findMany: vi.fn(async ({ where }: any) => {
         h.findManyWhere = where;
-        return h.staff.filter((s) => where.id.in.includes(s.id));
+        return where.id ? h.staff.filter((s) => where.id.in.includes(s.id)) : h.directory;
       }),
       update: vi.fn(async (args: any) => {
         h.updates.push(args);
@@ -41,9 +45,9 @@ vi.mock('bcryptjs', async (importOriginal) => {
   return { default: { ...real, hash }, hash, compare: real.compare };
 });
 
-import { issueLoginDetails } from '@/actions/auth.actions';
+import { issueLoginDetails, getLoginDirectory } from '@/actions/auth.actions';
 import { auditLog } from '@/lib/audit';
-import { generateTempPassword } from '@/lib/temp-password';
+import { generateTempPassword, issueTempPassword, recoverTempPassword } from '@/lib/temp-password';
 
 const admin = {
   id: 'admin-1', email: 'admin@x.com', roleCode: 'SUPER_ADMIN',
@@ -100,6 +104,12 @@ describe('issueLoginDetails', () => {
     expect(h.updates[0].data).toMatchObject({ mustChangePassword: true, failedLoginAttempts: 0, lockedUntil: null });
   });
 
+  it('records the issue time, from which the pending password can be looked up', async () => {
+    const { data } = await issueLoginDetails(['s1']);
+    const { passwordChangedAt } = h.updates[0].data;
+    expect(recoverTempPassword('s1', passwordChangedAt)).toBe(data![0].tempPassword);
+  });
+
   it('carries name, email, role and branch for sending', async () => {
     const { data } = await issueLoginDetails(['s1']);
     expect(data![0]).toMatchObject({
@@ -133,5 +143,80 @@ describe('issueLoginDetails', () => {
   it('audits every reissue', async () => {
     await issueLoginDetails(['s1', 's2']);
     expect(auditLog).toHaveBeenCalledTimes(2);
+  });
+});
+
+// ── Looking up pending temporary passwords ──────────────────────────────────
+
+describe('recoverTempPassword', () => {
+  it('returns the password that was issued', () => {
+    const { password, issuedAt } = issueTempPassword('s1');
+    expect(recoverTempPassword('s1', issuedAt)).toBe(password);
+  });
+
+  it('returns nothing for a time the staff member set by changing their own password', () => {
+    // A self-service change stamps passwordChangedAt with the plain clock,
+    // which almost never carries the check value in its milliseconds.
+    let misses = 0;
+    for (let i = 0; i < 50; i++) {
+      if (recoverTempPassword('s1', new Date(1_700_000_000_000 + i * 1_001)) === null) misses++;
+    }
+    expect(misses).toBeGreaterThanOrEqual(45);
+  });
+
+  it('is tied to the staff member', () => {
+    const { issuedAt } = issueTempPassword('s1');
+    expect(recoverTempPassword('s2', issuedAt)).not.toBe(issueTempPassword('s1').password);
+  });
+
+  it('returns nothing without an issue time', () => {
+    expect(recoverTempPassword('s1', null)).toBeNull();
+  });
+});
+
+describe('getLoginDirectory', () => {
+  const account = async (id: string, over: { own?: boolean; legacy?: boolean } = {}) => {
+    const { password, issuedAt } = issueTempPassword(id);
+    const hashFor = over.own ? 'Chosen-By-Staff-1!' : over.legacy ? 'Hylink@legacy99' : password;
+    return {
+      ...person(id, id.toUpperCase()),
+      status: 'ACTIVE',
+      passwordHash: await bcrypt.hash(hashFor, 4),
+      passwordChangedAt: over.own ? new Date(1_700_000_000_123) : over.legacy ? null : issuedAt,
+      mustChangePassword: !over.own,
+      lastLoginAt: over.own ? new Date() : null,
+      lockedUntil: null,
+      _password: password,
+    };
+  };
+
+  it('refuses anyone without SYSTEM:USER_MANAGE', async () => {
+    h.session = { user: { ...admin, permissions: ['HR:STAFF_READ'] } };
+    expect((await getLoginDirectory()).success).toBe(false);
+  });
+
+  it('shows the temporary password of an account still waiting to sign in', async () => {
+    const a = await account('p1');
+    h.directory = [a];
+    const { data } = await getLoginDirectory();
+    expect(data![0]).toMatchObject({ state: 'PENDING', tempPassword: a._password });
+  });
+
+  it('erases it once the staff member sets their own password', async () => {
+    h.directory = [await account('o1', { own: true })];
+    const { data } = await getLoginDirectory();
+    expect(data![0]).toMatchObject({ state: 'OWN_PASSWORD', tempPassword: null });
+  });
+
+  it('never shows a password that would not open the account', async () => {
+    h.directory = [await account('l1', { legacy: true })];
+    const { data } = await getLoginDirectory();
+    expect(data![0]).toMatchObject({ state: 'NOT_SAVED', tempPassword: null });
+  });
+
+  it('records every viewing in the audit log', async () => {
+    h.directory = [await account('p1')];
+    await getLoginDirectory();
+    expect(auditLog).toHaveBeenCalledWith(expect.objectContaining({ action: 'READ', module: 'AUTH' }));
   });
 });

@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/auth-utils';
 import { auditLog } from '@/lib/audit';
-import { generateTempPassword } from '@/lib/temp-password';
+import { issueTempPassword, recoverTempPassword } from '@/lib/temp-password';
 import type { ActionResult } from '@/types';
 
 export async function changePassword(
@@ -136,13 +136,14 @@ export async function resetStaffPassword(
       return { success: false, error: 'Staff member not found' };
     }
 
-    const tempPassword = generateTempPassword('Reset@');
+    const { password: tempPassword, issuedAt } = issueTempPassword(staffId);
     const passwordHash = await bcrypt.hash(tempPassword, 12);
 
     await prisma.staff.update({
       where: { id: staffId },
       data: {
         passwordHash,
+        passwordChangedAt: issuedAt,
         mustChangePassword: true,
         failedLoginAttempts: 0,
         lockedUntil: null,
@@ -218,11 +219,12 @@ export async function issueLoginDetails(
 
     const issued: IssuedLogin[] = [];
     for (const s of staff) {
-      const tempPassword = generateTempPassword();
+      const { password: tempPassword, issuedAt } = issueTempPassword(s.id);
       await prisma.staff.update({
         where: { id: s.id },
         data: {
           passwordHash: await bcrypt.hash(tempPassword, 12),
+          passwordChangedAt: issuedAt,
           mustChangePassword: true,
           failedLoginAttempts: 0,
           lockedUntil: null,
@@ -256,6 +258,101 @@ export async function issueLoginDetails(
     };
   } catch {
     return { success: false, error: 'Failed to issue login details' };
+  }
+}
+
+/**
+ * Where an account stands on signing in:
+ *  - PENDING: still on a temporary password, shown to the administrator.
+ *  - OWN_PASSWORD: the staff member has set their own; it cannot be shown.
+ *  - NOT_SAVED: on a temporary password issued before lookups existed (or
+ *    before the app secret last changed); issue a new one to send it.
+ */
+export type LoginState = 'PENDING' | 'OWN_PASSWORD' | 'NOT_SAVED';
+
+export interface LoginDirectoryEntry {
+  staffId: string;
+  name: string;
+  employeeId: string;
+  email: string;
+  role: string | null;
+  branch: string | null;
+  status: string;
+  state: LoginState;
+  /** Only for PENDING accounts. Gone once the staff member sets their own. */
+  tempPassword: string | null;
+  lastLoginAt: string | null;
+  locked: boolean;
+}
+
+/**
+ * Every staff account with its sign-in state, and the temporary password of
+ * any account still waiting to set its own. Viewing is audited.
+ */
+export async function getLoginDirectory(): Promise<ActionResult<LoginDirectoryEntry[]>> {
+  try {
+    const user = await getSession().then((s) => s.user);
+    if (!user.permissions.includes('SYSTEM:USER_MANAGE')) {
+      return { success: false, error: 'Permission denied' };
+    }
+
+    const staff = await prisma.staff.findMany({
+      where: { isDeleted: false, status: { not: 'TERMINATED' } },
+      select: {
+        id: true, firstName: true, lastName: true, employeeId: true, email: true, status: true,
+        passwordHash: true, passwordChangedAt: true, mustChangePassword: true,
+        lastLoginAt: true, lockedUntil: true,
+        role: { select: { name: true } },
+        branch: { select: { name: true } },
+      },
+      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+    });
+
+    const now = Date.now();
+    const entries = await Promise.all(
+      staff.map(async (s): Promise<LoginDirectoryEntry> => {
+        let state: LoginState = 'OWN_PASSWORD';
+        let tempPassword: string | null = null;
+        if (s.mustChangePassword) {
+          // Only shown when it still opens the account: re-derived, then
+          // checked against the stored hash.
+          const candidate = recoverTempPassword(s.id, s.passwordChangedAt);
+          if (candidate && (await bcrypt.compare(candidate, s.passwordHash))) {
+            state = 'PENDING';
+            tempPassword = candidate;
+          } else {
+            state = 'NOT_SAVED';
+          }
+        }
+        return {
+          staffId: s.id,
+          name: `${s.firstName} ${s.lastName}`,
+          employeeId: s.employeeId,
+          email: s.email,
+          role: s.role?.name ?? null,
+          branch: s.branch?.name ?? null,
+          status: s.status,
+          state,
+          tempPassword,
+          lastLoginAt: s.lastLoginAt?.toISOString() ?? null,
+          locked: !!s.lockedUntil && s.lockedUntil.getTime() > now,
+        };
+      })
+    );
+
+    await auditLog({
+      userId: user.id,
+      userEmail: user.email,
+      userRole: user.roleCode,
+      action: 'READ',
+      module: 'AUTH',
+      entityType: 'STAFF',
+      description: `Viewed staff login directory (${entries.filter((e) => e.state === 'PENDING').length} pending temporary passwords shown) — ${user.firstName} ${user.lastName}`,
+    });
+
+    return { success: true, data: entries };
+  } catch {
+    return { success: false, error: 'Failed to load login directory' };
   }
 }
 

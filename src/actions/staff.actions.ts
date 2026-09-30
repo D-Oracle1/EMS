@@ -6,7 +6,8 @@ import { requirePermission, getSession } from '@/lib/auth-utils';
 import { auditLog } from '@/lib/audit';
 import { generateReference } from '@/lib/utils';
 import { hash } from 'bcryptjs';
-import { generateTempPassword } from '@/lib/temp-password';
+import { randomUUID } from 'crypto';
+import { issueTempPassword } from '@/lib/temp-password';
 import type { ActionResult } from '@/types';
 
 export async function createStaff(data: {
@@ -32,11 +33,13 @@ export async function createStaff(data: {
     if (existing) return { success: false, error: 'Email already in use' };
 
     const employeeId = await generateReference('EMPLOYEE');
-    const tempPassword = generateTempPassword();
+    const staffId = randomUUID();
+    const { password: tempPassword, issuedAt } = issueTempPassword(staffId);
     const passwordHash = await hash(tempPassword, 12);
 
     const staff = await prisma.staff.create({
       data: {
+        id: staffId,
         employeeId,
         email: data.email,
         passwordHash,
@@ -53,6 +56,7 @@ export async function createStaff(data: {
         branchId: data.branchId || undefined,
         supervisorId: data.supervisorId || undefined,
         mustChangePassword: true,
+        passwordChangedAt: issuedAt,
         createdBy: user.id,
       },
     });

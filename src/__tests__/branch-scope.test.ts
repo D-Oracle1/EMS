@@ -2,8 +2,9 @@
  * Branch scoping.
  *
  * The rule this file defends: staff posted to a branch see only that branch's
- * customers and money. The superuser, directors and head office (no branch)
- * see every branch. HR administrators see every branch's people.
+ * customers and money. Senior roles (level 80+: HR, GM, Director, Super Admin)
+ * see every branch. Junior head-office staff (IT, accounts) see no branch.
+ * HR administrators see every branch's people.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
@@ -20,7 +21,7 @@ vi.mock('@/lib/prisma', () => ({
 }));
 
 import {
-  seesAllBranches, branchScopeFor, staffScopeFor, inScope, ALL_BRANCHES_ROLE_LEVEL,
+  seesAllBranches, branchScopeFor, staffScopeFor, inScope, ALL_BRANCHES_ROLE_LEVEL, NO_BRANCH,
 } from '@/lib/branch-scope';
 
 const viewer = (id: string, overrides: Partial<{ permissions: string[]; roleLevel: number }> = {}) => ({
@@ -39,8 +40,11 @@ describe('seesAllBranches', () => {
     expect(seesAllBranches(viewer('x', { permissions: ['ADMIN:SYSTEM'], roleLevel: 10 }))).toBe(true);
   });
 
-  it('lets a director see every branch', () => {
-    expect(seesAllBranches(viewer('x', { roleLevel: ALL_BRANCHES_ROLE_LEVEL }))).toBe(true);
+  it('lets senior roles see every branch: HR (80), GM (80+), Director (90)', () => {
+    expect(ALL_BRANCHES_ROLE_LEVEL).toBe(80);
+    for (const roleLevel of [80, 85, 90, 100]) {
+      expect(seesAllBranches(viewer('x', { roleLevel }))).toBe(true);
+    }
   });
 
   it('confines a manager', () => {
@@ -58,8 +62,15 @@ describe('branchScopeFor', () => {
     expect(await branchScopeFor(viewer('officer', { roleLevel: 40 }))).toBe('branch-b');
   });
 
-  it('gives head-office staff (no branch) every branch', async () => {
-    expect(await branchScopeFor(viewer('hq'))).toBeNull();
+  it('gives junior head-office staff (no branch) no branch at all', async () => {
+    const scope = await branchScopeFor(viewer('hq', { roleLevel: 55 }));
+    expect(scope).toBe(NO_BRANCH);
+    expect(inScope(scope, 'branch-a')).toBe(false);
+    expect(inScope(scope, null)).toBe(false);
+  });
+
+  it('gives senior head-office staff every branch', async () => {
+    expect(await branchScopeFor(viewer('hq', { roleLevel: 80 }))).toBeNull();
   });
 
   it('reads the branch from the database, so a transfer applies at once', async () => {

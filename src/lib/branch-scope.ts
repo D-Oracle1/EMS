@@ -2,10 +2,13 @@
  * Branch scoping — which branch's customers and money a staff member may see.
  *
  * The rule:
- *  - The superuser (ADMIN:SYSTEM) and anyone at Director level or above sees
- *    every branch.
- *  - Staff with no branch are head office, and see every branch too.
+ *  - Senior roles see every branch: the superuser (ADMIN:SYSTEM) and any role
+ *    at level 80 or above — HR Administrator (80), a General Manager role
+ *    created at 80+, Director (90) and Super Administrator (100).
  *  - Everyone else sees only the branch they are posted to.
+ *  - Staff below that level with no branch (head office: IT, accounts) are
+ *    not a branch, so they see no branch's customers or money. Company-wide
+ *    figures reach them only through their own modules (the ledger, reports).
  *
  * The branch is read from the database rather than the session token, so a
  * transfer takes effect on the next request instead of the next login.
@@ -14,7 +17,13 @@ import { prisma } from '@/lib/prisma';
 import type { SessionUser } from '@/types';
 
 /** Role level at and above which a role oversees the whole company. */
-export const ALL_BRANCHES_ROLE_LEVEL = 90;
+export const ALL_BRANCHES_ROLE_LEVEL = 80;
+
+/**
+ * The scope of head-office staff below senior level. Not a branch id, so as a
+ * filter it matches no record, and inScope() rejects every record under it.
+ */
+export const NO_BRANCH = 'no-branch-access';
 
 /** Role level at and above which a role runs a branch (Manager). */
 export const BRANCH_MANAGER_ROLE_LEVEL = 70;
@@ -40,13 +49,14 @@ export function seesAllBranches(user: Pick<SessionUser, 'permissions' | 'roleLev
 
 /**
  * The branch a viewer is confined to, or null when they may see every branch.
+ * Head-office staff below senior level get NO_BRANCH, which matches nothing.
  */
 export async function branchScopeFor(
   user: Pick<SessionUser, 'id' | 'permissions' | 'roleLevel'>
 ): Promise<string | null> {
   if (seesAllBranches(user)) return null;
   const staff = await prisma.staff.findUnique({ where: { id: user.id }, select: { branchId: true } });
-  return staff?.branchId ?? null;
+  return staff?.branchId ?? NO_BRANCH;
 }
 
 /**
