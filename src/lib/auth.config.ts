@@ -80,6 +80,7 @@ export const authConfig = {
         token.departmentCode = user.departmentCode;
         token.branchId = user.branchId;
         token.branchName = user.branchName;
+        token.onSalesTarget = user.onSalesTarget ?? false;
         token.permissions = user.permissions;
         token.mustChangePassword = user.mustChangePassword;
         token.userType = user.userType ?? 'staff';
@@ -102,6 +103,7 @@ export const authConfig = {
         departmentCode: token.departmentCode,
         branchId: token.branchId,
         branchName: token.branchName,
+        onSalesTarget: token.onSalesTarget ?? false,
         permissions: token.permissions,
         mustChangePassword: token.mustChangePassword,
         userType: token.userType ?? 'staff',

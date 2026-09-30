@@ -180,6 +180,10 @@ model Staff {
   passwordChangedAt   DateTime?
   mustChangePassword  Boolean   @default(true)
 
+  /// On the sales target engine: may report sales, gets monthly targets and
+  /// appears on the leaderboard. Marketers start on; anyone can be switched on.
+  onSalesTarget Boolean @default(false)
+
   // Soft delete
   isDeleted Boolean   @default(false)
   deletedAt DateTime?
@@ -198,6 +202,7 @@ model Staff {
   // Activity Relations
   auditLogs                    AuditLog[]
   marketingSales               MarketingSale[]      @relation("SaleMarketer")
+  marketingSalesReported       MarketingSale[]      @relation("SaleReporter")
   marketingSalesReviewed       MarketingSale[]      @relation("SaleReviewer")
   marketingCommissionsPaid     MarketingSale[]      @relation("SaleCommissionPayer")
   marketingTargets             MarketingTarget[]    @relation("TargetMarketer")
@@ -270,6 +275,7 @@ model Staff {
   @@index([departmentId])
   @@index([roleId])
   @@index([branchId])
+  @@index([onSalesTarget])
   @@index([status])
 }
 
@@ -3321,9 +3327,13 @@ model MarketingSale {
   type   MarketingSaleType
   status MarketingSaleStatus @default(PENDING)
 
-  marketerId String
-  branchId   String?
-  customerId String
+  /// The staff member credited with the sale; null for a company (direct)
+  /// sale, which earns no commission.
+  marketerId   String?
+  /// Who recorded it: the seller themselves, or an admin for a company sale.
+  reportedById String
+  branchId     String?
+  customerId   String
 
   // Exactly one of these, matching the type. A field collection targets a
   // savings account (deposit) or a loan (repayment).
@@ -3352,7 +3362,8 @@ model MarketingSale {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  marketer         Staff           @relation("SaleMarketer", fields: [marketerId], references: [id])
+  marketer         Staff?          @relation("SaleMarketer", fields: [marketerId], references: [id], onDelete: Restrict)
+  reportedBy       Staff           @relation("SaleReporter", fields: [reportedById], references: [id])
   reviewedBy       Staff?          @relation("SaleReviewer", fields: [reviewedById], references: [id])
   commissionPaidBy Staff?          @relation("SaleCommissionPayer", fields: [commissionPaidById], references: [id])
   branch           Branch?         @relation(fields: [branchId], references: [id])

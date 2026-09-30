@@ -12,6 +12,8 @@ export interface SessionUser {
   departmentCode: string;
   branchId: string | null;
   branchName: string | null;
+  /** On the sales target engine (Staff.onSalesTarget), as of sign-in. */
+  onSalesTarget?: boolean;
   permissions: string[];
   mustChangePassword: boolean;
   userType?: 'staff' | 'customer';

@@ -423,7 +423,7 @@ describe('Expenses', () => {
 // ── Marketing ───────────────────────────────────────────────────────────────
 
 describe('Marketing', () => {
-  const sees = (v: { permissions: string[]; roleLevel?: number; departmentCode?: string }) =>
+  const sees = (v: { permissions: string[]; roleLevel?: number; departmentCode?: string; onSalesTarget?: boolean }) =>
     resolveNav(v).items.some((i) => i.href === '/marketing');
 
   it('is shown to the Marketing department, whatever their role', () => {
@@ -433,6 +433,11 @@ describe('Marketing', () => {
   it('is shown to the staff who confirm sales: level 85+ and the superuser', () => {
     expect(sees({ permissions: [], roleLevel: 85, departmentCode: 'MANAGEMENT' })).toBe(true);
     expect(sees({ permissions: ['ADMIN:SYSTEM'], roleLevel: 10 })).toBe(true);
+  });
+
+  it('is shown to any staff member switched on to sales targets', () => {
+    expect(sees({ permissions: [...ROLES.LOAN_OFFICER], roleLevel: 50, departmentCode: 'LOANS', onSalesTarget: true })).toBe(true);
+    expect(sees({ permissions: [...ROLES.LOAN_OFFICER], roleLevel: 50, departmentCode: 'LOANS', onSalesTarget: false })).toBe(false);
   });
 
   it('is shown to the accountant, who confirms sales', () => {

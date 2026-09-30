@@ -54,10 +54,15 @@ function optionsFor(type: SaleType, c: Customer | null): Option[] {
   }
 }
 
-export function ReportSaleDialog({ open, onOpenChange, onReported }: {
+/**
+ * Report a sale. With `company`, records a company (direct) sale instead:
+ * credited to no staff member and earning no commission.
+ */
+export function ReportSaleDialog({ open, onOpenChange, onReported, company = false }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onReported: () => void;
+  company?: boolean;
 }) {
   const [type, setType] = useState<SaleType>('FIELD_COLLECTION');
   const [query, setQuery] = useState('');
@@ -115,6 +120,7 @@ export function ReportSaleDialog({ open, onOpenChange, onReported }: {
         paymentReference: paymentReference || undefined,
         collectedAt,
         notes: notes || undefined,
+        company,
       });
       if (result.success) {
         toast.success(result.message);
@@ -132,13 +138,17 @@ export function ReportSaleDialog({ open, onOpenChange, onReported }: {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Report a sale</DialogTitle>
-          <DialogDescription>It goes to senior staff to confirm. Nothing is posted until they do.</DialogDescription>
+          <DialogTitle>{company ? 'Record a company sale' : 'Report a sale'}</DialogTitle>
+          <DialogDescription>
+            {company
+              ? 'A direct sale by the company, credited to no staff member and earning no commission. Another admin or the accountant confirms it before anything is posted.'
+              : 'An admin or the accountant confirms it. Nothing is posted until they do.'}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <Label>What did you bring in?</Label>
+            <Label>{company ? 'What was sold?' : 'What did you bring in?'}</Label>
             <Select value={type} onValueChange={(v) => { setType(v as SaleType); setTarget(''); setAmount(''); }}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>

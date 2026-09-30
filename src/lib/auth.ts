@@ -261,6 +261,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           departmentCode: staff.department.code,
           branchId: staff.branchId,
           branchName: staff.branch?.name ?? null,
+          onSalesTarget: staff.onSalesTarget,
           permissions,
           mustChangePassword: staff.mustChangePassword,
           userType: 'staff',

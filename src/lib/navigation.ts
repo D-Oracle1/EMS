@@ -43,7 +43,7 @@ export interface NavItem {
    * belongs to one of the departments, holds the role level, or holds one of
    * the permissions. For modules owned by a department rather than a grant.
    */
-  anyOf?: { departments?: string[]; minRoleLevel?: number; permissions?: string[] };
+  anyOf?: { departments?: string[]; minRoleLevel?: number; permissions?: string[]; onSalesTarget?: boolean };
 }
 
 export const navItems: NavItem[] = [
@@ -73,10 +73,11 @@ export const navItems: NavItem[] = [
   { label: 'Deposit Rates',  href: '/settings/deposit-rates', icon: Percent, color: 'purple', permission: 'SYSTEM:CONFIG_MANAGE' },
 
   // ── Marketing ────────────────────────────────────────────────────────────
-  // Owned by the Marketing department, who report sales; admins (level 85+ or
-  // ADMIN:SYSTEM) and the accountant confirm them (lib/marketing-access). The
-  // server applies the same rule.
-  { label: 'Sales',            href: '/marketing', icon: TrendingUp, color: 'fuchsia', section: 'Marketing', anyOf: { departments: ['MARKETING'], minRoleLevel: 85, permissions: ['ADMIN:SYSTEM', 'ACCOUNTS:JOURNAL_POST'] } },
+  // Sellers report sales: the Marketing department and anyone on sales targets.
+  // Admins (level 85+ or ADMIN:SYSTEM) and the accountant confirm them and
+  // record company sales (lib/marketing-access). The server applies the same
+  // rule, reading the target switch fresh from the database.
+  { label: 'Sales',            href: '/marketing', icon: TrendingUp, color: 'fuchsia', section: 'Marketing', anyOf: { departments: ['MARKETING'], onSalesTarget: true, minRoleLevel: 85, permissions: ['ADMIN:SYSTEM', 'ACCOUNTS:JOURNAL_POST'] } },
 
   // ── Accounting ───────────────────────────────────────────────────────────
   { label: 'Accounting',       href: '/accounting',                     icon: BookOpen,  color: 'sky', permissions: ['ACCOUNTS:COA_MANAGE', 'ACCOUNTS:JOURNAL_CREATE', 'ACCOUNTS:REPORTS_VIEW'], section: 'Accounting' },
@@ -139,6 +140,7 @@ export interface NavViewer {
   roleLevel?: number;
   branchId?: string | null;
   departmentCode?: string;
+  onSalesTarget?: boolean;
 }
 
 /** Whether a viewer may see one entry. */
@@ -146,8 +148,9 @@ export function canSee(item: NavItem, viewer: NavViewer): boolean {
   if (item.minRoleLevel && (viewer.roleLevel ?? 0) < item.minRoleLevel) return false;
   if (item.requiresBranch && !viewer.branchId) return false;
   if (item.anyOf) {
-    const { departments, minRoleLevel, permissions } = item.anyOf;
+    const { departments, minRoleLevel, permissions, onSalesTarget } = item.anyOf;
     return (
+      (!!onSalesTarget && !!viewer.onSalesTarget) ||
       (!!viewer.departmentCode && !!departments?.includes(viewer.departmentCode)) ||
       (minRoleLevel !== undefined && (viewer.roleLevel ?? 0) >= minRoleLevel) ||
       !!permissions?.some((p) => viewer.permissions.includes(p))

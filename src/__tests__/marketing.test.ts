@@ -16,6 +16,9 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 const h = vi.hoisted(() => ({
   session: { user: {} as any },
   department: 'MARKETING' as string | null,
+  onSalesTarget: false,
+  staffRecord: { firstName: 'Mo', lastName: 'Marketer', onSalesTarget: true } as any,
+  staffUpdates: [] as any[],
   sale: null as any,
   claimCount: 1,
   updates: [] as any[],
@@ -28,10 +31,16 @@ const h = vi.hoisted(() => ({
 vi.mock('@/lib/prisma', () => ({
   prisma: {
     staff: {
-      findUnique: vi.fn(async () => ({ branchId: 'branch-a', department: h.department ? { code: h.department } : null })),
+      findUnique: vi.fn(async () => ({
+        branchId: 'branch-a', onSalesTarget: h.onSalesTarget,
+        department: h.department ? { code: h.department } : null,
+      })),
       findMany: vi.fn(async () => [{ id: 'boss-1' }]),
-      findFirst: vi.fn(async () => ({ firstName: 'Mo', lastName: 'Marketer' })),
+      findFirst: vi.fn(async () => h.staffRecord),
+      update: vi.fn(async (args: any) => { h.staffUpdates.push(args); return {}; }),
     },
+    customer: { findUnique: vi.fn(async () => ({ branchId: 'branch-c' })) },
+    marketingTarget: { upsert: vi.fn(async () => ({})) },
     savingsAccount: { findUnique: vi.fn(async () => h.records.savings ?? null) },
     loan: { findUnique: vi.fn(async () => h.records.loan ?? null) },
     fixedDeposit: { findUnique: vi.fn(async () => h.records.fd ?? null) },
@@ -60,7 +69,7 @@ vi.mock('@/lib/money-posting', () => ({
   postLoanRepayment: vi.fn(async () => ({ success: true, data: { receiptNumber: 'RCP0007' } })),
 }));
 
-import { reportSale, confirmSale, rejectSale } from '@/actions/marketing.actions';
+import { reportSale, confirmSale, rejectSale, setSalesTargetEnabled, setTarget } from '@/actions/marketing.actions';
 import { postSavingsDeposit as processDeposit, postLoanRepayment as processRepayment } from '@/lib/money-posting';
 import {
   canConfirmSales, commissionFor, validateSaleLinks, isMarketer, monthRange, SALE_CONFIRM_ROLE_LEVEL,
@@ -70,7 +79,7 @@ const marketer = { id: 'mkt-1', firstName: 'Mo', lastName: 'Marketer', permissio
 const gm = { id: 'gm-1', firstName: 'Gee', lastName: 'Em', permissions: [], roleLevel: 85, departmentCode: 'MANAGEMENT' };
 
 const pendingSale = (over: Record<string, unknown> = {}) => ({
-  id: 'sale-1', reference: 'MKT0001', type: 'FIELD_COLLECTION', status: 'PENDING', marketerId: 'mkt-1',
+  id: 'sale-1', reference: 'MKT0001', type: 'FIELD_COLLECTION', status: 'PENDING', marketerId: 'mkt-1', reportedById: 'mkt-1',
   savingsAccountId: 'sav-1', loanId: null, fixedDepositId: null,
   amount: 50_000, paymentMode: 'CASH', paymentReference: null,
   loan: null, fixedDeposit: null, savingsAccount: { status: 'ACTIVE' },
@@ -80,6 +89,9 @@ const pendingSale = (over: Record<string, unknown> = {}) => ({
 beforeEach(() => {
   h.session = { user: marketer };
   h.department = 'MARKETING';
+  h.onSalesTarget = false;
+  h.staffRecord = { firstName: 'Mo', lastName: 'Marketer', onSalesTarget: true };
+  h.staffUpdates = [];
   h.sale = pendingSale();
   h.claimCount = 1;
   h.updates = [];
@@ -174,7 +186,7 @@ describe('reportSale', () => {
     expect(result.success).toBe(true);
     // Status is left to the database default, PENDING.
     expect(h.created).not.toHaveProperty('status');
-    expect(h.created).toMatchObject({ marketerId: 'mkt-1', branchId: 'branch-a', amount: 50_000 });
+    expect(h.created).toMatchObject({ marketerId: 'mkt-1', reportedById: 'mkt-1', branchId: 'branch-a', amount: 50_000 });
     expect(processDeposit).not.toHaveBeenCalled();
   });
 
@@ -186,6 +198,14 @@ describe('reportSale', () => {
   it('refuses a zero or negative amount', async () => {
     expect((await reportSale({ ...collection, amount: 0 })).success).toBe(false);
     expect((await reportSale({ ...collection, amount: -5 })).success).toBe(false);
+  });
+
+  it('lets anyone switched on to sales targets report, whatever their department', async () => {
+    h.department = 'LOANS';
+    h.onSalesTarget = true;
+    const result = await reportSale(collection);
+    expect(result.success).toBe(true);
+    expect(h.created.marketerId).toBe('mkt-1');
   });
 
   it('refuses a future date', async () => {
@@ -291,5 +311,68 @@ describe('rejectSale', () => {
     expect(result.success).toBe(true);
     expect(processDeposit).not.toHaveBeenCalled();
     expect(h.updates[0]).toMatchObject({ where: { id: 'sale-1', status: 'PENDING' }, data: { status: 'REJECTED' } });
+  });
+});
+
+// ── Company (direct) sales ──────────────────────────────────────────────────
+
+describe('company sales', () => {
+  const collection = { type: 'FIELD_COLLECTION' as const, customerId: 'cust-1', savingsAccountId: 'sav-1', amount: 80_000 };
+
+  it('are recorded by an admin, credited to no one, on the customer\'s branch', async () => {
+    h.session = { user: gm };
+    h.department = 'MANAGEMENT';
+    const result = await reportSale({ ...collection, company: true });
+    expect(result.success).toBe(true);
+    expect(h.created).toMatchObject({ marketerId: null, reportedById: 'gm-1', branchId: 'branch-c' });
+  });
+
+  it('cannot be recorded by a seller', async () => {
+    const result = await reportSale({ ...collection, company: true });
+    expect(result.success).toBe(false);
+    expect(h.created).toBeNull();
+  });
+
+  it('earn no commission when confirmed, but are still posted', async () => {
+    h.session = { user: { ...gm, id: 'acct-1', permissions: ['ACCOUNTS:JOURNAL_POST'], roleLevel: 60 } };
+    h.sale = pendingSale({ marketerId: null, reportedById: 'gm-1' });
+    const result = await confirmSale('sale-1');
+    expect(result.success).toBe(true);
+    expect(processDeposit).toHaveBeenCalled();
+    const final = h.updates.find((u) => u.kind === 'update');
+    expect(final.data).toMatchObject({ status: 'CONFIRMED', commissionAmount: null, commissionRate: null });
+  });
+
+  it('cannot be confirmed by the admin who recorded them', async () => {
+    h.session = { user: gm };
+    h.sale = pendingSale({ marketerId: null, reportedById: 'gm-1' });
+    const result = await confirmSale('sale-1');
+    expect(result.success).toBe(false);
+    expect(processDeposit).not.toHaveBeenCalled();
+  });
+});
+
+// ── Target switch ───────────────────────────────────────────────────────────
+
+describe('target engine', () => {
+  it('only admins and the accountant switch people on or off', async () => {
+    const result = await setSalesTargetEnabled('staff-9', true);
+    expect(result.success).toBe(false);
+    expect(h.staffUpdates).toHaveLength(0);
+  });
+
+  it('switches a staff member on', async () => {
+    h.session = { user: gm };
+    h.staffRecord = { firstName: 'Lola', lastName: 'Loans', onSalesTarget: false };
+    const result = await setSalesTargetEnabled('staff-9', true);
+    expect(result.success).toBe(true);
+    expect(h.staffUpdates[0]).toMatchObject({ where: { id: 'staff-9' }, data: { onSalesTarget: true } });
+  });
+
+  it('refuses a target for someone who is not on target', async () => {
+    h.session = { user: gm };
+    h.staffRecord = null;
+    const result = await setTarget({ marketerId: 'staff-9', month: '2026-10', targetAmount: 1_000_000 });
+    expect(result.success).toBe(false);
   });
 });

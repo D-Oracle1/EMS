@@ -52,7 +52,7 @@ const cell = (v: unknown) => {
 };
 
 function downloadCsv(report: Report) {
-  const head = ['Reference', 'Date', 'Type', 'Marketer', 'Branch', 'Customer', 'Account', 'Amount', 'Payment', 'Posted ref', 'Commission', 'Commission paid'];
+  const head = ['Reference', 'Date', 'Type', 'Seller', 'Branch', 'Customer', 'Account', 'Amount', 'Payment', 'Posted ref', 'Commission', 'Commission paid'];
   const lines = report.rows.map((r) => [
     r.reference, r.collectedAt.slice(0, 10), SALE_TYPE_LABELS[r.type], r.marketer, r.branch ?? 'Head office',
     r.customer, r.target?.label ?? '', r.amount.toFixed(2), r.paymentMode, r.postedReference ?? '',
@@ -158,7 +158,9 @@ export function SalesReportPanel({ company }: { company: boolean }) {
             <div className="space-y-6">
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <Figure label="Confirmed sales" value={formatCurrency(report!.totals.amount)} sub={`${report!.totals.count} sale${report!.totals.count === 1 ? '' : 's'}`} />
-                <Figure label="Commission earned" value={formatCurrency(report!.totals.commission)} />
+                {company
+                  ? <Figure label="Company (direct) sales" value={formatCurrency(report!.totals.companyAmount)} sub="Not credited to any staff" />
+                  : <Figure label="Commission earned" value={formatCurrency(report!.totals.commission)} />}
                 <Figure label="Still awaiting confirmation" value={String(report!.totals.pending)} />
                 <Figure label="Rejected" value={String(report!.totals.rejected)} />
               </div>
@@ -192,9 +194,10 @@ export function SalesReportPanel({ company }: { company: boolean }) {
 
       {!loading && (
         <div className="grid gap-4 lg:grid-cols-2">
+          {company && <Breakdown title="Staff vs company" rows={report!.byChannel} label={(i) => report!.byChannel[i].channel} />}
           <Breakdown title="By sale type" rows={report!.byType} label={(i) => report!.byType[i].label} />
           {company && <Breakdown title="By branch" rows={report!.byBranch} label={(i) => report!.byBranch[i].branch} />}
-          {company && <Breakdown title="By marketer" rows={report!.byMarketer} label={(i) => report!.byMarketer[i].name} />}
+          {company && <Breakdown title="By seller" rows={report!.byMarketer} label={(i) => report!.byMarketer[i].name} />}
           <Breakdown title="By month" rows={report!.byMonth} label={(i) => report!.byMonth[i].label} />
         </div>
       )}

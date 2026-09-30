@@ -2,9 +2,9 @@
  * Marketing — who reports sales, who confirms them, and what commission a
  * confirmed sale earns.
  *
- *  - Marketers are the staff in the MARKETING department. Access comes from
- *    the department rather than a permission, so moving someone into or out
- *    of Marketing is all it takes.
+ *  - Sellers are the staff in the MARKETING department and anyone switched on
+ *    to the sales target engine (Staff.onSalesTarget). Admins and the
+ *    accountant can also record a company (direct) sale, credited to no one.
  *  - Sales are confirmed by an admin or the accountant, whichever gets there
  *    first: the superuser (ADMIN:SYSTEM), any role at level 85 and above
  *    (General Manager 85, Director 90, Super Administrator 100), or the
@@ -25,6 +25,9 @@ export const SALE_CONFIRM_ROLE_LEVEL = 85;
 export const ACCOUNTANT_PERMISSION = 'ACCOUNTS:JOURNAL_POST';
 
 export type SaleType = 'SAVINGS' | 'LOAN' | 'FIXED_DEPOSIT' | 'FIELD_COLLECTION';
+
+/** How a company (direct) sale, credited to no staff member, is labelled. */
+export const COMPANY_SALE_LABEL = 'Company (direct)';
 
 export const SALE_TYPE_LABELS: Record<SaleType, string> = {
   SAVINGS: 'New savings',

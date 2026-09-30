@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
 import {
-  TrendingUp, Plus, CheckCircle2, XCircle, Clock, Wallet, Target, Trophy,
+  TrendingUp, Plus, Building2, CheckCircle2, XCircle, Clock, Wallet, Target, Trophy,
   Loader2, RefreshCw, ChevronLeft, ChevronRight, Search, Medal,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
+import { Switch } from '@/components/ui/switch';
 import { StatCard } from '@/components/ui/stat-card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -29,14 +30,14 @@ import {
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { SALE_TYPE_LABELS, monthKey, type SaleType } from '@/lib/marketing-access';
 import {
-  getSales, getLeaderboard, getMarketingSummary, getMarketers,
-  confirmSale, rejectSale, markCommissionPaid, setTarget,
+  getSales, getLeaderboard, getMarketingSummary, getTargetRoster,
+  confirmSale, rejectSale, markCommissionPaid, setTarget, setSalesTargetEnabled,
   type MarketingSaleRow, type SaleFilters,
 } from '@/actions/marketing.actions';
 import { ReportSaleDialog } from './report-sale-dialog';
 import { SalesReportPanel } from './sales-report-panel';
 
-type Access = { isMarketer: boolean; canConfirm: boolean; userId: string };
+type Access = { canReport: boolean; canConfirm: boolean; userId: string };
 type Summary = Awaited<ReturnType<typeof getMarketingSummary>>;
 type Board = Awaited<ReturnType<typeof getLeaderboard>>;
 
@@ -69,9 +70,10 @@ function MonthPicker({ value, onChange }: { value: string; onChange: (v: string)
 }
 
 export function MarketingClient({ access }: { access: Access }) {
-  const { isMarketer, canConfirm } = access;
+  const { canReport, canConfirm } = access;
   const [summary, setSummary] = useState<Summary | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
+  const [companyOpen, setCompanyOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
 
@@ -90,15 +92,22 @@ export function MarketingClient({ access }: { access: Access }) {
           </h1>
           <p className="text-muted-foreground">
             {canConfirm
-              ? 'Confirm sales reported by Marketing. Money collected in the field is posted only when you confirm it.'
-              : 'Report the customers you bring in and the money you collect. Senior staff confirm each sale.'}
+              ? 'Confirm the sales staff report, and record the company\'s own direct sales. Money collected in the field is posted only when a sale is confirmed.'
+              : 'Report the customers you bring in and the money you collect. An admin or the accountant confirms each sale.'}
           </p>
         </div>
-        {isMarketer && (
-          <Button onClick={() => setReportOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" /> Report a sale
-          </Button>
-        )}
+        <div className="flex flex-wrap gap-2">
+          {canConfirm && (
+            <Button variant="outline" onClick={() => setCompanyOpen(true)}>
+              <Building2 className="mr-2 h-4 w-4" /> Record company sale
+            </Button>
+          )}
+          {canReport && (
+            <Button onClick={() => setReportOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" /> Report a sale
+            </Button>
+          )}
+        </div>
       </div>
 
       {summary && <SummaryCards summary={summary} forConfirmer={canConfirm} />}
@@ -107,7 +116,7 @@ export function MarketingClient({ access }: { access: Access }) {
         <div className="-mx-1 overflow-x-auto px-1">
           <TabsList className="w-max">
             {canConfirm && <TabsTrigger value="queue">To confirm{summary?.pendingCount ? ` (${summary.pendingCount})` : ''}</TabsTrigger>}
-            {isMarketer && <TabsTrigger value="mine">My sales</TabsTrigger>}
+            {canReport && <TabsTrigger value="mine">My sales</TabsTrigger>}
             {canConfirm && <TabsTrigger value="all">All sales</TabsTrigger>}
             <TabsTrigger value="leaderboard">Leaderboard</TabsTrigger>
             <TabsTrigger value="report">{canConfirm ? 'Company report' : 'My report'}</TabsTrigger>
@@ -121,14 +130,14 @@ export function MarketingClient({ access }: { access: Access }) {
             <SalesPanel key={`q-${refreshKey}`} fixed={{ status: 'PENDING' }} reviewable access={access} onChanged={refresh} emptyText="Nothing waiting for confirmation." />
           </TabsContent>
         )}
-        {isMarketer && (
+        {canReport && (
           <TabsContent value="mine">
             <SalesPanel key={`m-${refreshKey}`} fixed={{}} access={access} onChanged={refresh} showStatusFilter emptyText="You have not reported any sales yet." mineOnly />
           </TabsContent>
         )}
         {canConfirm && (
           <TabsContent value="all">
-            <SalesPanel key={`a-${refreshKey}`} fixed={{}} access={access} onChanged={refresh} showStatusFilter showSearch emptyText="No sales match." />
+            <SalesPanel key={`a-${refreshKey}`} fixed={{}} access={access} onChanged={refresh} showStatusFilter showSearch showChannel emptyText="No sales match." />
           </TabsContent>
         )}
         <TabsContent value="leaderboard">
@@ -150,6 +159,7 @@ export function MarketingClient({ access }: { access: Access }) {
       </Tabs>
 
       <ReportSaleDialog open={reportOpen} onOpenChange={setReportOpen} onReported={refresh} />
+      <ReportSaleDialog open={companyOpen} onOpenChange={setCompanyOpen} onReported={refresh} company />
     </div>
   );
 }
@@ -193,7 +203,7 @@ function SummaryCards({ summary, forConfirmer }: { summary: Summary; forConfirme
 // ── Sales list, with review ─────────────────────────────────────────────────
 
 function SalesPanel({
-  fixed, access, onChanged, reviewable = false, showStatusFilter = false, showSearch = false, mineOnly = false, emptyText,
+  fixed, access, onChanged, reviewable = false, showStatusFilter = false, showSearch = false, showChannel = false, mineOnly = false, emptyText,
 }: {
   fixed: SaleFilters;
   access: Access;
@@ -201,12 +211,15 @@ function SalesPanel({
   reviewable?: boolean;
   showStatusFilter?: boolean;
   showSearch?: boolean;
+  /** Offer the Staff / Company (direct) filter. */
+  showChannel?: boolean;
   mineOnly?: boolean;
   emptyText: string;
 }) {
   const [rows, setRows] = useState<MarketingSaleRow[]>([]);
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
   const [status, setStatus] = useState('');
+  const [channel, setChannel] = useState<'' | 'STAFF' | 'COMPANY'>('');
   const [search, setSearch] = useState('');
   const [reviewing, setReviewing] = useState<MarketingSaleRow | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -217,6 +230,7 @@ function SalesPanel({
         const result = await getSales({
           ...fixed,
           status: fixed.status ?? (status || undefined),
+          channel: channel || undefined,
           search: search || undefined,
           marketerId: mineOnly ? access.userId : undefined,
           page,
@@ -231,7 +245,7 @@ function SalesPanel({
   useEffect(() => {
     load(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
+  }, [status, channel]);
 
   return (
     <Card>
@@ -257,6 +271,16 @@ function SalesPanel({
                 <SelectItem value="PENDING">Awaiting confirmation</SelectItem>
                 <SelectItem value="CONFIRMED">Confirmed</SelectItem>
                 <SelectItem value="REJECTED">Rejected</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+          {showChannel && (
+            <Select value={channel || 'ALL'} onValueChange={(v) => setChannel(v === 'ALL' ? '' : (v as 'STAFF' | 'COMPANY'))}>
+              <SelectTrigger className="w-[190px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Staff and company</SelectItem>
+                <SelectItem value="STAFF">Staff sales</SelectItem>
+                <SelectItem value="COMPANY">Company (direct)</SelectItem>
               </SelectContent>
             </Select>
           )}
@@ -296,8 +320,13 @@ function SalesPanel({
                     </TableCell>
                     {!mineOnly && (
                       <TableCell>
-                        <div className="text-sm font-medium">{s.marketer}</div>
-                        <div className="text-xs text-muted-foreground">{s.branch ?? 'Head office'}</div>
+                        <div className="text-sm font-medium">
+                          {s.marketer}
+                          {s.isCompany && <Badge variant="secondary" className="ml-1.5 align-middle">Company</Badge>}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {s.isCompany ? `Recorded by ${s.reportedBy}` : s.branch ?? 'Head office'}
+                        </div>
                       </TableCell>
                     )}
                     <TableCell>
@@ -329,8 +358,8 @@ function SalesPanel({
                     </TableCell>
                     {reviewable && (
                       <TableCell className="text-right">
-                        {s.marketerId === access.userId
-                          ? <span className="text-xs text-muted-foreground">Your own sale</span>
+                        {s.marketerId === access.userId || s.reportedById === access.userId
+                          ? <span className="text-xs text-muted-foreground">You reported this</span>
                           : <Button size="sm" onClick={() => setReviewing(s)}>Review</Button>}
                       </TableCell>
                     )}
@@ -460,7 +489,7 @@ function LeaderboardPanel({ access }: { access: Access }) {
         {loading ? (
           <div className="flex items-center justify-center py-12 text-muted-foreground"><Loader2 className="mr-2 h-5 w-5 animate-spin" />Loading...</div>
         ) : board.rows.length === 0 ? (
-          <p className="py-8 text-center text-muted-foreground">No one is in the Marketing department yet.</p>
+          <p className="py-8 text-center text-muted-foreground">No one is on sales targets yet. Switch people on under Targets.</p>
         ) : (
           <div className="overflow-x-auto">
             <Table>
@@ -518,17 +547,24 @@ function LeaderboardPanel({ access }: { access: Access }) {
 
 // ── Targets ─────────────────────────────────────────────────────────────────
 
+/**
+ * Every staff member with an On target switch. Anyone switched on can report
+ * sales, is ranked on the leaderboard and can be given a monthly target.
+ */
 function TargetsPanel({ onChanged }: { onChanged: () => void }) {
   const [month, setMonth] = useState(() => monthKey(new Date()));
-  const [marketers, setMarketers] = useState<Awaited<ReturnType<typeof getMarketers>> | null>(null);
+  const [roster, setRoster] = useState<Awaited<ReturnType<typeof getTargetRoster>> | null>(null);
   const [drafts, setDrafts] = useState<Record<string, { amount: string; count: string }>>({});
-  const [saving, setSaving] = useState<string | null>(null);
   const [loadedMonth, setLoadedMonth] = useState<string | null>(null);
+  const [saving, setSaving] = useState<string | null>(null);
+  const [toggling, setToggling] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
+  const [search, setSearch] = useState('');
 
   useEffect(() => {
-    Promise.all([getMarketers(), getLeaderboard(month)])
+    Promise.all([getTargetRoster(), getLeaderboard(month)])
       .then(([people, board]) => {
-        setMarketers(people);
+        setRoster(people);
         setLoadedMonth(board.month);
         const byId = new Map(board.rows.map((r) => [r.marketerId, r]));
         setDrafts(Object.fromEntries(people.map((p) => {
@@ -538,6 +574,17 @@ function TargetsPanel({ onChanged }: { onChanged: () => void }) {
       })
       .catch((e) => toast.error(e.message));
   }, [month]);
+
+  const toggle = async (staffId: string, enabled: boolean) => {
+    setToggling(staffId);
+    const result = await setSalesTargetEnabled(staffId, enabled);
+    setToggling(null);
+    if (result.success) {
+      setRoster((r) => (r ?? []).map((p) => (p.id === staffId ? { ...p, onSalesTarget: enabled } : p)));
+      toast.success(result.message);
+      onChanged();
+    } else toast.error(result.error || 'Could not update');
+  };
 
   const save = async (marketerId: string) => {
     const d = drafts[marketerId];
@@ -552,54 +599,91 @@ function TargetsPanel({ onChanged }: { onChanged: () => void }) {
     else toast.error(result.error || 'Could not save the target');
   };
 
+  const q = search.trim().toLowerCase();
+  const visible = (roster ?? []).filter((p) =>
+    (showAll || p.onSalesTarget) &&
+    (!q || [p.name, p.employeeId, p.department ?? '', p.branch ?? ''].some((v) => v.toLowerCase().includes(q)))
+  );
+  const onCount = (roster ?? []).filter((p) => p.onSalesTarget).length;
+
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-3">
-        <CardTitle className="flex items-center gap-2 text-lg"><Target className="h-5 w-5" />Monthly targets</CardTitle>
-        <MonthPicker value={month} onChange={setMonth} />
+      <CardHeader className="space-y-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Target className="h-5 w-5" />Sales targets
+            {roster && <Badge variant="secondary">{onCount} on target</Badge>}
+          </CardTitle>
+          <MonthPicker value={month} onChange={setMonth} />
+        </div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative w-full sm:w-72">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input className="pl-9" placeholder="Name, ID, department, branch..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <Switch checked={showAll} onCheckedChange={setShowAll} />
+            Show all staff, to switch more people on
+          </label>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Anyone switched on can report the sales they bring in, appears on the leaderboard and can be given a monthly target.
+          Switch someone off if they are not on target; their past sales stay on record.
+        </p>
       </CardHeader>
       <CardContent>
-        {!marketers || loadedMonth !== month ? (
+        {!roster || loadedMonth !== month ? (
           <div className="flex items-center justify-center py-12 text-muted-foreground"><Loader2 className="mr-2 h-5 w-5 animate-spin" />Loading...</div>
-        ) : marketers.length === 0 ? (
+        ) : visible.length === 0 ? (
           <p className="py-8 text-center text-muted-foreground">
-            No one is in the Marketing department yet. Put staff in the Marketing department from People.
+            {showAll || q ? 'No staff match.' : 'No one is on sales targets yet. Turn on "Show all staff" to switch people on.'}
           </p>
         ) : (
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Marketer</TableHead>
+                  <TableHead>Staff</TableHead>
+                  <TableHead>On target</TableHead>
                   <TableHead>Target amount</TableHead>
                   <TableHead>Target sales (optional)</TableHead>
                   <TableHead />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {marketers.map((m) => (
-                  <TableRow key={m.id}>
+                {visible.map((p) => (
+                  <TableRow key={p.id} className={p.onSalesTarget ? undefined : 'opacity-70'}>
                     <TableCell>
-                      <div className="text-sm font-medium">{m.name}</div>
-                      <div className="text-xs text-muted-foreground">{m.employeeId} · {m.branch ?? 'Head office'}</div>
+                      <div className="text-sm font-medium">{p.name}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {[p.employeeId, p.role, p.department, p.branch ?? 'Head office'].filter(Boolean).join(' · ')}
+                      </div>
                     </TableCell>
                     <TableCell>
-                      <Input
-                        type="number" min="0" className="w-40"
-                        value={drafts[m.id]?.amount ?? ''}
-                        onChange={(e) => setDrafts((d) => ({ ...d, [m.id]: { ...d[m.id], amount: e.target.value } }))}
+                      <Switch
+                        checked={p.onSalesTarget}
+                        disabled={toggling === p.id}
+                        onCheckedChange={(v) => toggle(p.id, v)}
+                        aria-label={`${p.name} on sales target`}
                       />
                     </TableCell>
                     <TableCell>
                       <Input
-                        type="number" min="0" step="1" className="w-28"
-                        value={drafts[m.id]?.count ?? ''}
-                        onChange={(e) => setDrafts((d) => ({ ...d, [m.id]: { ...d[m.id], count: e.target.value } }))}
+                        type="number" min="0" className="w-40" disabled={!p.onSalesTarget}
+                        value={drafts[p.id]?.amount ?? ''}
+                        onChange={(e) => setDrafts((d) => ({ ...d, [p.id]: { ...d[p.id], amount: e.target.value } }))}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        type="number" min="0" step="1" className="w-28" disabled={!p.onSalesTarget}
+                        value={drafts[p.id]?.count ?? ''}
+                        onChange={(e) => setDrafts((d) => ({ ...d, [p.id]: { ...d[p.id], count: e.target.value } }))}
                       />
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button size="sm" variant="outline" disabled={saving === m.id} onClick={() => save(m.id)}>
-                        {saving === m.id && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}Save
+                      <Button size="sm" variant="outline" disabled={!p.onSalesTarget || saving === p.id} onClick={() => save(p.id)}>
+                        {saving === p.id && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}Save
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -633,10 +717,11 @@ function CommissionPanel({ access, onChanged }: { access: Access; onChanged: () 
   const byMarketer = useMemo(() => {
     const map = new Map<string, { name: string; amount: number; count: number }>();
     for (const r of rows ?? []) {
-      const entry = map.get(r.marketerId) ?? { name: r.marketer ?? '', amount: 0, count: 0 };
+      const key = r.marketerId ?? 'company';
+      const entry = map.get(key) ?? { name: r.marketer ?? '', amount: 0, count: 0 };
       entry.amount += r.commissionAmount ?? 0;
       entry.count += 1;
-      map.set(r.marketerId, entry);
+      map.set(key, entry);
     }
     return Array.from(map.values()).sort((a, b) => b.amount - a.amount);
   }, [rows]);

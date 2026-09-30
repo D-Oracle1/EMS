@@ -8,7 +8,7 @@ export default async function MarketingPage() {
   if (!session) redirect('/login');
 
   const access = await getMarketingAccess();
-  if (!access.isMarketer && !access.canConfirm) redirect('/dashboard');
+  if (!access.canReport && !access.canConfirm) redirect('/dashboard');
 
   return <MarketingClient access={access} />;
 }
