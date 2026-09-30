@@ -50,7 +50,9 @@ const ROLES = {
     'LOANS:READ', 'SAVINGS:READ', 'FIXED_DEPOSITS:READ',
     'DOCUMENTS:READ',
   ],
-  HR_ADMIN: [
+  // An HR officer without admin rights: the HR Administrator role before it
+  // was given admin powers. Kept so HR-only access stays defended.
+  HR_OFFICER: [
     'HR:STAFF_READ', 'HR:STAFF_CREATE', 'HR:STAFF_UPDATE',
     'HR:ATTENDANCE_MANAGE', 'HR:LEAVE_MANAGE', 'HR:PERFORMANCE_MANAGE',
     'HR:PAYROLL_READ', 'HR:PAYROLL_MANAGE',
@@ -67,6 +69,9 @@ const ROLES = {
     'DOCUMENTS:READ',
   ],
   SUPER_ADMIN: ALL_PERMISSIONS,
+  // HR Administrator doubles as the system administrator (2026-09-30): every
+  // permission except LOANS:CREATE, the same as Super Administrator.
+  HR_ADMIN: ALL_PERMISSIONS.filter((p) => p !== 'LOANS:CREATE'),
 } as const;
 
 const viewer = (role: keyof typeof ROLES) => ({ permissions: [...ROLES[role]] });
@@ -237,15 +242,15 @@ describe('account officer', () => {
 
 // ── HR administrator ────────────────────────────────────────────────────────
 
-describe('HR administrator', () => {
-  const hrefs = hrefsFor('HR_ADMIN');
+describe('HR officer (no admin rights)', () => {
+  const hrefs = hrefsFor('HR_OFFICER');
 
   it('sees the HR module', () => {
     expect(hrefs).toContain('/hr');
     expect(hrefs).toContain('/hr/staff');
     expect(hrefs).toContain('/hr/payroll');
     expect(hrefs).toContain('/hr/recruitment');
-    expect(visibleSections(viewer('HR_ADMIN'))).toContain('Human Resources');
+    expect(visibleSections(viewer('HR_OFFICER'))).toContain('Human Resources');
   });
 
   it('never sees customer money', () => {
@@ -259,7 +264,31 @@ describe('HR administrator', () => {
   it('never sees the website', () => {
     expect(hrefs).not.toContain('/cms/content');
     expect(hrefs).not.toContain('/cms/posts');
-    expect(visibleSections(viewer('HR_ADMIN'))).not.toContain('Website');
+    expect(visibleSections(viewer('HR_OFFICER'))).not.toContain('Website');
+  });
+});
+
+describe('HR administrator (also the system administrator)', () => {
+  const hrefs = hrefsFor('HR_ADMIN');
+
+  it('keeps the whole HR module', () => {
+    for (const href of ['/hr', '/hr/staff', '/hr/payroll', '/hr/recruitment', '/hr/settings']) {
+      expect(hrefs).toContain(href);
+    }
+  });
+
+  it('has the admin console: branches, roles, sessions, audit, configuration', () => {
+    for (const href of ['/branches', '/settings/roles', '/settings/sessions', '/audit-logs', '/settings/organisation', '/settings/configuration']) {
+      expect(hrefs).toContain(href);
+    }
+  });
+
+  it('confirms marketing sales', () => {
+    expect(hrefs).toContain('/marketing');
+  });
+
+  it('does not create loans, which stays with Loan Officers', () => {
+    expect(ROLES.HR_ADMIN).not.toContain('LOANS:CREATE');
   });
 });
 
@@ -345,7 +374,7 @@ describe('My Branch', () => {
   });
 
   it('is hidden from a senior role that approves nothing at the branch', () => {
-    expect(sees({ permissions: [...ROLES.HR_ADMIN], roleLevel: 80, branchId: 'b1' })).toBe(false);
+    expect(sees({ permissions: [...ROLES.HR_OFFICER], roleLevel: 80, branchId: 'b1' })).toBe(false);
   });
 });
 
@@ -365,7 +394,7 @@ describe('Marketing', () => {
   });
 
   it('is hidden from other departments below level 85, including HR', () => {
-    expect(sees({ permissions: [...ROLES.HR_ADMIN], roleLevel: 80, departmentCode: 'HR' })).toBe(false);
+    expect(sees({ permissions: [...ROLES.HR_OFFICER], roleLevel: 80, departmentCode: 'HR' })).toBe(false);
     expect(sees({ permissions: [...ROLES.SAVINGS_OFFICER], roleLevel: 40, departmentCode: 'SAVINGS' })).toBe(false);
     expect(sees({ permissions: [...ROLES.IT_ADMIN], roleLevel: 55, departmentCode: 'IT' })).toBe(false);
   });
@@ -402,7 +431,11 @@ describe('canSee', () => {
 
 describe('landing page', () => {
   it('sends an HR-only user to the HR overview', () => {
-    expect(resolveLandingPath(viewer('HR_ADMIN'))).toBe('/hr');
+    expect(resolveLandingPath(viewer('HR_OFFICER'))).toBe('/hr');
+  });
+
+  it('sends the HR administrator, who is also admin, to the full dashboard', () => {
+    expect(resolveLandingPath(viewer('HR_ADMIN'))).toBe('/dashboard');
   });
 
   it('sends an IT-only user to the site content editor', () => {

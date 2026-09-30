@@ -7,6 +7,8 @@ import { requirePermission, requireAnyPermission } from '@/lib/auth-utils';
 import { auditLog } from '@/lib/audit';
 import { generateReference } from '@/lib/utils';
 import { createJournalEntry, getAccountByCode } from '@/lib/accounting-engine';
+import { createCustomerInTx, validateNewCustomer, type NewCustomerInput } from '@/lib/customer-registration';
+import { provisionCustomerLogin } from '@/lib/customer-auth';
 import type { ActionResult } from '@/types';
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
@@ -102,11 +104,20 @@ export async function getFixedDeposit(id: string) {
   };
 }
 
+const FUNDING_MODES = ['CASH', 'BANK_TRANSFER', 'CHEQUE', 'MOBILE_MONEY', 'POS', 'DIRECT_DEBIT'];
+const INTEREST_PAYMENTS = ['AT_MATURITY', 'MONTHLY', 'QUARTERLY'];
+const MATURITY_INSTRUCTIONS = ['ROLLOVER_PRINCIPAL_AND_INTEREST', 'ROLLOVER_PRINCIPAL_ONLY', 'PAY_OUT', 'TRANSFER_TO_SAVINGS'];
+
 /**
  * Create fixed deposit - Posts GL: Dr Cash, Cr FD Liability
+ *
+ * For an existing customer (customerId) or a new one registered on the spot
+ * (newCustomer), exactly as a savings account is opened: the customer and the
+ * deposit are created in one transaction, so a failure leaves neither behind.
  */
 export async function createFixedDeposit(data: {
-  customerId: string;
+  customerId?: string;
+  newCustomer?: NewCustomerInput;
   principalAmount: number;
   tenure: number; // days
   interestRate: number;
@@ -119,9 +130,41 @@ export async function createFixedDeposit(data: {
   try {
     const user = await requirePermission('FIXED_DEPOSITS:CREATE');
 
-    const customer = await prisma.customer.findUnique({ where: { id: data.customerId } });
-    if (!customer || customer.status !== 'ACTIVE') {
-      return { success: false, error: 'Customer not found or not active' };
+    if (!Number.isFinite(data.principalAmount) || data.principalAmount <= 0) {
+      return { success: false, error: 'Principal amount must be greater than 0' };
+    }
+    if (!Number.isInteger(data.tenure) || data.tenure <= 0) {
+      return { success: false, error: 'Tenure must be a whole number of days greater than 0' };
+    }
+    if (!Number.isFinite(data.interestRate) || data.interestRate <= 0) {
+      return { success: false, error: 'Interest rate must be greater than 0' };
+    }
+    if (!FUNDING_MODES.includes(data.fundingMode)) return { success: false, error: 'Unknown funding mode' };
+    if (data.interestPayment && !INTEREST_PAYMENTS.includes(data.interestPayment)) {
+      return { success: false, error: 'Unknown interest payment option' };
+    }
+    if (data.maturityInstruction && !MATURITY_INSTRUCTIONS.includes(data.maturityInstruction)) {
+      return { success: false, error: 'Unknown maturity instruction' };
+    }
+
+    // Resolve customer: existing, or auto-register a new one.
+    const registerNew = !data.customerId && !!data.newCustomer;
+    let customerId = data.customerId?.trim() || '';
+    let customerName: string;
+    const branchId = data.branchId || user.branchId;
+
+    if (registerNew) {
+      const err = validateNewCustomer(data.newCustomer!);
+      if (err) return { success: false, error: err };
+      if (!branchId) return { success: false, error: 'No branch assigned. Cannot register a new customer.' };
+      customerName = `${data.newCustomer!.firstName.trim()} ${data.newCustomer!.lastName.trim()}`;
+    } else {
+      if (!customerId) return { success: false, error: 'Please select an existing customer or enter new customer details' };
+      const customer = await prisma.customer.findUnique({ where: { id: customerId } });
+      if (!customer || customer.status !== 'ACTIVE' || !inScope(await branchScopeFor(user), customer.branchId)) {
+        return { success: false, error: 'Customer not found or not active' };
+      }
+      customerName = `${customer.firstName} ${customer.lastName}`;
     }
 
     const startDate = new Date();
@@ -139,12 +182,22 @@ export async function createFixedDeposit(data: {
 
     const maturityAmount = new Decimal(data.principalAmount).plus(interestAmount).toNumber();
     const certificateNumber = await generateReference('FIXED_DEPOSIT');
+    const newCustomerNumber = registerNew ? await generateReference('CUSTOMER') : null;
 
-    const fd = await prisma.fixedDeposit.create({
+    const fd = await withTransaction(async (tx) => {
+      if (registerNew) {
+        const created = await createCustomerInTx(tx, data.newCustomer!, {
+          customerNumber: newCustomerNumber!,
+          branchId: branchId as string,
+          createdBy: user.id,
+        });
+        customerId = created.id;
+      }
+      return tx.fixedDeposit.create({
       data: {
         certificateNumber,
-        customerId: data.customerId,
-        branchId: data.branchId || user.branchId,
+        customerId,
+        branchId: branchId || undefined,
         principalAmount: data.principalAmount,
         interestRate: data.interestRate,
         tenure: data.tenure,
@@ -158,7 +211,16 @@ export async function createFixedDeposit(data: {
         fundingReference: data.fundingReference,
         createdById: user.id,
       },
+      });
     });
+
+    if (registerNew && newCustomerNumber) {
+      await auditLog({
+        userId: user.id, action: 'CREATE', module: 'CUSTOMERS', entityType: 'CUSTOMER', entityId: customerId,
+        description: `Registered customer ${newCustomerNumber}: ${customerName} (from fixed deposit ${certificateNumber})`,
+      });
+      await provisionCustomerLogin(customerId);
+    }
 
     // Post GL: Dr Cash, Cr FD Liability
     const cashAccount = await getAccountByCode(FD_GL.CASH);
@@ -174,7 +236,7 @@ export async function createFixedDeposit(data: {
         fixedDepositId: fd.id,
         lines: [
           { accountId: cashAccount.id, debitAmount: data.principalAmount, description: `FD funding - ${certificateNumber}` },
-          { accountId: fdLiability.id, creditAmount: data.principalAmount, description: `FD liability - ${certificateNumber}`, customerId: data.customerId },
+          { accountId: fdLiability.id, creditAmount: data.principalAmount, description: `FD liability - ${certificateNumber}`, customerId },
         ],
         createdById: user.id,
         autoPost: true,
@@ -183,7 +245,7 @@ export async function createFixedDeposit(data: {
 
     await auditLog({
       userId: user.id, action: 'CREATE', module: 'FIXED_DEPOSITS', entityType: 'FIXED_DEPOSIT', entityId: fd.id,
-      description: `Created FD ${certificateNumber}: ${data.principalAmount} at ${data.interestRate}% for ${data.tenure} days`,
+      description: `Created FD ${certificateNumber} for ${customerName}: ${data.principalAmount} at ${data.interestRate}% for ${data.tenure} days`,
     });
 
     return { success: true, message: `FD ${certificateNumber} created`, data: { id: fd.id, certificateNumber } };

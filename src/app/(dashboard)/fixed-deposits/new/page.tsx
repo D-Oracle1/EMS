@@ -18,9 +18,15 @@ import {
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { createFixedDeposit } from '@/actions/fixed-deposit.actions';
+import {
+  CustomerPicker,
+  emptyCustomerSelection,
+  validateCustomerSelection,
+  toActionCustomer,
+  type CustomerSelection,
+} from '@/components/customer-picker';
 
 interface FormData {
-  customerId: string;
   principalAmount: string;
   tenure: string;
   interestRate: string;
@@ -31,7 +37,6 @@ interface FormData {
 }
 
 const initialFormData: FormData = {
-  customerId: '',
   principalAmount: '',
   tenure: '',
   interestRate: '',
@@ -51,7 +56,8 @@ export default function NewFixedDepositPage() {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [form, setForm] = useState<FormData>(initialFormData);
-  const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>(
+  const [customerSel, setCustomerSel] = useState<CustomerSelection>(emptyCustomerSelection);
+  const [errors, setErrors] = useState<Partial<Record<keyof FormData | 'customer', string>>>(
     {}
   );
 
@@ -88,10 +94,11 @@ export default function NewFixedDepositPage() {
   }, [form.principalAmount, form.tenure, form.interestRate]);
 
   const validate = (): boolean => {
-    const newErrors: Partial<Record<keyof FormData, string>> = {};
+    const newErrors: Partial<Record<keyof FormData | 'customer', string>> = {};
 
-    if (!form.customerId.trim()) {
-      newErrors.customerId = 'Customer ID is required';
+    const customerErr = validateCustomerSelection(customerSel);
+    if (customerErr) {
+      newErrors.customer = customerErr;
     }
     if (!form.principalAmount || parseFloat(form.principalAmount) <= 0) {
       newErrors.principalAmount = 'Principal amount must be greater than 0';
@@ -120,7 +127,7 @@ export default function NewFixedDepositPage() {
     startTransition(async () => {
       try {
         const result = await createFixedDeposit({
-          customerId: form.customerId.trim(),
+          ...toActionCustomer(customerSel),
           principalAmount: parseFloat(form.principalAmount),
           tenure: parseInt(form.tenure, 10),
           interestRate: parseFloat(form.interestRate),
@@ -172,19 +179,17 @@ export default function NewFixedDepositPage() {
               Customer
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <Label htmlFor="customerId">Customer ID *</Label>
-              <Input
-                id="customerId"
-                value={form.customerId}
-                onChange={(e) => updateField('customerId', e.target.value)}
-                placeholder="Enter customer ID"
-              />
-              {errors.customerId && (
-                <p className="text-xs text-destructive">{errors.customerId}</p>
-              )}
-            </div>
+          <CardContent className="space-y-2">
+            <CustomerPicker
+              value={customerSel}
+              onChange={(sel) => {
+                setCustomerSel(sel);
+                if (errors.customer) setErrors((prev) => ({ ...prev, customer: undefined }));
+              }}
+            />
+            {errors.customer && (
+              <p className="text-sm text-destructive">{errors.customer}</p>
+            )}
           </CardContent>
         </Card>
 
@@ -270,8 +275,10 @@ export default function NewFixedDepositPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="CASH">Cash</SelectItem>
-                    <SelectItem value="TRANSFER">Transfer</SelectItem>
+                    <SelectItem value="BANK_TRANSFER">Bank transfer</SelectItem>
                     <SelectItem value="CHEQUE">Cheque</SelectItem>
+                    <SelectItem value="MOBILE_MONEY">Mobile money</SelectItem>
+                    <SelectItem value="POS">POS</SelectItem>
                   </SelectContent>
                 </Select>
                 {errors.fundingMode && (
@@ -343,10 +350,13 @@ export default function NewFixedDepositPage() {
                     <SelectItem value="ROLLOVER_PRINCIPAL_AND_INTEREST">
                       Rollover Principal & Interest
                     </SelectItem>
-                    <SelectItem value="ROLLOVER_PRINCIPAL">
+                    <SelectItem value="ROLLOVER_PRINCIPAL_ONLY">
                       Rollover Principal Only
                     </SelectItem>
-                    <SelectItem value="PAYOUT">Payout</SelectItem>
+                    <SelectItem value="PAY_OUT">Payout</SelectItem>
+                    <SelectItem value="TRANSFER_TO_SAVINGS">
+                      Transfer to Savings
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>

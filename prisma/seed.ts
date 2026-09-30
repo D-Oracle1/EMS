@@ -137,18 +137,9 @@ async function main() {
       name: 'HR Administrator',
       code: 'HR_ADMIN',
       level: 80,
-      perms: [
-        // Full HR module access. Payroll can be processed here but NOT approved —
-        // approval sits with the Director so no one person can run and release pay.
-        'HR:STAFF_READ', 'HR:STAFF_CREATE', 'HR:STAFF_UPDATE',
-        'HR:ATTENDANCE_MANAGE', 'HR:LEAVE_MANAGE', 'HR:PERFORMANCE_MANAGE',
-        'HR:PAYROLL_READ', 'HR:PAYROLL_MANAGE',
-        'HR:RECRUITMENT_MANAGE', 'HR:TRAINING_MANAGE', 'HR:ASSET_MANAGE',
-        'HR:ANNOUNCE', 'HR:CONFIG_MANAGE', 'HR:ANALYTICS_VIEW',
-        'DOCUMENTS:READ', 'DOCUMENTS:CREATE',
-        'AUDIT:READ',
-        'SYSTEM:USER_MANAGE',
-      ],
+      // The HR Administrator is also the system administrator (2026-09-30):
+      // every permission except LOANS:CREATE, as Super Administrator holds.
+      perms: permissionCodes.filter((p) => p !== 'LOANS:CREATE'),
     },
     {
       name: 'IT Administrator',
