@@ -1,5 +1,6 @@
 'use client';
 
+import { iconTileClass } from '@/components/icon-tile';
 /**
  * The phone's navigation: a full-screen grid of icons.
  *
@@ -121,7 +122,7 @@ export function MobileNavGrid({ open, onClose }: { open: boolean; onClose: () =>
                         : 'border-border/60 bg-card hover:bg-foreground/5'
                     }`}
                   >
-                    <span className={`icon-tile icon-tile-sm icon-tile-${item.color}`}>
+                    <span className={`icon-tile icon-tile-sm ${iconTileClass(item.color)}`}>
                       <Icon className="h-4 w-4" />
                     </span>
                     <span

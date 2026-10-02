@@ -135,7 +135,7 @@ export function ContentClient({ user }: ContentClientProps) {
       </div>
 
       {overview && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard title="Content Blocks" color="fuchsia" value={overview.blocks} icon={LayoutTemplate} />
           <StatCard title="Published Posts" color="emerald" value={overview.published} icon={LayoutTemplate} />
           <StatCard title="Drafts" color="amber" value={overview.drafts} icon={LayoutTemplate} />
@@ -257,7 +257,7 @@ export function ContentClient({ user }: ContentClientProps) {
                         {r.changedBy} · {formatDateTime(r.changedAt)}
                       </span>
                     </div>
-                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                    <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
                       <div className="rounded bg-rose-50 p-2 text-xs text-rose-800">
                         <span className="font-semibold">Before: </span>
                         {r.oldValue?.slice(0, 160) || '(empty)'}

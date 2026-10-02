@@ -41,17 +41,36 @@ export function formatDate(date: Date | string): string {
 }
 
 /**
- * Format date and time
+ * A time of day on the 12-hour clock: "4:16 PM", or "4:16:05 PM" with
+ * seconds. The one place the app decides how a time reads; every clock,
+ * timestamp and clock-in time goes through it.
  */
-export function formatDateTime(date: Date | string): string {
+export function formatTime(date: Date | string, opts: { seconds?: boolean } = {}): string {
   const d = typeof date === 'string' ? new Date(date) : date;
-  return d.toLocaleDateString('en-NG', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
+  return d.toLocaleTimeString('en-US', {
+    hour: 'numeric',
     minute: '2-digit',
-  });
+    ...(opts.seconds ? { second: '2-digit' } : {}),
+    hour12: true,
+  })
+    // Newer ICU puts a narrow no-break space (U+202F) before AM/PM; use a
+    // plain one so the time reads the same in every browser and on the server.
+    .replace(/\u202f/g, ' ');
+}
+
+/** The parts of a 12-hour time, for a clock that styles "PM" apart: { time: "4:16", period: "PM" }. */
+export function timeParts(date: Date, opts: { seconds?: boolean } = {}): { time: string; period: string } {
+  const full = formatTime(date, opts);
+  const match = /^(.*?)\s*([AP]M)$/i.exec(full);
+  return match ? { time: match[1], period: match[2].toUpperCase() } : { time: full, period: '' };
+}
+
+/**
+ * Format date and time: "2 Oct 2026, 4:16 PM".
+ */
+export function formatDateTime(date: Date | string, opts: { seconds?: boolean } = {}): string {
+  const d = typeof date === 'string' ? new Date(date) : date;
+  return `${formatDate(d)}, ${formatTime(d, opts)}`;
 }
 
 /**

@@ -1,5 +1,6 @@
 'use client';
 
+import { timeParts } from '@/lib/utils';
 /**
  * The clock and greeting that open every staff workspace.
  *
@@ -57,14 +58,9 @@ export function WorkspaceHeader({
   const tick = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const now = useMemo(() => (tick === null ? null : new Date(tick)), [tick]);
 
-  const time = now
-    ? now.toLocaleTimeString('en-GB', {
-        hour: '2-digit',
-        minute: '2-digit',
-        ...(showSeconds ? { second: '2-digit' } : {}),
-        hour12: false,
-      })
-    : null;
+  // 12-hour clock: "4:16 PM". The big clock styles the AM/PM smaller.
+  const parts = now ? timeParts(now, { seconds: showSeconds }) : null;
+  const time = parts ? `${parts.time} ${parts.period}` : null;
 
   const date = now
     ? now.toLocaleDateString('en-NG', {
@@ -98,7 +94,12 @@ export function WorkspaceHeader({
         {/* Reserve the height so the surrounding layout does not jump when the
             clock appears on mount. */}
         <p className="clock-time text-6xl font-bold sm:text-7xl md:text-8xl" suppressHydrationWarning>
-          {time ?? ' '}
+          {parts ? (
+            <>
+              {parts.time}
+              <span className="ml-2 align-baseline text-[0.4em] font-semibold tracking-normal">{parts.period}</span>
+            </>
+          ) : ' '}
         </p>
         <p className="mt-2 text-sm text-muted-foreground sm:text-base" suppressHydrationWarning>
           {subtitle ?? date ?? ' '}

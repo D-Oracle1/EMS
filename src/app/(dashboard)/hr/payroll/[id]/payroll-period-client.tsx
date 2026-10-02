@@ -229,7 +229,7 @@ export function PayrollPeriodClient({ periodId, user }: PayrollPeriodClientProps
       </div>
 
       {period && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {[
             { label: 'Staff', value: String(period.staffCount), color: 'indigo' as const, icon: Users },
             { label: 'Gross Earnings', value: formatCurrency(period.totalGross), color: 'emerald' as const, icon: Wallet },

@@ -169,7 +169,7 @@ export function MarketingClient({ access }: { access: Access }) {
 function SummaryCards({ summary, forConfirmer }: { summary: Summary; forConfirmer: boolean }) {
   const progress = summary.targetAmount ? Math.min(100, Math.round((summary.confirmedAmount / summary.targetAmount) * 100)) : undefined;
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <StatCard
         title={forConfirmer ? 'Awaiting confirmation' : 'Awaiting confirmation'}
         color="amber" icon={Clock}
@@ -745,7 +745,7 @@ function CommissionPanel({ access, onChanged }: { access: Access; onChanged: () 
   return (
     <div className="space-y-4">
       {byMarketer.length > 0 && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {byMarketer.map((m) => (
             <Card key={m.name}>
               <CardContent className="p-4">

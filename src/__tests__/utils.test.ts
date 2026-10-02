@@ -7,6 +7,8 @@ import {
   formatCurrency,
   formatDate,
   formatDateTime,
+  formatTime,
+  timeParts,
   getFinancialPeriod,
   getPeriodDateRange,
   calculateReducingBalanceSchedule,
@@ -59,6 +61,37 @@ describe('formatDateTime', () => {
   it('includes time in output', () => {
     const result = formatDateTime(new Date('2024-03-20T09:30:00'));
     expect(result).toContain('2024');
+  });
+});
+
+describe('formatTime (12-hour clock)', () => {
+  it('writes afternoon times with PM', () => {
+    expect(formatTime(new Date('2024-03-20T16:16:00'))).toBe('4:16 PM');
+  });
+
+  it('writes morning times with AM, without a leading zero', () => {
+    expect(formatTime(new Date('2024-03-20T09:05:00'))).toBe('9:05 AM');
+  });
+
+  it('writes midnight and noon as 12', () => {
+    expect(formatTime(new Date('2024-03-20T00:00:00'))).toBe('12:00 AM');
+    expect(formatTime(new Date('2024-03-20T12:30:00'))).toBe('12:30 PM');
+  });
+
+  it('adds seconds when asked', () => {
+    expect(formatTime(new Date('2024-03-20T16:16:07'), { seconds: true })).toBe('4:16:07 PM');
+  });
+
+  it('is never on the 24-hour clock', () => {
+    expect(formatTime(new Date('2024-03-20T23:45:00'))).not.toContain('23');
+  });
+
+  it('splits the period out for the big clock', () => {
+    expect(timeParts(new Date('2024-03-20T16:16:00'))).toEqual({ time: '4:16', period: 'PM' });
+  });
+
+  it('carries the 12-hour time into formatDateTime', () => {
+    expect(formatDateTime(new Date('2024-03-20T16:16:00'))).toMatch(/4:16\sPM$/);
   });
 });
 

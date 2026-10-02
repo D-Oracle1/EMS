@@ -1,5 +1,6 @@
 'use client';
 
+import { formatDateTime } from '@/lib/utils';
 import { useEffect, useState, useTransition } from 'react';
 import {
   Shield,
@@ -47,17 +48,7 @@ const actionVariant: Record<string, 'success' | 'error' | 'warning' | 'info' | '
   REVERSAL: 'warning',
 };
 
-const formatTimestamp = (dateStr: string | Date): string => {
-  const d = typeof dateStr === 'string' ? new Date(dateStr) : dateStr;
-  return d.toLocaleDateString('en-NG', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
-};
+const formatTimestamp = (dateStr: string | Date): string => formatDateTime(dateStr, { seconds: true });
 
 export default function AuditLogsPage() {
   const [logs, setLogs] = useState<any[]>([]);

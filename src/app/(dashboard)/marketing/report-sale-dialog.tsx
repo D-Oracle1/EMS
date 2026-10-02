@@ -223,7 +223,7 @@ export function ReportSaleDialog({ open, onOpenChange, onReported, company = fal
             </div>
           )}
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="sale-amount">{isCollection ? 'Amount collected' : 'Amount'}</Label>
               <Input id="sale-amount" type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />

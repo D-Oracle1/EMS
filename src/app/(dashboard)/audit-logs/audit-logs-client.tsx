@@ -1,5 +1,6 @@
 'use client';
 
+import { formatDateTime } from '@/lib/utils';
 import { useEffect, useState, useTransition } from 'react';
 import {
   Shield,
@@ -109,17 +110,7 @@ export function AuditLogsClient({ user }: AuditLogsClientProps) {
     });
   };
 
-  const formatTimestamp = (dateStr: string) => {
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('en-NG', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    });
-  };
+  const formatTimestamp = (dateStr: string) => formatDateTime(dateStr, { seconds: true });
 
   return (
     <div className="space-y-6">

@@ -221,7 +221,7 @@ export function OrgChartClient({ user }: OrgChartClientProps) {
       </div>
 
       {chart && (
-        <div className="grid gap-4 sm:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
           {[
             { label: 'Staff in Chart', value: chart.totalStaff, icon: Users, color: 'indigo' as const },
             { label: 'Top-level Nodes', value: chart.roots.length, icon: Network, color: 'blue' as const },

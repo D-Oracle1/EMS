@@ -1,5 +1,6 @@
 'use client';
 
+import { iconTileClass } from '@/components/icon-tile';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
@@ -77,7 +78,7 @@ function ChartPanel({
   return (
     <div className="premium-card p-5">
       <div className="flex items-center gap-2 mb-4">
-        <div className={`icon-tile icon-tile-sm icon-tile-${tint}`}>{icon}</div>
+        <div className={`icon-tile icon-tile-sm ${iconTileClass(tint)}`}>{icon}</div>
         <div>
           <h2 className="font-semibold leading-tight">{title}</h2>
           <p className="text-xs text-muted-foreground">{subtitle}</p>
@@ -125,7 +126,7 @@ function StatTile({
 }) {
   return (
     <div className="premium-card premium-card-hover p-4">
-      <div className={`icon-tile icon-tile-sm icon-tile-${tint}`}>
+      <div className={`icon-tile icon-tile-sm ${iconTileClass(tint)}`}>
         <Icon style={{ height: 18, width: 18 }} />
       </div>
       <p className="mt-3 text-xl font-bold tracking-tight leading-tight">{value}</p>
@@ -359,7 +360,7 @@ export function SavingsDashboardClient({ user }: Props) {
                       href={`/savings/${m.id}`}
                       className="flex items-center gap-3 rounded-xl px-2 py-2 -mx-2 hover:bg-muted/60 transition-colors"
                     >
-                      <div className={`icon-tile icon-tile-sm icon-tile-${TILE_TINTS[i % TILE_TINTS.length]}`}>
+                      <div className={`icon-tile icon-tile-sm ${iconTileClass(TILE_TINTS[i % TILE_TINTS.length])}`}>
                         <Wallet className="h-4 w-4" />
                       </div>
                       <div className="min-w-0 flex-1">

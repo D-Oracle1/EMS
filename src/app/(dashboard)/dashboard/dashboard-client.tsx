@@ -116,7 +116,7 @@ export function DashboardClient({ user, data }: DashboardClientProps) {
 
       {/* The savings pair and the to-do list share a row: what you hold, how to
           add to it, and what is waiting on you. */}
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Link href="/savings" className="premium-card premium-card-hover p-5">
           <div className="flex items-center gap-2">
             <span className="icon-tile icon-tile-sm icon-tile-emerald">

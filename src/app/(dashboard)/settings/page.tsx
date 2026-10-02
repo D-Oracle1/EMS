@@ -170,7 +170,7 @@ export default function SettingsPage() {
 
       {/* Administration console */}
       {visibleLinks.length > 0 && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {visibleLinks.map((link) => {
             const Icon = link.icon;
             return (
@@ -201,7 +201,7 @@ export default function SettingsPage() {
           <CardTitle className="text-lg">System Information</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div>
               <p className="text-sm text-muted-foreground">Application</p>
               <p className="font-medium">Hy-Link Finance v2.0</p>
@@ -262,7 +262,7 @@ export default function SettingsPage() {
                 {batchStatus.lastRun ? new Date(batchStatus.lastRun).toLocaleString() : 'never'}
               </div>
             )}
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {BATCH_JOBS.map((job) => (
                 <div
                   key={job.key}

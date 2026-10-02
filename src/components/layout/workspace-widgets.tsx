@@ -1,5 +1,6 @@
 'use client';
 
+import { iconTileClass } from '@/components/icon-tile';
 /**
  * The workspace widget cards: Quick Access, To Do and Recent Activity.
  *
@@ -308,7 +309,7 @@ export function WorkspaceWidgets() {
   const quick = items.filter((i) => i.href !== '/dashboard').slice(0, 8);
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       {/* Quick Access */}
       <section className="premium-card p-5">
         <div className="mb-4 flex items-center gap-2">
@@ -327,7 +328,7 @@ export function WorkspaceWidgets() {
                 className="glass-inset flex flex-col items-center gap-1.5 p-2.5 text-center transition-transform hover:-translate-y-0.5"
                 title={item.label}
               >
-                <span className={`icon-tile icon-tile-sm icon-tile-${item.color}`}>
+                <span className={`icon-tile icon-tile-sm ${iconTileClass(item.color)}`}>
                   <Icon className="h-4 w-4" />
                 </span>
                 <span className="w-full truncate text-[10px] text-muted-foreground">

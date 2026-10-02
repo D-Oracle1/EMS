@@ -91,7 +91,7 @@ export function ExpensesClient({ access }: { access: Access }) {
       </div>
 
       {summary && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard title="Spent this month" color="sky" icon={Banknote}
             value={formatCurrency(summary.approvedAmount)}
             description={`${summary.approvedCount} approved expense${summary.approvedCount === 1 ? '' : 's'}`} />
@@ -122,7 +122,7 @@ export function ExpensesClient({ access }: { access: Access }) {
         </TabsContent>
         <TabsContent value="breakdown">
           {summary && (
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <BreakdownCard title="By category" rows={summary.byCategory} />
               <BreakdownCard title="By branch" rows={summary.byBranch} />
             </div>
@@ -427,7 +427,7 @@ function RecordExpenseDialog({ open, onOpenChange, options, onRecorded }: {
             Set up at least one expense account and one cash or bank account in the Chart of Accounts first.
           </p>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="e-date">Date</Label>
               <Input id="e-date" type="date" max={today()} value={form.expenseDate} onChange={(e) => set('expenseDate', e.target.value)} />

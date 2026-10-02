@@ -312,7 +312,7 @@ export function RolesClient({ user }: RolesClientProps) {
           />
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {filteredModules.map((group) => {
             const grantable = group.permissions.filter((p) => canGrant(p.code));
             const allOn =

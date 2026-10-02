@@ -49,7 +49,7 @@ export function InterestSchedule({ projection, title = 'What this earns', defaul
           </Badge>
         </div>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-4">
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-4">
           <Figure label="Principal" value={formatCurrency(projection.principal)} />
           <Figure
             label="Total interest"

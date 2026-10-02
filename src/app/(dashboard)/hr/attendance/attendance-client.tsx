@@ -1,5 +1,6 @@
 'use client';
 
+import { formatTime } from '@/lib/utils';
 import { useEffect, useState, useTransition } from 'react';
 import {
   Clock,
@@ -117,11 +118,7 @@ export function AttendanceClient({ user }: AttendanceClientProps) {
     });
   };
 
-  const formatTime = (dateStr: string | null) => {
-    if (!dateStr) return '-';
-    const d = new Date(dateStr);
-    return d.toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' });
-  };
+  const formatClock = (dateStr: string | null) => (dateStr ? formatTime(dateStr) : '-');
 
   return (
     <>
@@ -169,13 +166,13 @@ export function AttendanceClient({ user }: AttendanceClientProps) {
                   {status?.clockIn && (
                     <div className="flex items-center gap-3">
                       <span className="text-sm text-muted-foreground">Clock In:</span>
-                      <span className="text-sm font-medium">{formatTime(status.clockIn)}</span>
+                      <span className="text-sm font-medium">{formatClock(status.clockIn)}</span>
                     </div>
                   )}
                   {status?.clockOut && (
                     <div className="flex items-center gap-3">
                       <span className="text-sm text-muted-foreground">Clock Out:</span>
-                      <span className="text-sm font-medium">{formatTime(status.clockOut)}</span>
+                      <span className="text-sm font-medium">{formatClock(status.clockOut)}</span>
                     </div>
                   )}
                 </div>
@@ -273,8 +270,8 @@ export function AttendanceClient({ user }: AttendanceClientProps) {
                         </div>
                       </TableCell>
                       <TableCell>{formatDate(record.date)}</TableCell>
-                      <TableCell>{record.clockIn ? formatTime(record.clockIn) : '-'}</TableCell>
-                      <TableCell>{record.clockOut ? formatTime(record.clockOut) : '-'}</TableCell>
+                      <TableCell>{record.clockIn ? formatClock(record.clockIn) : '-'}</TableCell>
+                      <TableCell>{record.clockOut ? formatClock(record.clockOut) : '-'}</TableCell>
                       <TableCell>
                         <Badge variant={attendanceStatusVariant[record.status] || 'default'}>
                           {record.status}

@@ -293,7 +293,7 @@ export function RecruitmentClient({ user }: RecruitmentClientProps) {
       {/* Pipeline */}
       {pipeline && (
         <>
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <StatCard
               title="Open Roles"
               color="cyan"

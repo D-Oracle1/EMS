@@ -1,5 +1,6 @@
 'use client';
 
+import { formatTime } from '@/lib/utils';
 import { useEffect, useState, useTransition } from 'react';
 import {
   User,
@@ -67,11 +68,7 @@ export function MyProfileClient({ user }: MyProfileClientProps) {
     fetchProfile();
   }, []);
 
-  const formatTime = (dateStr: string | null) => {
-    if (!dateStr) return '-';
-    const d = new Date(dateStr);
-    return d.toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' });
-  };
+  const formatClock = (dateStr: string | null) => (dateStr ? formatTime(dateStr) : '-');
 
   const staff = profile?.staff;
 
@@ -212,8 +209,8 @@ export function MyProfileClient({ user }: MyProfileClientProps) {
                         {profile.recentAttendance.map((rec: any) => (
                           <TableRow key={rec.id}>
                             <TableCell>{formatDate(rec.date)}</TableCell>
-                            <TableCell>{rec.clockIn ? formatTime(rec.clockIn) : '-'}</TableCell>
-                            <TableCell>{rec.clockOut ? formatTime(rec.clockOut) : '-'}</TableCell>
+                            <TableCell>{rec.clockIn ? formatClock(rec.clockIn) : '-'}</TableCell>
+                            <TableCell>{rec.clockOut ? formatClock(rec.clockOut) : '-'}</TableCell>
                             <TableCell>
                               <Badge variant={attendanceStatusVariant[rec.status] || 'default'}>
                                 {rec.status}

@@ -276,6 +276,10 @@
   .icon-tile-sky    { background: linear-gradient(135deg, #e0f2fe, #bae6fd); color: #0284c7; }
   .icon-tile-indigo { background: linear-gradient(135deg, #e0e7ff, #c7d2fe); color: #4f46e5; }
   .icon-tile-slate  { background: linear-gradient(135deg, #f1f5f9, #e2e8f0); color: #475569; }
+  .icon-tile-teal   { background: linear-gradient(135deg, #ccfbf1, #99f6e4); color: #0d9488; }
+  .icon-tile-purple { background: linear-gradient(135deg, #f3e8ff, #e9d5ff); color: #9333ea; }
+  .icon-tile-fuchsia{ background: linear-gradient(135deg, #fae8ff, #f5d0fe); color: #c026d3; }
+  .icon-tile-pink   { background: linear-gradient(135deg, #fce7f3, #fbcfe8); color: #db2777; }
 
   .dark .icon-tile-blue   { background: hsla(224, 76%, 58%, 0.18); color: #93b4fd; }
   .dark .icon-tile-orange { background: hsla(24, 95%, 53%, 0.18);  color: #fdba74; }
@@ -287,6 +291,10 @@
   .dark .icon-tile-sky    { background: hsla(199, 89%, 48%, 0.18); color: #7dd3fc; }
   .dark .icon-tile-indigo { background: hsla(239, 84%, 67%, 0.18); color: #a5b4fc; }
   .dark .icon-tile-slate  { background: hsla(215, 20%, 65%, 0.16); color: #cbd5e1; }
+  .dark .icon-tile-teal   { background: hsla(173, 80%, 40%, 0.18); color: #5eead4; }
+  .dark .icon-tile-purple { background: hsla(271, 91%, 65%, 0.18); color: #d8b4fe; }
+  .dark .icon-tile-fuchsia{ background: hsla(292, 84%, 61%, 0.18); color: #f0abfc; }
+  .dark .icon-tile-pink   { background: hsla(330, 81%, 60%, 0.18); color: #f9a8d4; }
 
 
   /* ==========================================================================

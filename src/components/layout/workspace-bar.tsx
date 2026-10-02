@@ -131,21 +131,19 @@ export function WorkspaceBar({
     'inline-flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground';
 
   return (
-    // flex-wrap is load-bearing, not tidiness. On a dashboard this row holds
-    // the greeting pill *and* the icon cluster; neither could shrink (the
-    // cluster's children are fixed h-10 w-10 squares, the greeting had no
-    // truncation), so on a ~360px screen their combined min-content width
-    // forced the row — and the whole document — wider than the viewport. That
-    // was the horizontal scrolling on the home page. Wrapping lets the cluster
-    // drop to its own line instead of pushing the page.
-    <div className="flex flex-wrap items-start justify-between gap-3">
+    // One row, greeting left and icon cluster right, on every screen. The
+    // cluster keeps its full-size tap targets (shrink-0); the greeting is the
+    // part that gives way - it can shrink to nothing (min-w-0) and truncates
+    // its text - so the two never wrap onto separate lines, and their combined
+    // width can never push the page wider than the screen.
+    <div className="flex flex-nowrap items-center justify-between gap-2">
       {/* Greeting. No menu button here any more: on a phone the navigation is
           reached from the bottom tab bar, which is where the thumb already is. */}
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
+      <div className="flex min-w-0 flex-1 items-center">
         {showGreeting && (
           // max-w-full + truncate: the greeting is the half that should give
           // way, since the controls opposite have to stay tappable.
-          <p className="greeting-pill max-w-full">
+          <p className="greeting-pill min-w-0 max-w-full px-3 sm:px-4">
             <span aria-hidden>👋</span>
             <span className="truncate" suppressHydrationWarning>
               {greeting ?? 'Welcome'}, {user.firstName}

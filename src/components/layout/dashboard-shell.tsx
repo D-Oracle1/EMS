@@ -11,6 +11,7 @@ import { WorkspaceBar } from './workspace-bar';
 import { GlobalSearch } from './global-search';
 import { MobileTabBar } from './mobile-tab-bar';
 import { WorkspaceHeader } from '@/components/workspace-header';
+import { resolveLandingPath } from '@/lib/landing';
 import type { SessionUser } from '@/types';
 
 const PIN_KEY = 'hylink-sidebar-pinned';
@@ -53,7 +54,22 @@ const getPinServerSnapshot = (): boolean => false;
  * The small clock chip in the icon cluster is on every page, dashboards
  * included, so the time is always in the same corner wherever you are.
  */
-const DASHBOARD_PATHS = ['/dashboard', '/savings/dashboard'];
+/**
+ * Home pages: where a department opens its day. Each gets the full home
+ * treatment - the greeting pill, today's attendance in the icon cluster and
+ * the big clock - rather than the compact working-page header. Any user's own
+ * landing page (resolveLandingPath) counts too, so a new role lands on a
+ * proper home without this list changing.
+ */
+const HOME_PATHS = [
+  '/dashboard',
+  '/savings/dashboard',
+  '/hr',
+  '/marketing',
+  '/my-branch',
+  '/cms/content',
+  '/accounting',
+];
 
 /**
  * The workspace frame, built to the reference design.
@@ -75,9 +91,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const pinned = useSyncExternalStore(subscribeToPin, getPinSnapshot, getPinServerSnapshot);
   const pathname = usePathname();
-  const isDashboard = DASHBOARD_PATHS.includes(pathname);
   const { data: session } = useSession();
   const user = session?.user as SessionUser | undefined;
+  const isDashboard = HOME_PATHS.includes(pathname) || (!!user && pathname === resolveLandingPath(user));
 
   const changePinned = useCallback((next: boolean) => {
     try {

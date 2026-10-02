@@ -1,5 +1,6 @@
 'use client';
 
+import { formatTime } from '@/lib/utils';
 /**
  * Today's attendance, in the icon cluster.
  *
@@ -30,11 +31,7 @@ interface AttendanceStatus {
 
 function timeOf(value: Date | string | null | undefined): string {
   if (!value) return '';
-  return new Date(value).toLocaleTimeString('en-GB', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
+  return formatTime(value);
 }
 
 const CHIP =

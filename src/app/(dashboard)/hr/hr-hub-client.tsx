@@ -150,7 +150,7 @@ export function HRHubClient({ user }: HRHubClientProps) {
 
       {/* Headline metrics */}
       {isPending && !overview && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {[0, 1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-28" />
           ))}
@@ -159,7 +159,7 @@ export function HRHubClient({ user }: HRHubClientProps) {
 
       {overview && (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard
               title="Headcount"
               color="indigo"
@@ -198,7 +198,7 @@ export function HRHubClient({ user }: HRHubClientProps) {
               <CardTitle className="text-lg">Needs Attention</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 {[
                   { label: 'Leave requests pending', value: overview.actionItems.pendingLeaveRequests, href: '/hr/leave' },
                   { label: 'Probation ending in 30 days', value: overview.actionItems.probationEndingSoon, href: '/hr/staff' },
@@ -223,7 +223,7 @@ export function HRHubClient({ user }: HRHubClientProps) {
           </Card>
 
           {/* Charts */}
-          <div className="grid gap-4 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <Card className="lg:col-span-2">
               <CardHeader>
                 <CardTitle className="text-lg">Hires & Exits — 12 Months</CardTitle>
@@ -314,7 +314,7 @@ export function HRHubClient({ user }: HRHubClientProps) {
           </div>
 
           {/* Composition + milestones */}
-          <div className="grid gap-4 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">Workforce Composition</CardTitle>
@@ -432,7 +432,7 @@ export function HRHubClient({ user }: HRHubClientProps) {
       {/* Module navigation */}
       <div>
         <h2 className="mb-3 text-lg font-semibold">HR Modules</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {visibleSections.map((section) => {
             const Icon = section.icon;
             return (

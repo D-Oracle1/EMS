@@ -60,7 +60,7 @@ export function BranchesClient({ branches }: { branches: Branch[] }) {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard title="Branches" color="slate" icon={Building2}
           value={branches.length}
           description={`${branches.filter((b) => b.isActive).length} active`} />
@@ -81,7 +81,7 @@ export function BranchesClient({ branches }: { branches: Branch[] }) {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {filtered.map((b) => (
             <Link key={b.id} href={`/branches/${b.id}`} className="group block">
               <Card className="h-full transition-shadow group-hover:shadow-md group-hover:border-indigo-300">

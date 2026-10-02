@@ -156,7 +156,7 @@ export function SalesReportPanel({ company }: { company: boolean }) {
             <div className="flex items-center justify-center py-16 text-muted-foreground"><Loader2 className="mr-2 h-5 w-5 animate-spin" />Loading...</div>
           ) : (
             <div className="space-y-6">
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <Figure label="Confirmed sales" value={formatCurrency(report!.totals.amount)} sub={`${report!.totals.count} sale${report!.totals.count === 1 ? '' : 's'}`} />
                 {company
                   ? <Figure label="Company (direct) sales" value={formatCurrency(report!.totals.companyAmount)} sub="Not credited to any staff" />
@@ -193,7 +193,7 @@ export function SalesReportPanel({ company }: { company: boolean }) {
       </Card>
 
       {!loading && (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {company && <Breakdown title="Staff vs company" rows={report!.byChannel} label={(i) => report!.byChannel[i].channel} />}
           <Breakdown title="By sale type" rows={report!.byType} label={(i) => report!.byType[i].label} />
           {company && <Breakdown title="By branch" rows={report!.byBranch} label={(i) => report!.byBranch[i].branch} />}

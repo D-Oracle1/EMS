@@ -75,7 +75,7 @@ export function MyPayslipsClient({ user }: MyPayslipsClientProps) {
       </div>
 
       {payslips.length > 0 && (
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <StatCard title="Payslips" color="slate" value={payslips.length} icon={Receipt} />
           <StatCard
             title="Total Gross"

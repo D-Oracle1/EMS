@@ -243,7 +243,7 @@ export function AssetsClient({ user }: AssetsClientProps) {
         )}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
         {[
           { label: 'Total Assets', value: String(assets.length), color: 'slate' as const, icon: Laptop },
           { label: 'Assigned', value: String(assets.filter((a) => a.status === 'ASSIGNED').length), color: 'indigo' as const, icon: UserPlus },

@@ -137,7 +137,7 @@ export function BranchDetailClient({ branch, mine = false }: { branch: Branch; m
       </div>
 
       {/* Headline figures */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard title="Staff" color="indigo" icon={UserCog}
           value={branch.staffCount} description={`${branch.activeStaffCount} active`} />
         <StatCard title="Customers" color="cyan" icon={Users}
