@@ -4,7 +4,7 @@ import { BrandLogo } from '@/components/brand';
 
 export default function OfflinePage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6 pt-[calc(1.5rem+env(safe-area-inset-top))]">
       <div className="text-center max-w-md">
         <BrandLogo className="mx-auto mb-8 w-40" />
         <div className="mx-auto h-16 w-16 rounded-full bg-blue-100 flex items-center justify-center mb-6">

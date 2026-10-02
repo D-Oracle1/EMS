@@ -52,7 +52,7 @@ export function AuthShell({ eyebrow, title, lede, children, footer, panel }: Aut
   return (
     <main className="min-h-screen bg-white text-slate-800 lg:grid lg:grid-cols-2">
       {/* Form side */}
-      <div className="flex flex-col justify-center px-6 py-12 sm:px-12 lg:px-16 xl:px-24">
+      <div className="flex flex-col justify-center px-6 pb-12 pt-[calc(3rem+env(safe-area-inset-top))] sm:px-12 lg:px-16 xl:px-24">
         <div className="mx-auto w-full max-w-md">
           <a href={SITE} className="mb-10 inline-block">
             <BrandLogo className="w-36" />

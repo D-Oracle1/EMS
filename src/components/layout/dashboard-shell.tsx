@@ -93,8 +93,10 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   if (user?.mustChangePassword) {
     return (
       <div className="min-h-screen">
-        <div className="flex h-16 items-center gap-2 px-4 sm:px-6">
-          <BrandLogo className="w-32" />
+        <div className="pt-safe">
+          <div className="flex h-16 items-center gap-2 px-4 sm:px-6">
+            <BrandLogo className="w-32" />
+          </div>
         </div>
         <main className="overflow-x-clip p-4 lg:p-6">{children}</main>
       </div>
@@ -116,7 +118,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       >
         {/* overflow-x-clip: nothing on a page can drag the whole screen
             sideways on a phone. Wide tables scroll inside their own frame. */}
-        <main className="mx-auto max-w-[110rem] overflow-x-clip px-4 pb-[calc(7rem+env(safe-area-inset-bottom))] pt-4 lg:px-8 lg:pb-10 lg:pt-6">
+        <main className="mx-auto max-w-[110rem] overflow-x-clip px-4 pb-[calc(7rem+env(safe-area-inset-bottom))] pt-[calc(1rem+env(safe-area-inset-top))] lg:px-8 lg:pb-10 lg:pt-6">
           <WorkspaceBar
             // A dashboard already has the big clock on it, so the slot in the
             // icon cluster carries today's attendance instead. Working pages,

@@ -55,7 +55,10 @@ export const metadata: Metadata = {
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
-    statusBarStyle: 'default',
+    // iOS cannot hide the status bar in a home-screen app; this is the
+    // closest it allows: the bar turns transparent and the app runs
+    // full-bleed beneath it (pages pad for env(safe-area-inset-top)).
+    statusBarStyle: 'black-translucent',
     // The home-screen label, matching the launch screen's title.
     title: 'Hy-Link Finance',
     startupImage: STARTUP_IMAGES,
