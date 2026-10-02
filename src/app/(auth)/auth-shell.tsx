@@ -1,11 +1,13 @@
 import Link from 'next/link';
+import { BrandLogo } from '@/components/brand';
 
 /**
  * The split-screen shell used by sign-in and the account enquiry, matching the
  * marketing site's auth pages so the two halves of the product read as one.
  *
- * The logo and artwork are served from the marketing site rather than copied in,
- * so a rebrand there carries straight through here.
+ * The logo is the homepage's own, copied into public/brand (see
+ * components/brand) so it loads with the app and works offline. The artwork
+ * is still served from the marketing site.
  */
 
 const SITE = 'https://www.hylinkfinance.com';
@@ -53,12 +55,7 @@ export function AuthShell({ eyebrow, title, lede, children, footer, panel }: Aut
       <div className="flex flex-col justify-center px-6 py-12 sm:px-12 lg:px-16 xl:px-24">
         <div className="mx-auto w-full max-w-md">
           <a href={SITE} className="mb-10 inline-block">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={`${SITE}/assets/logo-brand.png`}
-              alt="HY-LINK Finance Limited"
-              className="w-36"
-            />
+            <BrandLogo className="w-36" />
           </a>
 
           <span className="text-xs font-bold uppercase tracking-[0.18em] text-orange-600">

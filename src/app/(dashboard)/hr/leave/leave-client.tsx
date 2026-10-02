@@ -182,7 +182,7 @@ export function LeaveClient({ user }: LeaveClientProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Leave Management</h1>
           <p className="text-muted-foreground">Request leave and track your entitlement</p>
@@ -236,7 +236,7 @@ export function LeaveClient({ user }: LeaveClientProps) {
 
       {/* My leave requests */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
           <CardTitle className="text-lg flex items-center gap-2">
             <CalendarOff className="h-5 w-5" />
             My Leave Requests
@@ -309,7 +309,7 @@ export function LeaveClient({ user }: LeaveClientProps) {
       {/* Pending approval queue (managers only) */}
       {isManager && (
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
+          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
             <CardTitle className="text-lg flex items-center gap-2">
               <CalendarDays className="h-5 w-5" />
               Pending Approvals
@@ -520,7 +520,7 @@ function LeaveRequestDialog({
           )}
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="leave-start">Start Date</Label>
             <Input

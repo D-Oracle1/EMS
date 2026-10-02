@@ -283,7 +283,7 @@ export default function NewJournalEntryPage() {
 
         {/* Journal Lines */}
         <Card className="mb-6">
-          <CardHeader className="flex flex-row items-center justify-between">
+          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
             <CardTitle className="text-lg">Journal Lines</CardTitle>
             <Button type="button" variant="outline" size="sm" onClick={addLine}>
               <Plus className="h-4 w-4 mr-1" />

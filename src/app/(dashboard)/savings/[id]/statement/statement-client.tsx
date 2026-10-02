@@ -1,5 +1,6 @@
 'use client';
 
+import { BrandLogo } from '@/components/brand';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Printer, FileDown, Loader2 } from 'lucide-react';
@@ -122,13 +123,14 @@ export function SavingsStatementClient({ accountId }: { accountId: string }) {
           <CardContent className="p-6 space-y-6">
             {/* Header */}
             <div className="flex flex-wrap items-start justify-between gap-4 border-b pb-4">
-              <div>
+              <div className="space-y-3">
+                <BrandLogo className="w-40" />
                 <h1 className="text-xl font-bold">Savings Statement</h1>
                 <p className="text-sm text-muted-foreground">
                   Generated {fmtDate(statement.generatedAt)}
                 </p>
               </div>
-              <div className="text-sm text-right">
+              <div className="text-sm sm:text-right">
                 <p className="font-medium">{statement.customer.name}</p>
                 <p className="text-muted-foreground">{statement.customer.customerNumber}</p>
                 <p className="text-muted-foreground">{statement.customer.phone}</p>

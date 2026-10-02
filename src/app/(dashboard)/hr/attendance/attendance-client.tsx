@@ -217,7 +217,7 @@ export function AttendanceClient({ user }: AttendanceClientProps) {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex items-end gap-3 mb-4">
+              <div className="flex flex-wrap items-end gap-3 mb-4">
                 <div className="space-y-1">
                   <Label htmlFor="att-start" className="text-xs">Start Date</Label>
                   <Input

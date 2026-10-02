@@ -327,7 +327,7 @@ export function SettingsClient({ user }: SettingsClientProps) {
         {/* Leave types */}
         <TabsContent value="leave" className="mt-4">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
               <CardTitle className="text-lg">Leave Types</CardTitle>
               {canManage && (
                 <Button size="sm" onClick={() => setDialog('leaveType')}>
@@ -455,7 +455,7 @@ export function SettingsClient({ user }: SettingsClientProps) {
         {/* Holidays */}
         <TabsContent value="holidays" className="mt-4">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
               <CardTitle className="text-lg">Holiday Calendar — {year}</CardTitle>
               {canManage && (
                 <div className="flex gap-2">
@@ -535,7 +535,7 @@ export function SettingsClient({ user }: SettingsClientProps) {
         {/* Shifts */}
         <TabsContent value="shifts" className="mt-4">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
               <CardTitle className="text-lg">Work Shifts</CardTitle>
               {canManage && (
                 <Button size="sm" onClick={() => setDialog('shift')}>
@@ -623,7 +623,7 @@ export function SettingsClient({ user }: SettingsClientProps) {
         {/* Grades */}
         <TabsContent value="grades" className="mt-4">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
               <CardTitle className="text-lg">Salary Grades</CardTitle>
               {canManage && (
                 <Button size="sm" onClick={() => setDialog('grade')}>
@@ -687,7 +687,7 @@ export function SettingsClient({ user }: SettingsClientProps) {
         {/* Components */}
         <TabsContent value="components" className="mt-4">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
               <div>
                 <CardTitle className="text-lg">Payroll Components</CardTitle>
                 <p className="mt-1 text-sm text-muted-foreground">
@@ -800,7 +800,7 @@ export function SettingsClient({ user }: SettingsClientProps) {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="lt-code">Code</Label>
                 <Input
@@ -821,7 +821,7 @@ export function SettingsClient({ user }: SettingsClientProps) {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div className="space-y-2">
                 <Label htmlFor="lt-days">Default Days</Label>
                 <Input
@@ -962,7 +962,7 @@ export function SettingsClient({ user }: SettingsClientProps) {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="s-code">Code</Label>
                 <Input
@@ -983,7 +983,7 @@ export function SettingsClient({ user }: SettingsClientProps) {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
               <div className="space-y-2">
                 <Label htmlFor="s-start">Start</Label>
                 <Input
@@ -1074,7 +1074,7 @@ export function SettingsClient({ user }: SettingsClientProps) {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div className="space-y-2">
                 <Label htmlFor="g-code">Code</Label>
                 <Input
@@ -1093,7 +1093,7 @@ export function SettingsClient({ user }: SettingsClientProps) {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="g-min">Minimum Gross</Label>
                 <Input
@@ -1113,7 +1113,7 @@ export function SettingsClient({ user }: SettingsClientProps) {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="g-level">Level</Label>
                 <Input
@@ -1163,7 +1163,7 @@ export function SettingsClient({ user }: SettingsClientProps) {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="c-code">Code</Label>
                 <Input
@@ -1184,7 +1184,7 @@ export function SettingsClient({ user }: SettingsClientProps) {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="c-type">Type</Label>
                 <Select
@@ -1224,7 +1224,7 @@ export function SettingsClient({ user }: SettingsClientProps) {
                 </Select>
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div className="space-y-2">
                 <Label htmlFor="c-default">
                   Default {componentForm.calculationType === 'FIXED' ? 'Amount' : '%'}

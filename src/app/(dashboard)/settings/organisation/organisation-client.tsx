@@ -228,7 +228,7 @@ export function OrganisationClient({ user }: OrganisationClientProps) {
         {/* Branches */}
         <TabsContent value="branches" className="mt-4">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
               <CardTitle className="text-lg">Branch Network</CardTitle>
               {canManage && (
                 <Button size="sm" onClick={openBranchCreate}>
@@ -309,7 +309,7 @@ export function OrganisationClient({ user }: OrganisationClientProps) {
         {/* Departments */}
         <TabsContent value="departments" className="mt-4">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
               <CardTitle className="text-lg">Departments</CardTitle>
               {canManageDepartments && (
                 <Button size="sm" onClick={openDeptCreate}>
@@ -394,7 +394,7 @@ export function OrganisationClient({ user }: OrganisationClientProps) {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="branch-code">Code</Label>
                 <Input
@@ -425,7 +425,7 @@ export function OrganisationClient({ user }: OrganisationClientProps) {
                 placeholder="Street address"
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="branch-phone">Phone</Label>
                 <Input
@@ -467,7 +467,7 @@ export function OrganisationClient({ user }: OrganisationClientProps) {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="dept-code">Code</Label>
                 <Input

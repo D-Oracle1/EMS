@@ -225,7 +225,7 @@ export function BranchDetailClient({ branch, mine = false }: { branch: Branch; m
                 Showing {(pagination.page - 1) * pagination.limit + 1} to{' '}
                 {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total}
               </p>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button variant="outline" size="sm" onClick={() => load(tab, pagination.page - 1)} disabled={pagination.page <= 1}>
                   <ChevronLeft className="mr-1 h-4 w-4" />Previous
                 </Button>

@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { Landmark, Pin, PinOff } from 'lucide-react';
+import { Pin, PinOff } from 'lucide-react';
+import { BrandTile, BrandLogo } from '@/components/brand';
 import { cn } from '@/lib/utils';
 import { resolveNav } from '@/lib/navigation';
 import { hidesGenericDashboard } from '@/lib/landing';
@@ -84,17 +85,12 @@ export function Sidebar({ pinned = false, onPinnedChange }: SidebarProps) {
       >
         {/* Logo */}
         <div className="flex h-16 shrink-0 items-center gap-2.5 px-[1.15rem]">
-          <Link href="/dashboard" className="group/logo relative flex items-center gap-2.5">
-            <span className="relative shrink-0">
-              <Landmark className="h-7 w-7 text-indigo-400 transition-colors duration-200 group-hover/logo:text-indigo-300" />
-              <span className="absolute inset-0 rounded-full bg-indigo-400/20 blur-lg transition-all duration-200 group-hover/logo:bg-indigo-300/30" />
-            </span>
+          <Link href="/dashboard" className="group/logo relative flex items-center gap-2.5" aria-label="HY-LINK Finance EMS home">
+            <BrandTile className="h-9 w-9 transition-transform duration-200 group-hover/logo:scale-105" />
             <span className={cn('whitespace-nowrap transition-opacity duration-200', reveal)}>
-              <span className="block bg-gradient-to-r from-indigo-300 via-purple-300 to-pink-300 bg-clip-text text-lg font-bold leading-tight text-transparent">
-                Hylink
-              </span>
-              <span className="block text-[10px] font-medium uppercase tracking-widest text-slate-500">
-                Finance EMS
+              <BrandLogo tone="light" className="w-32" />
+              <span className="mt-0.5 block text-[10px] font-medium uppercase tracking-widest text-slate-500">
+                Enterprise System
               </span>
             </span>
           </Link>

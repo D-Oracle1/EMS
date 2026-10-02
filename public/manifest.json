@@ -1,15 +1,18 @@
 {
   "id": "/dashboard",
-  "name": "Hylink Finance EMS",
-  "short_name": "Hylink EMS",
-  "description": "Enterprise Management System - Hylink Finance Limited",
+  "name": "HY-LINK Finance EMS",
+  "short_name": "HY-LINK EMS",
+  "description": "Enterprise Management System - HY-LINK Finance Limited",
   "start_url": "/dashboard",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#0b1b3f",
-  "theme_color": "#1d4ed8",
+  "background_color": "#ffffff",
+  "theme_color": "#002078",
   "orientation": "any",
-  "categories": ["finance", "business"],
+  "categories": [
+    "finance",
+    "business"
+  ],
   "icons": [
     {
       "src": "/icons/icon-192x192.png",

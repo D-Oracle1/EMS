@@ -230,7 +230,7 @@ export default function FinancialPeriodsPage() {
               Select the period you want to close and the type of closure.
             </p>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label>Year</Label>
                 <Input

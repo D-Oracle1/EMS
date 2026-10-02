@@ -13,7 +13,11 @@ const TabsList = React.forwardRef<
   <TabsPrimitive.List
     ref={ref}
     className={cn(
-      'inline-flex h-10 items-center justify-center rounded-xl bg-muted border border-border p-1 text-muted-foreground gap-0.5',
+      // Scrolls sideways when the tabs outgrow the screen (a phone, or a page
+      // with many tabs) instead of pushing the page wider. Scrollbar hidden:
+      // the cut-off tab at the edge already says there is more.
+      'inline-flex h-10 max-w-full items-center justify-start overflow-x-auto rounded-xl bg-muted border border-border p-1 text-muted-foreground gap-0.5',
+      '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
       className
     )}
     {...props}
@@ -28,7 +32,7 @@ const TabsTrigger = React.forwardRef<
   <TabsPrimitive.Trigger
     ref={ref}
     className={cn(
-      'inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium',
+      'inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium',
       'ring-offset-background transition-all duration-200',
       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2',
       'disabled:pointer-events-none disabled:opacity-50',

@@ -430,7 +430,7 @@ export function AssetsClient({ user }: AssetsClientProps) {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="as-tag">Asset Tag</Label>
                 <Input
@@ -451,7 +451,7 @@ export function AssetsClient({ user }: AssetsClientProps) {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div className="space-y-2">
                 <Label htmlFor="as-cat">Category</Label>
                 <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
@@ -484,7 +484,7 @@ export function AssetsClient({ user }: AssetsClientProps) {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="as-serial">Serial Number</Label>
                 <Input
@@ -513,7 +513,7 @@ export function AssetsClient({ user }: AssetsClientProps) {
                 </Select>
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div className="space-y-2">
                 <Label htmlFor="as-pdate">Purchase Date</Label>
                 <Input
@@ -651,7 +651,7 @@ export function AssetsClient({ user }: AssetsClientProps) {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="ar-cond">Condition on Return</Label>
                 <Select

@@ -332,7 +332,7 @@ export function DashboardClient({ user, data }: DashboardClientProps) {
       {/* Loan Officer: My Loan Portfolio */}
       {data.myRecentLoans && (
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-3">
+          <CardHeader className="flex flex-row flex-wrap items-center justify-between pb-3 gap-2">
             <CardTitle className="text-lg flex items-center gap-2">
               <Landmark className="h-5 w-5 text-blue-600" />
               My Loan Portfolio
@@ -403,7 +403,7 @@ export function DashboardClient({ user, data }: DashboardClientProps) {
       {/* Loan Officer: My Loans Status Board */}
       {data.myLoansStatusBoard && data.myLoansStatusBoard.length > 0 && (
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-3">
+          <CardHeader className="flex flex-row flex-wrap items-center justify-between pb-3 gap-2">
             <CardTitle className="text-lg flex items-center gap-2">
               <Landmark className="h-5 w-5 text-blue-600" />
               My Loans - Status Board
@@ -484,7 +484,7 @@ export function DashboardClient({ user, data }: DashboardClientProps) {
       {/* Verification Officer: My Verification Queue */}
       {data.myActiveVerificationTasks && data.myActiveVerificationTasks.length > 0 && (
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-3">
+          <CardHeader className="flex flex-row flex-wrap items-center justify-between pb-3 gap-2">
             <CardTitle className="text-lg flex items-center gap-2">
               <ClipboardCheck className="h-5 w-5 text-indigo-600" />
               My Verification Queue
@@ -522,7 +522,7 @@ export function DashboardClient({ user, data }: DashboardClientProps) {
       {/* Manager: Loans Awaiting Approval */}
       {data.pendingApprovalLoans && data.pendingApprovalLoans.length > 0 && (
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-3">
+          <CardHeader className="flex flex-row flex-wrap items-center justify-between pb-3 gap-2">
             <CardTitle className="text-lg flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-amber-600" />
               Loans Awaiting Approval ({data.pendingApprovalLoans.length})
@@ -561,7 +561,7 @@ export function DashboardClient({ user, data }: DashboardClientProps) {
       {/* Accountant: Pending Journals */}
       {data.recentJournals && data.recentJournals.length > 0 && (
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-3">
+          <CardHeader className="flex flex-row flex-wrap items-center justify-between pb-3 gap-2">
             <CardTitle className="text-lg flex items-center gap-2">
               <FileText className="h-5 w-5 text-purple-600" />
               Pending Journal Entries
@@ -990,7 +990,7 @@ function SavingsMovement({ rows }: { rows: { month: string; deposits: number; wi
     <>
     <MonthDetailDialog month={openMonth} onClose={() => setOpenMonth(null)} />
     <Card className="savings-series">
-      <CardHeader className="flex flex-row items-start justify-between gap-3 pb-3">
+      <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3 pb-3">
         <div>
           <CardTitle className="text-lg flex items-center gap-2">
             <PiggyBank className="h-5 w-5 text-emerald-600" />

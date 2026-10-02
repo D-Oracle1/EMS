@@ -1,5 +1,6 @@
 'use client';
 
+import { BrandLogo } from '@/components/brand';
 import { useCallback, useState, useSyncExternalStore } from 'react';
 import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
@@ -92,13 +93,11 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   if (user?.mustChangePassword) {
     return (
       <div className="min-h-screen">
-        <div className="flex h-16 items-center px-6">
-          <span className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-lg font-bold text-transparent">
-            Hylink Finance
-          </span>
-          <span className="ml-2 text-sm text-muted-foreground">EMS</span>
+        <div className="flex h-16 items-center gap-2 px-4 sm:px-6">
+          <BrandLogo className="w-32" />
+          <span className="text-sm text-muted-foreground">EMS</span>
         </div>
-        <main className="p-4 lg:p-6">{children}</main>
+        <main className="overflow-x-clip p-4 lg:p-6">{children}</main>
       </div>
     );
   }
@@ -116,7 +115,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           pinned ? 'lg:ml-[17.5rem]' : 'lg:ml-[6.25rem]'
         }`}
       >
-        <main className="mx-auto max-w-[110rem] px-4 pb-28 pt-4 lg:px-8 lg:pb-10 lg:pt-6">
+        {/* overflow-x-clip: nothing on a page can drag the whole screen
+            sideways on a phone. Wide tables scroll inside their own frame. */}
+        <main className="mx-auto max-w-[110rem] overflow-x-clip px-4 pb-28 pt-4 lg:px-8 lg:pb-10 lg:pt-6">
           <WorkspaceBar
             // A dashboard already has the big clock on it, so the slot in the
             // icon cluster carries today's attendance instead. Working pages,

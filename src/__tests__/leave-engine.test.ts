@@ -150,6 +150,21 @@ function future(daysAhead: number): Date {
   return d;
 }
 
+/**
+ * The nth working day (Mon-Fri) from today. For tests that need a short
+ * window that still contains working days whatever weekday the suite runs on:
+ * future(1)..future(2) is a weekend when run on a Friday.
+ */
+function workingDaysAhead(n: number): Date {
+  const d = future(0);
+  let left = n;
+  while (left > 0) {
+    d.setDate(d.getDate() + 1);
+    if (d.getDay() !== 0 && d.getDay() !== 6) left--;
+  }
+  return d;
+}
+
 beforeEach(() => {
   h.state.leaveTypes = [leaveType()];
   h.state.balances = [balance()];
@@ -415,8 +430,8 @@ describe('validateLeaveRequest', () => {
 
     const result = await validateLeaveRequest({
       ...baseRequest,
-      startDate: future(1),
-      endDate: future(2),
+      startDate: workingDaysAhead(1),
+      endDate: workingDaysAhead(2),
       minNoticeDays: 7,
     });
 

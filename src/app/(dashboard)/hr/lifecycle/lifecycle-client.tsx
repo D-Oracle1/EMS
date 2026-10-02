@@ -479,7 +479,7 @@ export function LifecycleClient({ user }: LifecycleClientProps) {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="m-staff">Staff Member</Label>
                 <Select
@@ -530,7 +530,7 @@ export function LifecycleClient({ user }: LifecycleClientProps) {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="m-role">New Role</Label>
                 <Select
@@ -571,7 +571,7 @@ export function LifecycleClient({ user }: LifecycleClientProps) {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="m-branch">New Branch</Label>
                 <Select
@@ -706,7 +706,7 @@ export function LifecycleClient({ user }: LifecycleClientProps) {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="e-notice">Notice Date</Label>
                 <Input

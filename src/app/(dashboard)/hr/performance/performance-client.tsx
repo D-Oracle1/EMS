@@ -274,7 +274,7 @@ export function PerformanceClient({ user }: PerformanceClientProps) {
         {/* REVIEWS TAB */}
         <TabsContent value="reviews">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
               <CardTitle className="text-lg">Reviews</CardTitle>
               <div className="flex gap-2">
                 <Button variant="ghost" size="sm" onClick={fetchReviews} disabled={isPending}>
@@ -302,7 +302,7 @@ export function PerformanceClient({ user }: PerformanceClientProps) {
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                           <div className="space-y-2">
                             <Label>Review Period</Label>
                             <Input placeholder="e.g., Q1 2026" value={reviewPeriod} onChange={(e) => setReviewPeriod(e.target.value)} />
@@ -405,7 +405,7 @@ export function PerformanceClient({ user }: PerformanceClientProps) {
         {/* DISCIPLINE TAB */}
         <TabsContent value="discipline">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
               <CardTitle className="text-lg flex items-center gap-2">
                 <AlertTriangle className="h-5 w-5" />
                 Disciplinary Records
@@ -436,7 +436,7 @@ export function PerformanceClient({ user }: PerformanceClientProps) {
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                           <div className="space-y-2">
                             <Label>Type</Label>
                             <Select value={discType} onValueChange={setDiscType}>

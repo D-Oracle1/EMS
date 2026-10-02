@@ -621,7 +621,7 @@ export function StaffClient({ user }: { user: SessionUser }) {
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <Users className="h-6 w-6" />
@@ -1025,7 +1025,7 @@ export function StaffClient({ user }: { user: SessionUser }) {
           </DialogHeader>
 
           <Tabs value={detailTab} onValueChange={setDetailTab}>
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="w-full sm:grid sm:grid-cols-4">
               <TabsTrigger value="info">
                 <Eye className="mr-2 h-4 w-4" />
                 Info
@@ -1796,7 +1796,7 @@ export function StaffClient({ user }: { user: SessionUser }) {
           </DialogHeader>
 
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="pk-basic">Basic Salary (monthly)</Label>
                 <Input
@@ -1831,7 +1831,7 @@ export function StaffClient({ user }: { user: SessionUser }) {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="pk-from">Effective From</Label>
                 <Input

@@ -126,7 +126,7 @@ export function FixedSavingsAccountsClient({ user }: Props) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <PiggyBank className="h-6 w-6" />
@@ -134,7 +134,7 @@ export function FixedSavingsAccountsClient({ user }: Props) {
           </h1>
           <p className="text-muted-foreground">Manage fixed-term savings accounts with interest accrual</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {user.permissions.includes('SAVINGS:APPROVE') && (
             <Button variant="outline" asChild>
               <Link href="/savings/terminations">Terminations</Link>

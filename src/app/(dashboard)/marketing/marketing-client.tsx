@@ -481,7 +481,7 @@ function LeaderboardPanel({ access }: { access: Access }) {
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-3">
+      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
         <CardTitle className="flex items-center gap-2 text-lg"><Trophy className="h-5 w-5" />Leaderboard</CardTitle>
         <MonthPicker value={month} onChange={setMonth} />
       </CardHeader>
@@ -758,7 +758,7 @@ function CommissionPanel({ access, onChanged }: { access: Access; onChanged: () 
         </div>
       )}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-3">
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
           <CardTitle className="flex items-center gap-2 text-lg"><Wallet className="h-5 w-5" />Unpaid commission</CardTitle>
           <Button disabled={selected.size === 0 || isPending} onClick={pay}>
             {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

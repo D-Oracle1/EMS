@@ -140,12 +140,12 @@ export function TerminationsClient({ user }: Props) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Early Termination Requests</h1>
           <p className="text-muted-foreground">Review and approve fixed savings early termination requests</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" asChild>
             <Link href="/savings/accounts">All Accounts</Link>
           </Button>
@@ -158,7 +158,7 @@ export function TerminationsClient({ user }: Props) {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <CardTitle>Requests</CardTitle>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="w-[160px]">
@@ -348,7 +348,7 @@ export function TerminationsClient({ user }: Props) {
               <Separator />
               <p className="text-sm font-medium">Approval Terms</p>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label>Approved Interest (NGN)</Label>
                   <Input

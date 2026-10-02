@@ -223,7 +223,7 @@ export function MyPayslipsClient({ user }: MyPayslipsClientProps) {
                   </span>
                 </div>
 
-                <div className="grid grid-cols-4 gap-3 text-center text-sm">
+                <div className="grid grid-cols-2 gap-3 text-center text-sm sm:grid-cols-4">
                   <div>
                     <p className="text-muted-foreground">Working days</p>
                     <p className="font-semibold tabular-nums">{selected.workingDays}</p>

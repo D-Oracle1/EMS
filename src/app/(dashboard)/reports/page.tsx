@@ -40,6 +40,7 @@ import {
 } from '@/actions/report.actions';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { addLetterhead } from '@/lib/pdf-letterhead';
 
 type ReportType = 'trial-balance' | 'income-statement' | 'balance-sheet' | 'loan-portfolio' | 'cash-flow';
 
@@ -193,16 +194,11 @@ export default function ReportsPage() {
     const title = reportTabs.find((t) => t.key === activeReport)?.label ?? activeReport;
     const dateStr = new Date().toLocaleDateString('en-NG', { year: 'numeric', month: 'long', day: 'numeric' });
 
-    doc.setFontSize(16);
-    doc.text('Hylink Finance Limited', 14, 15);
-    doc.setFontSize(12);
-    doc.text(title, 14, 23);
-    doc.setFontSize(9);
-    doc.text(`Generated: ${dateStr}`, 14, 29);
+    const startY = await addLetterhead(doc, title, [`Generated: ${dateStr}`]);
 
     if (activeReport === 'trial-balance' && trialBalance) {
       autoTable(doc, {
-        startY: 35,
+        startY,
         head: [['Account Code', 'Account Name', 'Type', 'Debit', 'Credit']],
         body: [
           ...trialBalance.rows.map((r) => [
@@ -215,7 +211,7 @@ export default function ReportsPage() {
       });
     } else if (activeReport === 'income-statement' && incomeStatement) {
       autoTable(doc, {
-        startY: 35,
+        startY,
         head: [['Account Code', 'Account Name', 'Amount']],
         body: [
           [{ content: 'INCOME', colSpan: 3, styles: { fontStyle: 'bold', fillColor: [220, 252, 231] } }],
@@ -241,10 +237,10 @@ export default function ReportsPage() {
         }
         body.push(['', `Total ${s.label}`, formatCurrency(balanceSheet[s.key]?.total ?? 0)]);
       }
-      autoTable(doc, { startY: 35, head: [['Code', 'Name', 'Balance']], body });
+      autoTable(doc, { startY, head: [['Code', 'Name', 'Balance']], body });
     } else if (activeReport === 'cash-flow' && cashFlow) {
       autoTable(doc, {
-        startY: 35,
+        startY,
         head: [['Activity', 'Cash In', 'Cash Out', 'Net Cash Flow']],
         body: [
           [{ content: 'Opening Cash Balance', colSpan: 3, styles: { fontStyle: 'bold' } }, formatCurrency(cashFlow.openingBalance)],
@@ -255,7 +251,7 @@ export default function ReportsPage() {
       });
     } else if (activeReport === 'loan-portfolio' && loanPortfolio) {
       autoTable(doc, {
-        startY: 35,
+        startY,
         head: [['Loan #', 'Customer', 'Product', 'Principal', 'Outstanding', 'Status', 'Disbursed', 'Maturity']],
         body: loanPortfolio.portfolio.map((l) => [
           l.loanNumber, l.customer, l.product,
@@ -340,14 +336,14 @@ export default function ReportsPage() {
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Financial Reports</h1>
           <p className="text-muted-foreground">
             Generate and view financial reports
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" onClick={() => window.print()} disabled={isPending} className="print:hidden">
             <Printer className="mr-2 h-4 w-4" />
             Print

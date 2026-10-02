@@ -381,7 +381,7 @@ export function LoanProductsClient({ user }: LoanProductsClientProps) {
           )}
 
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="p-code">Code</Label>
                 <Input
@@ -416,7 +416,7 @@ export function LoanProductsClient({ user }: LoanProductsClientProps) {
 
             <Separator />
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="p-min">Minimum Amount</Label>
                 <Input
@@ -441,7 +441,7 @@ export function LoanProductsClient({ user }: LoanProductsClientProps) {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="p-mintenure">Minimum Tenure (months)</Label>
                 <Input
@@ -468,7 +468,7 @@ export function LoanProductsClient({ user }: LoanProductsClientProps) {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="p-rate">Annual Interest Rate (%)</Label>
                 <Input
@@ -507,7 +507,7 @@ export function LoanProductsClient({ user }: LoanProductsClientProps) {
 
             <Separator />
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="p-fee">Processing Fee (%)</Label>
                 <Input
@@ -532,7 +532,7 @@ export function LoanProductsClient({ user }: LoanProductsClientProps) {
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div className="space-y-2">
                 <Label htmlFor="p-late">Late Fee (flat)</Label>
                 <Input

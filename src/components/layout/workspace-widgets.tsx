@@ -317,7 +317,7 @@ export function WorkspaceWidgets() {
           </span>
           <h2 className="font-semibold">Quick Access</h2>
         </div>
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {quick.map((item) => {
             const Icon = item.icon;
             return (

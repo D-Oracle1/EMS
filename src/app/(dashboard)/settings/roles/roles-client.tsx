@@ -320,7 +320,7 @@ export function RolesClient({ user }: RolesClientProps) {
 
             return (
               <Card key={group.module}>
-                <CardHeader className="flex flex-row items-center justify-between py-3">
+                <CardHeader className="flex flex-row flex-wrap items-center justify-between py-3 gap-2">
                   <CardTitle className="text-sm font-semibold tracking-wide">
                     {group.module}
                   </CardTitle>
@@ -484,7 +484,7 @@ export function RolesClient({ user }: RolesClientProps) {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="role-code">Code</Label>
                 <Input

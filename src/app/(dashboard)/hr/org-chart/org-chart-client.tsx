@@ -257,7 +257,7 @@ export function OrgChartClient({ user }: OrgChartClientProps) {
       </div>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
           <CardTitle className="flex items-center gap-2 text-lg">
             <Network className="h-5 w-5" />
             Reporting Structure

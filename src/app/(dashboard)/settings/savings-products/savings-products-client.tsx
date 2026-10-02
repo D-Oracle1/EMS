@@ -230,7 +230,7 @@ export function SavingsProductsClient({ user }: SavingsProductsClientProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <Settings className="h-6 w-6" />
@@ -241,7 +241,7 @@ export function SavingsProductsClient({ user }: SavingsProductsClientProps) {
           </p>
         </div>
         {canManage && (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={handleSeed} disabled={loading === 'seed'}>
               {loading === 'seed' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Database className="mr-2 h-4 w-4" />}
               Seed Defaults
@@ -477,7 +477,7 @@ export function SavingsProductsClient({ user }: SavingsProductsClientProps) {
             <Separator />
             <p className="text-sm font-medium">Interest Configuration</p>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label>Duration (months) <span className="text-destructive">*</span></Label>
                 <Input
@@ -548,7 +548,7 @@ export function SavingsProductsClient({ user }: SavingsProductsClientProps) {
             <Separator />
             <p className="text-sm font-medium">Deposit Limits</p>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label>Minimum Deposit (NGN) <span className="text-destructive">*</span></Label>
                 <Input
@@ -623,7 +623,7 @@ export function SavingsProductsClient({ user }: SavingsProductsClientProps) {
 
               {form.promoActive && (
                 <div className="space-y-3 rounded-lg border border-fuchsia-200 bg-fuchsia-50/50 p-3">
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label>Promo name</Label>
                       <Input
@@ -646,7 +646,7 @@ export function SavingsProductsClient({ user }: SavingsProductsClientProps) {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label>Starts</Label>
                       <Input

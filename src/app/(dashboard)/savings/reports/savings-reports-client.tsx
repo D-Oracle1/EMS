@@ -134,17 +134,13 @@ export function SavingsReportsClient({ user: _user }: { user: SessionUser }) {
     if (!guard()) return;
     const { default: jsPDF } = await import('jspdf');
     const autoTable = (await import('jspdf-autotable')).default;
+    const { addLetterhead } = await import('@/lib/pdf-letterhead');
     const doc = new jsPDF({ orientation: 'landscape' });
-    doc.setFontSize(14);
-    doc.text('Savings Report', 14, 16);
-    doc.setFontSize(9);
-    doc.text(
+    const startY = await addLetterhead(doc, 'Savings Report', [
       `${summary.count} accounts · Balance ${formatCurrency(summary.totalBalance)} · Interest ${formatCurrency(summary.totalInterest)}`,
-      14,
-      22
-    );
+    ]);
     autoTable(doc, {
-      startY: 27,
+      startY,
       head: [HEADERS],
       body: rows.map((r) => [
         r.accountNumber, r.customer, r.customerNumber, r.product, r.status,

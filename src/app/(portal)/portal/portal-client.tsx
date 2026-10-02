@@ -70,7 +70,7 @@ export function PortalClient() {
   return (
     <div className="space-y-5 animate-rise">
       {/* Balance summary */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="premium-card p-4">
           <div className="icon-tile icon-tile-sm icon-tile-emerald"><Wallet className="h-4 w-4" /></div>
           <p className="mt-2 text-xl font-bold">{formatCurrency(totalSavings)}</p>
@@ -92,7 +92,7 @@ export function PortalClient() {
       {/* What your money has been doing */}
       {notices.items.length > 0 && (
         <section className="space-y-2">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="font-semibold flex items-center gap-2">
               <Bell className="h-4 w-4 text-emerald-600" /> Activity
               {notices.unread > 0 && (
@@ -304,7 +304,7 @@ function LoanApplyDialog({ onDone }: { onDone: () => void }) {
               </p>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Amount</Label>
               <Input type="number" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />

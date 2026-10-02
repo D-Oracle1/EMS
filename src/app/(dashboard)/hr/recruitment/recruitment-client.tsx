@@ -646,7 +646,7 @@ export function RecruitmentClient({ user }: RecruitmentClientProps) {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="o-dept">Department</Label>
                 <Select
@@ -686,7 +686,7 @@ export function RecruitmentClient({ user }: RecruitmentClientProps) {
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div className="space-y-2">
                 <Label htmlFor="o-type">Employment Type</Label>
                 <Select
@@ -735,7 +735,7 @@ export function RecruitmentClient({ user }: RecruitmentClientProps) {
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div className="space-y-2">
                 <Label htmlFor="o-min">Min Salary</Label>
                 <Input
@@ -845,7 +845,7 @@ export function RecruitmentClient({ user }: RecruitmentClientProps) {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="f-score">Score (1–100)</Label>
                 <Input

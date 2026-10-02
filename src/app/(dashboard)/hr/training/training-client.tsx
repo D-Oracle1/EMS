@@ -497,7 +497,7 @@ export function TrainingClient({ user }: TrainingClientProps) {
                 placeholder="AML & KYC Refresher"
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="t-cat">Category</Label>
                 <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
@@ -529,7 +529,7 @@ export function TrainingClient({ user }: TrainingClientProps) {
                 </Select>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="t-start">Start Date</Label>
                 <Input
@@ -549,7 +549,7 @@ export function TrainingClient({ user }: TrainingClientProps) {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="t-provider">Provider</Label>
                 <Input
@@ -567,7 +567,7 @@ export function TrainingClient({ user }: TrainingClientProps) {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div className="space-y-2">
                 <Label htmlFor="t-cap">Capacity</Label>
                 <Input

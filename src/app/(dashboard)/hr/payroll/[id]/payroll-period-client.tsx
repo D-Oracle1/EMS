@@ -348,7 +348,7 @@ export function PayrollPeriodClient({ periodId, user }: PayrollPeriodClientProps
         {bankSchedule && (
           <TabsContent value="bank" className="mt-4">
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
+              <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <Banknote className="h-5 w-5" />
                   Bank Transfer Schedule
@@ -526,7 +526,7 @@ export function PayrollPeriodClient({ periodId, user }: PayrollPeriodClientProps
 
                 <Separator />
 
-                <div className="grid grid-cols-4 gap-3 text-center text-sm">
+                <div className="grid grid-cols-2 gap-3 text-center text-sm sm:grid-cols-4">
                   <div>
                     <p className="text-muted-foreground">Working days</p>
                     <p className="font-semibold tabular-nums">{selectedSlip.workingDays}</p>
