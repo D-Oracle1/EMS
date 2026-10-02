@@ -46,3 +46,6 @@ logs/
 *.log
 
 .vercel
+
+# This folder's own Vercel CLI login (npm run vercel:login). Holds a token.
+.vercel-cli/
