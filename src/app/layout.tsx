@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google';
 import './globals.css';
 import { Toaster } from 'sonner';
 import { ThemeProvider, themeScript } from '@/components/theme';
+import { SplashScreen } from '@/components/splash-screen';
 
 /**
  * `subsets` here controls which faces get preloaded, not which exist:
@@ -26,8 +27,9 @@ const inter = Inter({
 });
 
 /**
- * iOS launch screens: the homepage's wordmark centred on white, one per
- * current iPhone/iPad size (generated from public/brand; see components/brand).
+ * iOS launch screens: plain white, one per current iPhone/iPad size, so the
+ * animated splash (components/splash-screen) is the first thing anyone sees
+ * rather than a static logo followed by the animation.
  * The favicon and home-screen icons come from src/app/icon.png, apple-icon.png
  * and favicon.ico, which Next.js links automatically.
  */
@@ -46,13 +48,13 @@ const STARTUP_IMAGES = [
 ];
 
 export const metadata: Metadata = {
-  title: 'HY-LINK Finance EMS',
-  description: 'Enterprise Management System - HY-LINK Finance Limited',
+  title: 'Hylink Finance',
+  description: 'Hylink Finance - savings, loans and operations for HY-LINK Finance Limited',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'HY-LINK EMS',
+    title: 'Hylink Finance',
     startupImage: STARTUP_IMAGES,
   },
 };
@@ -80,6 +82,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body className={inter.className}>
+        <SplashScreen />
         <ThemeProvider>
           {children}
           <Toaster position="top-right" richColors theme="system" />

@@ -133,7 +133,7 @@ export function StatCard({
           a ₦ figure, so the value steps up with the viewport instead of being
           fixed at a size that overflowed the card. */}
       <p className="mt-0.5 flex min-w-0 flex-wrap items-baseline gap-x-1.5 text-[1.3rem] font-bold leading-tight tracking-tight sm:text-[1.45rem] lg:text-[1.6rem]">
-        <span className="min-w-0 break-words">{value}</span>
+        <span className="min-w-0 break-words">{typeof value === 'number' ? value.toLocaleString('en-NG') : value}</span>
         {secondaryValue !== undefined && (
           <span className="text-sm font-semibold text-muted-foreground">- {secondaryValue}</span>
         )}

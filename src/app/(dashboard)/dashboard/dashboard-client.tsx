@@ -61,6 +61,11 @@ function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
+/** A compact figure without the currency, for chart axes. */
+function compactAxis(amount: number): string {
+  return formatCompact(amount).replace(/^NGN /, '');
+}
+
 function formatCompact(amount: number): string {
   if (amount >= 1_000_000_000) return `NGN ${(amount / 1_000_000_000).toFixed(1)}B`;
   if (amount >= 1_000_000) return `NGN ${(amount / 1_000_000).toFixed(1)}M`;
@@ -182,7 +187,7 @@ export function DashboardClient({ user, data }: DashboardClientProps) {
                 replaced, and at 36px that ran past the right edge of a 360px
                 screen. break-all is the backstop for an unusually large figure:
                 it wraps rather than widening the page. */}
-            <p className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight leading-none mt-1 break-all">
+            <p className="mt-1 break-words text-[clamp(1.45rem,7.5vw,3rem)] font-bold leading-tight tracking-tight">
               {data.savings
                 ? formatCurrency(data.savings.totalBalance)
                 : aum !== null
@@ -201,7 +206,7 @@ export function DashboardClient({ user, data }: DashboardClientProps) {
           {/* shrink-0 so the badges keep their size, and the figure beside them
               is what gives way — without it this column can force the flex row
               wider than the card on a narrow screen. */}
-          <div className="flex shrink-0 flex-col items-end gap-2">
+          <div className="flex flex-row flex-wrap items-center gap-2 sm:shrink-0 sm:flex-col sm:items-end">
             {data.attendance?.isClockedIn && user.roleCode !== 'SUPER_ADMIN' && (
               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-400/20 text-emerald-200 text-xs font-medium px-2.5 py-1">
                 <CheckCircle className="h-3 w-3" /> Clocked In
@@ -576,12 +581,12 @@ export function DashboardClient({ user, data }: DashboardClientProps) {
             <div className="space-y-2">
               {data.recentJournals.map((journal) => (
                 <Link key={journal.id} href={`/accounting/journal/${journal.id}`} className="block">
-                  <div className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors">
-                    <div>
+                  <div className="flex items-center justify-between gap-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors">
+                    <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium font-mono">{journal.entryNumber}</p>
-                      <p className="text-xs text-muted-foreground truncate max-w-[200px]">{journal.description}</p>
+                      <p className="text-xs text-muted-foreground truncate">{journal.description}</p>
                     </div>
-                    <div className="text-right">
+                    <div className="shrink-0 text-right">
                       <p className="text-sm font-medium">{formatCurrency(journal.totalDebit)}</p>
                       <Badge variant={STATUS_BADGE_VARIANT[journal.status] || 'secondary'} className="text-xs">
                         {journal.status.replace(/_/g, ' ')}
@@ -758,7 +763,7 @@ export function DashboardClient({ user, data }: DashboardClientProps) {
                     return `${months[parseInt(m, 10) - 1]} ${y.slice(2)}`;
                   }}
                 />
-                <YAxis tick={{ fontSize: 12 }} tickFormatter={(val: number) => formatCompact(val)} />
+                <YAxis tick={{ fontSize: 12 }} tickFormatter={(val: number) => compactAxis(val)} />
                 <Tooltip
                   formatter={(value: number) => [formatCurrency(value), 'Disbursed']}
                   labelFormatter={(label: string) => {
@@ -784,7 +789,7 @@ export function DashboardClient({ user, data }: DashboardClientProps) {
                 <CardTitle className="text-lg">Loan Portfolio by Category</CardTitle>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
+                <ResponsiveContainer width="100%" height={240}>
                   <PieChart>
                     <Pie
                       data={loansByCategory}
@@ -792,33 +797,30 @@ export function DashboardClient({ user, data }: DashboardClientProps) {
                       nameKey="name"
                       cx="50%"
                       cy="50%"
-                      outerRadius={100}
-                      label={({ name, percent }: { name: string; percent: number }) =>
-                        `${name} (${(percent * 100).toFixed(0)}%)`
-                      }
-                      labelLine
+                      innerRadius="45%"
+                      outerRadius="85%"
+                      paddingAngle={1}
                     >
                       {loansByCategory.map((_, index) => (
                         <Cell key={index} fill={CHART_COLORS[index % CHART_COLORS.length]} />
                       ))}
                     </Pie>
                     <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                    <Legend />
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="mt-4 space-y-2">
                   {loansByCategory.map((cat, i) => (
-                    <div key={i} className="flex items-center justify-between text-sm">
-                      <div className="flex items-center gap-2">
+                    <div key={i} className="flex items-start justify-between gap-3 text-sm">
+                      <div className="flex min-w-0 items-center gap-2">
                         <div
-                          className="h-3 w-3 rounded-full"
+                          className="h-3 w-3 shrink-0 rounded-full"
                           style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }}
                         />
                         <span className="font-medium">{cat.name}</span>
                       </div>
-                      <div className="text-right">
-                        <span className="text-muted-foreground">{cat.count} loans</span>
-                        <span className="ml-3 font-medium">{formatCurrency(cat.amount)}</span>
+                      <div className="shrink-0 text-right">
+                        <div className="font-medium tabular-nums">{formatCurrency(cat.amount)}</div>
+                        <div className="text-xs text-muted-foreground">{cat.count.toLocaleString('en-NG')} loans</div>
                       </div>
                     </div>
                   ))}
@@ -841,7 +843,7 @@ export function DashboardClient({ user, data }: DashboardClientProps) {
                     margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis type="number" tick={{ fontSize: 12 }} tickFormatter={(val: number) => formatCompact(val)} />
+                    <XAxis type="number" tick={{ fontSize: 12 }} tickFormatter={(val: number) => compactAxis(val)} />
                     <YAxis
                       type="category"
                       dataKey="name"
@@ -1033,7 +1035,7 @@ function SavingsMovement({ rows }: { rows: { month: string; deposits: number; wi
                   tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
                 />
                 <YAxis
-                  tickFormatter={(value: number) => formatCompact(value)}
+                  tickFormatter={(value: number) => compactAxis(value)}
                   tickLine={false}
                   axisLine={false}
                   width={64}

@@ -140,7 +140,7 @@ export function PWAInstallPrompt() {
           <Smartphone className="h-5 w-5 text-white" />
         </div>
         <div>
-          <h3 className="text-sm font-semibold text-slate-900">Install Hylink EMS</h3>
+          <h3 className="text-sm font-semibold text-slate-900">Install Hylink Finance</h3>
           <p className="text-xs text-slate-500 mt-0.5">
             Add this app to your home screen for the best experience.
           </p>
@@ -179,7 +179,7 @@ export function PWAInstallPrompt() {
         <Download className="h-5 w-5 text-white" />
       </div>
       <div className="flex-1 min-w-0">
-        <h3 className="text-sm font-semibold text-slate-900">Install Hylink EMS</h3>
+        <h3 className="text-sm font-semibold text-slate-900">Install Hylink Finance</h3>
         <p className="text-xs text-slate-500 mt-0.5">
           Install the app for faster access, offline support, and push notifications.
         </p>
@@ -208,7 +208,7 @@ export function PWAInstallPrompt() {
               <div className="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center">
                 <Download className="h-4 w-4 text-white" />
               </div>
-              Install Hylink Finance EMS
+              Install Hylink Finance
             </DialogTitle>
             <DialogDescription>
               Get the full app experience with offline support, push notifications, and quick access from your home screen.

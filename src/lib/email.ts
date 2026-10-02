@@ -92,7 +92,7 @@ export function renderAlertEmail(opts: {
     : null;
 
   const button = href
-    ? `<a href="${href}" style="display:inline-block;background:#1d4ed8;color:#ffffff;text-decoration:none;font-weight:600;font-size:14px;padding:11px 22px;border-radius:9999px;">${opts.actionLabel || 'Open Hylink EMS'}</a>`
+    ? `<a href="${href}" style="display:inline-block;background:#1d4ed8;color:#ffffff;text-decoration:none;font-weight:600;font-size:14px;padding:11px 22px;border-radius:9999px;">${opts.actionLabel || 'Open Hylink Finance'}</a>`
     : '';
 
   return `<!doctype html>
@@ -109,7 +109,7 @@ export function renderAlertEmail(opts: {
         <p style="margin:0 0 20px;color:#334155;font-size:14px;line-height:1.6;">${opts.message}</p>
         ${button}
         <div style="border-top:1px solid #e2e8f0;margin-top:24px;padding-top:16px;color:#94a3b8;font-size:11px;line-height:1.5;">
-          This is an automated alert from Hylink Finance EMS. If a button doesn't work, sign in at
+          This is an automated alert from Hylink Finance. If a button doesn't work, sign in at
           <a href="${APP_URL}" style="color:#1d4ed8;">${APP_URL.replace(/^https?:\/\//, '')}</a>.
         </div>
       </div>

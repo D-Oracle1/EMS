@@ -61,7 +61,7 @@ const loginUrl = () => (typeof window === 'undefined' ? '' : `${window.location.
 /** One person's details as a message ready to paste into WhatsApp, SMS or email. */
 function asMessage(r: Sendable) {
   return [
-    `Hello ${r.name.split(' ')[0]}, here are your Hylink EMS login details:`,
+    `Hello ${r.name.split(' ')[0]}, here are your Hylink Finance login details:`,
     `Login page: ${loginUrl()}`,
     `Email: ${r.email}`,
     `Temporary password: ${r.tempPassword}`,

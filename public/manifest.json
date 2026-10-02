@@ -1,8 +1,8 @@
 {
   "id": "/dashboard",
-  "name": "HY-LINK Finance EMS",
-  "short_name": "HY-LINK EMS",
-  "description": "Enterprise Management System - HY-LINK Finance Limited",
+  "name": "Hylink Finance",
+  "short_name": "Hylink Finance",
+  "description": "Hylink Finance - savings, loans and operations for HY-LINK Finance Limited",
   "start_url": "/dashboard",
   "scope": "/",
   "display": "standalone",
