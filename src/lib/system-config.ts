@@ -39,7 +39,7 @@ export const CONFIG_DEFINITIONS: ConfigDefinition[] = [
     label: 'Company Name',
     description: 'Legal name printed on reports, payslips and customer statements.',
     dataType: 'STRING',
-    defaultValue: 'Hylink Finance Limited',
+    defaultValue: 'Hy-Link Finance Limited',
   },
   {
     key: 'company.shortName',
@@ -47,7 +47,7 @@ export const CONFIG_DEFINITIONS: ConfigDefinition[] = [
     label: 'Short Name',
     description: 'Abbreviated name used in headers and email subjects.',
     dataType: 'STRING',
-    defaultValue: 'Hylink Finance',
+    defaultValue: 'Hy-Link Finance',
   },
   {
     key: 'company.address',

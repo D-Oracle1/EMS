@@ -73,7 +73,7 @@ export function NotificationListener() {
 
         // Show browser notification
         if ('Notification' in window && Notification.permission === 'granted') {
-          new Notification('Hylink Finance', {
+          new Notification('Hy-Link Finance', {
             body: `You have ${newCount} new notification${newCount > 1 ? 's' : ''}`,
             icon: '/icons/icon-192x192.png',
             tag: 'ems-notification',

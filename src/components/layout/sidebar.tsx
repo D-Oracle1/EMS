@@ -85,7 +85,7 @@ export function Sidebar({ pinned = false, onPinnedChange }: SidebarProps) {
       >
         {/* Logo */}
         <div className="flex h-16 shrink-0 items-center gap-2.5 px-[1.15rem]">
-          <Link href="/dashboard" className="group/logo relative flex items-center gap-2.5" aria-label="Hylink Finance home">
+          <Link href="/dashboard" className="group/logo relative flex items-center gap-2.5" aria-label="Hy-Link Finance home">
             <BrandTile className="h-9 w-9 transition-transform duration-200 group-hover/logo:scale-105" />
             <span className={cn('whitespace-nowrap transition-opacity duration-200', reveal)}>
               <BrandLogo tone="light" className="w-32" />

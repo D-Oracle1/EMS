@@ -17,7 +17,7 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
           <div className="flex min-w-0 items-center gap-2.5">
             <BrandTile className="h-9 w-9" />
             <div className="min-w-0">
-              <p className="truncate text-white font-semibold leading-tight">Hylink Finance</p>
+              <p className="truncate text-white font-semibold leading-tight">Hy-Link Finance</p>
               <p className="truncate text-blue-100/80 text-xs">
                 {user ? `${user.firstName} ${user.lastName}` : 'Customer Portal'}
               </p>

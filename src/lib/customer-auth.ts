@@ -38,9 +38,9 @@ export async function provisionCustomerLogin(customerId: string): Promise<void> 
 
     await sendEmail({
       to: c.email,
-      subject: 'Your Hylink Finance online account is ready',
+      subject: 'Your Hy-Link Finance online account is ready',
       html: renderAlertEmail({
-        title: 'Welcome to Hylink Finance',
+        title: 'Welcome to Hy-Link Finance',
         recipientName: c.firstName ?? undefined,
         message:
           'An online account has been created for you so you can view your loans, savings and statements.<br/><br/>' +
@@ -50,7 +50,7 @@ export async function provisionCustomerLogin(customerId: string): Promise<void> 
         actionUrl: '/login',
         actionLabel: 'Sign in',
       }),
-      text: `Welcome to Hylink Finance. Email: ${c.email} | Temporary password: ${otp}. Sign in at ${APP_URL}/login and set a new password.`,
+      text: `Welcome to Hy-Link Finance. Email: ${c.email} | Temporary password: ${otp}. Sign in at ${APP_URL}/login and set a new password.`,
     });
   } catch (error) {
     console.error('[customer-auth] provisionCustomerLogin failed:', error);

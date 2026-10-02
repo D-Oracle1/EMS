@@ -98,7 +98,7 @@ describe('CONFIG_DEFINITIONS', () => {
 
 describe('typed accessors', () => {
   it('returns the registry default when nothing is stored', async () => {
-    expect(await getConfig('company.name')).toBe('Hylink Finance Limited');
+    expect(await getConfig('company.name')).toBe('Hy-Link Finance Limited');
   });
 
   it('returns a stored override in place of the default', async () => {

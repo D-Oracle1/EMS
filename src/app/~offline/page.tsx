@@ -14,7 +14,7 @@ export default function OfflinePage() {
         </div>
         <h1 className="text-2xl font-bold text-slate-900 mb-2">You are offline</h1>
         <p className="text-slate-600 mb-6">
-          Please check your internet connection and try again. Hylink Finance needs a network connection to work.
+          Please check your internet connection and try again. Hy-Link Finance needs a network connection to work.
         </p>
         <button
           onClick={() => window.location.reload()}

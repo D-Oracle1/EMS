@@ -40,7 +40,7 @@ async function emailAlert(
             message: params.message,
             recipientName: s.firstName,
             actionUrl: params.actionUrl,
-            actionLabel: 'Open in Hylink Finance',
+            actionLabel: 'Open in Hy-Link Finance',
           }),
           text: params.message,
         })

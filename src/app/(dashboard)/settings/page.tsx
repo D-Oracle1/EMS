@@ -204,7 +204,7 @@ export default function SettingsPage() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div>
               <p className="text-sm text-muted-foreground">Application</p>
-              <p className="font-medium">Hylink Finance v2.0</p>
+              <p className="font-medium">Hy-Link Finance v2.0</p>
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Environment</p>

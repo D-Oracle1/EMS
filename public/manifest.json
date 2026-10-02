@@ -2,7 +2,7 @@
   "id": "/dashboard",
   "name": "Hy-Link Finance",
   "short_name": "Hy-Link Finance",
-  "description": "Hylink Finance - savings, loans and operations for HY-LINK Finance Limited",
+  "description": "Hy-Link Finance - savings, loans and operations for HY-LINK Finance Limited",
   "start_url": "/dashboard",
   "scope": "/",
   "display": "standalone",

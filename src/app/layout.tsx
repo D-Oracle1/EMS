@@ -50,8 +50,8 @@ const STARTUP_IMAGES = [
 ];
 
 export const metadata: Metadata = {
-  title: 'Hylink Finance',
-  description: 'Hylink Finance - savings, loans and operations for HY-LINK Finance Limited',
+  title: 'Hy-Link Finance',
+  description: 'Hy-Link Finance - savings, loans and operations for HY-LINK Finance Limited',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,

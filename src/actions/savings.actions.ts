@@ -229,7 +229,7 @@ export async function createSavingsAccount(data: {
     await notifyCustomerByEmail(
       customerId,
       `Savings account ${accountNumber} opened`,
-      `Your savings account ${accountNumber} has been successfully opened. Thank you for banking with Hylink Finance.`
+      `Your savings account ${accountNumber} has been successfully opened. Thank you for banking with Hy-Link Finance.`
     );
 
     return { success: true, message: `Account ${accountNumber} created`, data: { id: account.id, accountNumber } };
