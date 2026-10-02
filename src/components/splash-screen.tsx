@@ -6,7 +6,7 @@
  * so it greets a launch, not every page change.
  *
  * Its first and last frames are the same layout as the static iOS launch
- * screens in public/splash (mark 64px, name 22px, tagline 13px, the doodle
+ * screens in public/splash (mark 64px, 8px gap, name 22px, tagline 11px, the doodle
  * pattern at 6%), so the hand-over from the operating system is seamless.
  *
  * No grid lines: the pieces are whole-pixel tiles (an 8 x 8 grid of 8px tiles
@@ -104,9 +104,9 @@ ${PATTERN_SRC ? `.hl-splash::before{content:"";position:absolute;inset:0;backgro
 .hl-splash__piece{position:absolute;width:${TILE}px;height:${TILE}px;
   background-image:url(${MARK_SRC});background-size:${SIZE}px ${SIZE}px;background-repeat:no-repeat;
   animation:hl-break ${BREAK_DURATION}ms cubic-bezier(.45,0,.2,1) both}
-.hl-splash__name{margin:16px 0 0;font:700 22px/1.2 ${FONT};letter-spacing:-.01em;color:${NAVY};white-space:nowrap}
+.hl-splash__name{margin:8px 0 0;font:700 22px/1.2 ${FONT};letter-spacing:-.01em;color:${NAVY};white-space:nowrap}
 .hl-splash__name span{display:inline-block;animation:hl-rise .55s cubic-bezier(.2,.85,.25,1) both}
-.hl-splash__tagline{margin:5px 0 0;font:400 13px/1.4 ${FONT};color:${SLATE};white-space:nowrap;
+.hl-splash__tagline{margin:3px 0 0;font:400 11px/1.4 ${FONT};letter-spacing:.01em;color:${SLATE};white-space:nowrap;text-align:center;
   animation:hl-rise .7s ease-out ${TAGLINE_AT}ms both}
 @keyframes hl-break{
   0%{transform:none;opacity:1}
