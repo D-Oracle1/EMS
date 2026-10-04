@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui/badge';
 import type { ActionResult } from '@/types';
 import { StatusBadge, AudienceBadge, copyShareLink } from './form-bits';
 import { ShareFormButton } from './share-form-button';
+import { FormQrButton } from './form-qr-button';
 
 type FormRow = Awaited<ReturnType<typeof getForms>>[number];
 
@@ -143,6 +144,7 @@ export function FormsClient({ forms }: { forms: FormRow[] }) {
                   {f.status !== 'DRAFT' && (
                     <>
                       <ShareFormButton slug={f.slug} title={f.title} />
+                      <FormQrButton slug={f.slug} title={f.title} />
                       <Button size="sm" variant="secondary" onClick={() => copyShareLink(f.slug)}>
                         <Link2 className="mr-1.5 h-3.5 w-3.5" />Link
                       </Button>

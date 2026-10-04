@@ -20,6 +20,7 @@ import {
 import { setFormStatus, deleteFormResponse, type getFormResponses } from '@/actions/form.actions';
 import { StatusBadge, AudienceBadge, copyShareLink, useShareUrl } from '../form-bits';
 import { ShareFormButton } from '../share-form-button';
+import { FormQrButton } from '../form-qr-button';
 
 type FormData = NonNullable<Awaited<ReturnType<typeof getFormResponses>>>;
 
@@ -123,6 +124,7 @@ export function ResponsesClient({ form }: { form: FormData }) {
                 <Link2 className="mr-2 h-4 w-4" />Copy
               </Button>
               <ShareFormButton slug={form.slug} title={form.title} variant="full" />
+              <FormQrButton slug={form.slug} title={form.title} variant="full" />
             </div>
           </CardContent>
         </Card>
