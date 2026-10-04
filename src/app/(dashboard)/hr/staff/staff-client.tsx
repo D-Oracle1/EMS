@@ -16,7 +16,11 @@ import {
   Upload,
   Wallet,
   Loader2,
+  FileSpreadsheet,
+  UserPlus,
 } from 'lucide-react';
+import Link from 'next/link';
+import { StaffBulkUpload } from '@/components/hr/staff-bulk-upload';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -263,6 +267,7 @@ export function StaffClient({ user }: { user: SessionUser }) {
   // ---- login details (bulk issue, and the one just created) ----
   const [loginDetailsOpen, setLoginDetailsOpen] = useState(false);
   const [newLogin, setNewLogin] = useState<IssuedLogin[] | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
 
   /* ---------------------------------------------------------------- */
   /*  Data fetching                                                    */
@@ -639,6 +644,17 @@ export function StaffClient({ user }: { user: SessionUser }) {
           </Button>
         )}
         {canCreateStaff && (
+          <>
+            <Button variant="outline" asChild>
+              <Link href="/hr/joiners"><UserPlus className="mr-2 h-4 w-4" />New joiners</Link>
+            </Button>
+            <Button variant="outline" onClick={() => setBulkOpen(true)}>
+              <FileSpreadsheet className="mr-2 h-4 w-4" />
+              Bulk upload
+            </Button>
+          </>
+        )}
+        {canCreateStaff && (
           <Dialog open={createOpen} onOpenChange={setCreateOpen}>
             <DialogTrigger asChild>
               <Button>
@@ -845,6 +861,21 @@ export function StaffClient({ user }: { user: SessionUser }) {
         onOpenChange={setLoginDetailsOpen}
         staff={staffList}
         currentUserId={user.id}
+      />
+      <StaffBulkUpload
+        open={bulkOpen}
+        onOpenChange={setBulkOpen}
+        onCreated={(result) => {
+          if (result.created.length) setNewLogin(result.created);
+          if (result.skipped.length) {
+            toast.warning(`${result.skipped.length} row(s) were skipped: ${result.skipped.slice(0, 3).map((s) => `row ${s.line} (${s.problems[0]})`).join('; ')}${result.skipped.length > 3 ? '...' : ''}`, { duration: 12000 });
+          }
+          const unsent = result.created.filter((c) => !c.emailed).length;
+          if (result.created.length && unsent) {
+            toast.info(`${unsent} login email(s) were not sent. Copy the details from the list instead.`, { duration: 10000 });
+          }
+          fetchStaff();
+        }}
       />
       <LoginDetailsDialog
         open={newLogin !== null}

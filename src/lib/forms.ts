@@ -498,3 +498,83 @@ export function responsesCsv(
   ]);
   return [header, ...rows].map((row) => row.map(csvCell).join(',')).join('\r\n');
 }
+
+// ─── Staff onboarding ───────────────────────────────────────────────────────
+
+/**
+ * The questions a staff onboarding form must keep. Their ids are the staff
+ * record's own field names, which is how an approved response becomes a
+ * staff member. HR may reword them and add questions of their own, but not
+ * remove these or change their type.
+ *
+ * Department, role and branch are deliberately absent: HR sets them on
+ * approval. Letting a respondent pick their own role would let anyone with
+ * the link make themselves an administrator.
+ */
+export const ONBOARDING_FIELDS: FormQuestion[] = [
+  { id: 'firstName', type: 'SHORT_TEXT', label: 'First name', required: true },
+  { id: 'middleName', type: 'SHORT_TEXT', label: 'Middle name', required: false },
+  { id: 'lastName', type: 'SHORT_TEXT', label: 'Last name (surname)', required: true },
+  { id: 'email', type: 'EMAIL', label: 'Email address', required: true, help: 'Your login details will be sent here.' },
+  { id: 'phone', type: 'PHONE', label: 'Phone number', required: true },
+  { id: 'dateOfBirth', type: 'DATE', label: 'Date of birth', required: false },
+  { id: 'gender', type: 'DROPDOWN', label: 'Gender', required: false, options: ['Male', 'Female', 'Other'] },
+  { id: 'address', type: 'PARAGRAPH', label: 'Home address', required: false },
+  { id: 'nationalId', type: 'SHORT_TEXT', label: 'National Identification Number (NIN)', required: false },
+];
+
+/** Fields an onboarding form cannot make optional: a staff record needs them. */
+const ONBOARDING_REQUIRED = new Set(['firstName', 'lastName', 'email']);
+
+export const isOnboardingField = (id: string) => ONBOARDING_FIELDS.some((f) => f.id === id);
+export const isOnboardingRequired = (id: string) => ONBOARDING_REQUIRED.has(id);
+
+/** A fresh onboarding form: the staff fields, plus a hint HR can use when assigning a role. */
+export function onboardingTemplate(): FormQuestion[] {
+  return [
+    ...ONBOARDING_FIELDS.map((f) => ({ ...f, options: f.options?.slice() })),
+    { id: newQuestionId(), type: 'SHORT_TEXT', label: 'Position / job title you are joining as', required: false },
+    { id: newQuestionId(), type: 'SHORT_TEXT', label: 'Branch or office you will work from', required: false },
+  ];
+}
+
+/**
+ * Holds an onboarding form to its staff fields. Puts back any that were
+ * removed (so an old form keeps working), restores their type and options,
+ * and keeps the essential ones required.
+ */
+export function enforceOnboardingFields(questions: FormQuestion[]): FormQuestion[] {
+  const byId = new Map(questions.map((q) => [q.id, q]));
+  const fixed = questions.map((q) => {
+    const field = ONBOARDING_FIELDS.find((f) => f.id === q.id);
+    if (!field) return q;
+    return {
+      ...q,
+      type: field.type,
+      options: field.options?.slice(),
+      required: ONBOARDING_REQUIRED.has(q.id) ? true : q.required,
+    };
+  });
+  const missing = ONBOARDING_FIELDS.filter((f) => !byId.has(f.id)).map((f) => ({ ...f, options: f.options?.slice() }));
+  return [...missing, ...fixed];
+}
+
+/** The staff details in an onboarding response, ready to prefill the approval. */
+export function onboardingDetails(answers: Answers): {
+  firstName: string; middleName?: string; lastName: string; email: string; phone?: string;
+  dateOfBirth?: string; gender?: string; address?: string; nationalId?: string;
+} {
+  const text = (id: string) => (typeof answers[id] === 'string' ? (answers[id] as string).trim() : '');
+  const gender = text('gender').toUpperCase();
+  return {
+    firstName: text('firstName'),
+    middleName: text('middleName') || undefined,
+    lastName: text('lastName'),
+    email: text('email').toLowerCase(),
+    phone: text('phone') || undefined,
+    dateOfBirth: text('dateOfBirth') || undefined,
+    gender: ['MALE', 'FEMALE', 'OTHER'].includes(gender) ? gender : undefined,
+    address: text('address') || undefined,
+    nationalId: text('nationalId') || undefined,
+  };
+}

@@ -22,7 +22,7 @@ import {
   Briefcase, GraduationCap, Laptop, Megaphone, Network, ArrowRightLeft,
   ClipboardList, Receipt, HeartHandshake, Package, Percent, Layers,
   CalendarDays, XCircle, LayoutTemplate, Newspaper, ShieldCheck,
-  MonitorSmartphone, Building2, SlidersHorizontal, TrendingUp, Banknote, ListChecks,
+  MonitorSmartphone, Building2, SlidersHorizontal, TrendingUp, Banknote, ListChecks, UserPlus,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -94,6 +94,8 @@ export const navItems: NavItem[] = [
   // or loan officer never sees the HR module at all.
   { label: 'HR Overview',   href: '/hr',               icon: HeartHandshake, color: 'violet',  permissions: ['HR:STAFF_READ', 'HR:ANALYTICS_VIEW', 'HR:PAYROLL_MANAGE', 'HR:RECRUITMENT_MANAGE'], section: 'Human Resources' },
   { label: 'People',        href: '/hr/staff',         icon: UserCog,        color: 'indigo',  permission: 'HR:STAFF_READ' },
+  // Onboarding form responses waiting to become staff accounts (onboarding.actions).
+  { label: 'New Joiners',   href: '/hr/joiners',       icon: UserPlus,       color: 'indigo',  permission: 'HR:STAFF_CREATE' },
   { label: 'Payroll',       href: '/hr/payroll',       icon: Wallet,         color: 'emerald', permissions: ['HR:PAYROLL_READ', 'HR:PAYROLL_MANAGE', 'HR:PAYROLL_APPROVE'] },
   { label: 'Recruitment',   href: '/hr/recruitment',   icon: Briefcase,      color: 'cyan',    permission: 'HR:RECRUITMENT_MANAGE' },
   { label: 'Onboarding',    href: '/hr/onboarding',    icon: ClipboardList,  color: 'sky',     permissions: ['HR:STAFF_READ', 'HR:STAFF_UPDATE'] },

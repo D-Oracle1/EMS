@@ -5,14 +5,15 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
-  ClipboardList, Plus, Search, Link2, Pencil, BarChart3, CopyPlus, Trash2, Play, Square, Inbox,
+  ClipboardList, Plus, Search, Link2, Pencil, BarChart3, CopyPlus, Trash2, Play, Square, Inbox, UserPlus,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { StatCard } from '@/components/ui/stat-card';
 import { formatDateTime } from '@/lib/utils';
-import { setFormStatus, deleteForm, duplicateForm, type getForms } from '@/actions/form.actions';
+import { setFormStatus, deleteForm, duplicateForm, createOnboardingForm, type getForms } from '@/actions/form.actions';
+import { Badge } from '@/components/ui/badge';
 import type { ActionResult } from '@/types';
 import { StatusBadge, AudienceBadge, copyShareLink } from './form-bits';
 
@@ -55,9 +56,18 @@ export function FormsClient({ forms }: { forms: FormRow[] }) {
             Build a form, share its link with anyone or with staff, and read every response here
           </p>
         </div>
-        <Button asChild>
-          <Link href="/forms/new"><Plus className="mr-2 h-4 w-4" />New form</Link>
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            disabled={busy === 'onboarding'}
+            onClick={() => run('onboarding', () => createOnboardingForm(), (d) => d && router.push(`/forms/${d.id}/edit`))}
+          >
+            <UserPlus className="mr-2 h-4 w-4" />New onboarding form
+          </Button>
+          <Button asChild>
+            <Link href="/forms/new"><Plus className="mr-2 h-4 w-4" />New form</Link>
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -97,6 +107,11 @@ export function FormsClient({ forms }: { forms: FormRow[] }) {
                 <div className="flex flex-wrap gap-1.5">
                   <StatusBadge status={f.status} accepting={f.accepting} />
                   <AudienceBadge audience={f.audience} />
+                  {f.purpose === 'STAFF_ONBOARDING' && (
+                    <Badge variant="outline" className="gap-1 border-indigo-300 text-indigo-700 dark:text-indigo-300">
+                      <UserPlus className="h-3 w-3" />Staff onboarding
+                    </Badge>
+                  )}
                 </div>
                 <Link href={`/forms/${f.id}`} className="group min-w-0">
                   <h2 className="break-words font-semibold group-hover:text-indigo-600 dark:group-hover:text-indigo-400">{f.title}</h2>

@@ -4,6 +4,7 @@ import './globals.css';
 import { Toaster } from 'sonner';
 import { ThemeProvider, themeScript } from '@/components/theme';
 import { SplashScreen } from '@/components/splash-screen';
+import { PwaFullscreen } from '@/components/pwa-fullscreen';
 
 /**
  * `subsets` here controls which faces get preloaded, not which exist:
@@ -89,6 +90,7 @@ export default function RootLayout({
       </head>
       <body className={inter.className}>
         <SplashScreen />
+        <PwaFullscreen />
         <ThemeProvider>
           {children}
           <Toaster position="top-right" richColors theme="system" />

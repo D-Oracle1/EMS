@@ -541,3 +541,15 @@ describe('Forms', () => {
     }
   });
 });
+
+describe('Staff onboarding', () => {
+  const sees = (v: { permissions: string[]; roleLevel?: number }) =>
+    resolveNav(v).items.some((i) => i.href === '/hr/joiners');
+
+  it('goes to whoever can create staff, and no one else', () => {
+    expect(sees(viewer('HR_OFFICER'))).toBe(true);
+    expect(sees(viewer('HR_ADMIN'))).toBe(true);
+    expect(sees(viewer('SAVINGS_OFFICER'))).toBe(false);
+    expect(sees(viewer('IT_ADMIN'))).toBe(false);
+  });
+});

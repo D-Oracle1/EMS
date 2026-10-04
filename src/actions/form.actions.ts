@@ -24,7 +24,8 @@ import { auditLog } from '@/lib/audit';
 import { createNotificationForUsers } from '@/lib/notifications';
 import {
   canManageForms, normalizeQuestions, readQuestions, validateAnswers, isAcceptingResponses,
-  makeSlug, LIMITS, readFiles, type FormQuestion, type Answers,
+  makeSlug, LIMITS, readFiles, onboardingTemplate, enforceOnboardingFields, onboardingDetails,
+  type FormQuestion, type Answers,
 } from '@/lib/forms';
 import type { ActionResult, SessionUser } from '@/types';
 
@@ -99,6 +100,7 @@ export async function getForms() {
     slug: f.slug,
     title: f.title,
     audience: f.audience,
+    purpose: f.purpose,
     status: f.status,
     accepting: isAcceptingResponses(f),
     closesAt: f.closesAt?.toISOString() ?? null,
@@ -120,6 +122,7 @@ export async function getFormForEdit(id: string) {
     title: f.title,
     description: f.description ?? '',
     audience: f.audience,
+    purpose: f.purpose,
     status: f.status,
     confirmationMessage: f.confirmationMessage ?? '',
     oneResponsePerStaff: f.oneResponsePerStaff,
@@ -129,10 +132,13 @@ export async function getFormForEdit(id: string) {
   };
 }
 
-function cleanInput(data: FormInput) {
+function cleanInput(data: FormInput, purpose: 'GENERAL' | 'STAFF_ONBOARDING' = 'GENERAL') {
   const title = (data.title ?? '').trim().slice(0, LIMITS.title);
   if (!title) throw new Error('Give the form a title');
-  const audience = data.audience === 'STAFF' ? 'STAFF' : 'PUBLIC';
+  const onboarding = purpose === 'STAFF_ONBOARDING';
+  // New joiners have no login yet, so an onboarding form is always public.
+  const audience = !onboarding && data.audience === 'STAFF' ? 'STAFF' : 'PUBLIC';
+  const questions = normalizeQuestions(data.questions);
   let closesAt: Date | null = null;
   if (data.closesAt) {
     closesAt = new Date(data.closesAt);
@@ -146,7 +152,7 @@ function cleanInput(data: FormInput) {
     // One response each needs to know who answered, so it means nothing on a public form.
     oneResponsePerStaff: audience === 'STAFF' && data.oneResponsePerStaff === true,
     closesAt,
-    questions: normalizeQuestions(data.questions) as unknown as Prisma.InputJsonValue,
+    questions: (onboarding ? enforceOnboardingFields(questions) : questions) as unknown as Prisma.InputJsonValue,
   } as const;
 }
 
@@ -154,11 +160,11 @@ function cleanInput(data: FormInput) {
 export async function saveForm(data: FormInput, id?: string): Promise<ActionResult<{ id: string }>> {
   try {
     const user = await requireManager();
-    const values = cleanInput(data);
+    const existing = id ? await prisma.form.findUnique({ where: { id }, select: { id: true, purpose: true } }) : null;
+    if (id && !existing) return { success: false, error: 'Form not found' };
+    const values = cleanInput(data, existing?.purpose);
 
     if (id) {
-      const existing = await prisma.form.findUnique({ where: { id }, select: { id: true } });
-      if (!existing) return { success: false, error: 'Form not found' };
       await prisma.form.update({ where: { id }, data: values });
       await auditLog({
         userId: user.id, action: 'UPDATE', module: 'FORMS', entityType: 'FORM', entityId: id,
@@ -178,6 +184,53 @@ export async function saveForm(data: FormInput, id?: string): Promise<ActionResu
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Could not save the form' };
   }
+}
+
+/**
+ * A ready-made staff onboarding form, as a draft to review and open. Its
+ * responses wait under HR > Onboarding, where approving one creates the
+ * staff member and emails their login.
+ */
+export async function createOnboardingForm(): Promise<ActionResult<{ id: string }>> {
+  try {
+    const user = await requireManager();
+    const title = 'Staff Onboarding: Hy-Link Finance';
+    const form = await prisma.form.create({
+      data: {
+        title,
+        slug: makeSlug('staff-onboarding'),
+        description:
+          'Welcome to Hy-Link Finance. Please fill in your details exactly as they appear on your ID. ' +
+          'HR will review them, set up your account and email your login details.',
+        audience: 'PUBLIC',
+        purpose: 'STAFF_ONBOARDING',
+        confirmationMessage:
+          'Thank you. HR will review your details and email your login details to the address you gave.',
+        questions: onboardingTemplate() as unknown as Prisma.InputJsonValue,
+        createdById: user.id,
+      },
+    });
+    await auditLog({
+      userId: user.id, action: 'CREATE', module: 'FORMS', entityType: 'FORM', entityId: form.id,
+      description: `Created staff onboarding form "${title}"`,
+    });
+    return { success: true, message: 'Onboarding form created', data: { id: form.id } };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Could not create the form' };
+  }
+}
+
+/** Everyone who can create staff: the people an onboarding request goes to. */
+async function staffCreatorIds(): Promise<string[]> {
+  const rows = await prisma.staff.findMany({
+    where: {
+      status: 'ACTIVE',
+      isDeleted: false,
+      role: { permissions: { some: { permission: { code: 'HR:STAFF_CREATE' } } } },
+    },
+    select: { id: true },
+  });
+  return rows.map((r) => r.id);
 }
 
 /** Opens, closes or returns a form to draft. Opening a staff form the first time tells every staff member. */
@@ -263,6 +316,7 @@ export async function duplicateForm(id: string): Promise<ActionResult<{ id: stri
         audience: form.audience,
         confirmationMessage: form.confirmationMessage,
         oneResponsePerStaff: form.oneResponsePerStaff,
+        purpose: form.purpose,
         questions: form.questions as Prisma.InputJsonValue,
         createdById: user.id,
       },
@@ -291,12 +345,14 @@ export async function getFormResponses(id: string) {
     title: form.title,
     description: form.description,
     audience: form.audience,
+    purpose: form.purpose,
     status: form.status,
     accepting: isAcceptingResponses(form),
     closesAt: form.closesAt?.toISOString() ?? null,
     questions: readQuestions(form.questions),
     responses: form.responses.map((r) => ({
       id: r.id,
+      onboardingStatus: r.onboardingStatus,
       submittedAt: r.submittedAt.toISOString(),
       respondent: fullName(r.staff),
       respondentDetail: r.staff ? [r.staff.employeeId, r.staff.department?.name].filter(Boolean).join(' · ') : null,
@@ -413,15 +469,29 @@ export async function submitFormResponse(
       if (already) return { success: false, error: 'You have already responded to this form' };
     }
 
-    await prisma.formResponse.create({
+    const onboarding = form.purpose === 'STAFF_ONBOARDING';
+    const response = await prisma.formResponse.create({
       data: {
         formId: form.id,
         // A staff member answering a public form is still named, which is
         // what lets an admin see who said what.
         staffId: staff?.id ?? null,
         answers: result.answers as Prisma.InputJsonValue,
+        ...(onboarding ? { onboardingStatus: 'PENDING' as const } : {}),
       },
     });
+
+    if (onboarding) {
+      const who = onboardingDetails(result.answers);
+      await createNotificationForUsers(await staffCreatorIds(), {
+        type: 'APPROVAL_REQUIRED',
+        title: 'New staff onboarding request',
+        message: `${who.firstName} ${who.lastName} submitted their details. Review and create their account.`,
+        entityType: 'FORM_RESPONSE',
+        entityId: response.id,
+        actionUrl: '/hr/joiners',
+      });
+    }
 
     return { success: true, message: confirmation };
   } catch (error) {

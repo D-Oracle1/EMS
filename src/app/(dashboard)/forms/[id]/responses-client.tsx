@@ -104,6 +104,14 @@ export function ResponsesClient({ form }: { form: FormData }) {
         </div>
       </div>
 
+      {form.purpose === 'STAFF_ONBOARDING' && (
+        <p className="rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-200">
+          Staff onboarding form.{' '}
+          <span className="font-semibold">{form.responses.filter((x) => x.onboardingStatus === 'PENDING').length}</span> waiting for HR.{' '}
+          <Link href="/hr/joiners" className="font-medium underline">Review and create accounts</Link>
+        </p>
+      )}
+
       {form.status !== 'DRAFT' ? (
         <Card>
           <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center">

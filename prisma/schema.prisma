@@ -211,6 +211,8 @@ model Staff {
   expensesReviewed             Expense[]            @relation("ExpenseReviewer")
   formsCreated                 Form[]               @relation("FormCreator")
   formResponses                FormResponse[]       @relation("FormRespondent")
+  onboardedFrom                FormResponse?        @relation("OnboardedStaff")
+  onboardingReviews            FormResponse[]       @relation("OnboardingReviewer")
   disciplinaryActions          DisciplinaryAction[] @relation("DisciplinedStaff")
   disciplinaryIssued           DisciplinaryAction[] @relation("DisciplinaryIssuer")
   createdLoans                 Loan[]               @relation("LoanCreatedBy")
@@ -3475,6 +3477,20 @@ enum FormStatus {
   CLOSED
 }
 
+/// What a form is for. A staff onboarding form's answers become staff
+/// records once HR approves them.
+enum FormPurpose {
+  GENERAL
+  STAFF_ONBOARDING
+}
+
+/// Where an onboarding response stands with HR.
+enum FormReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model Form {
   id          String  @id @default(uuid())
   /// The share link: /f/<slug>.
@@ -3484,6 +3500,7 @@ model Form {
 
   audience FormAudience @default(PUBLIC)
   status   FormStatus   @default(DRAFT)
+  purpose  FormPurpose  @default(GENERAL)
 
   /// The questions, in order (FormQuestion[] in lib/forms.ts). Each carries a
   /// stable id that responses key their answers by.
@@ -3519,9 +3536,19 @@ model FormResponse {
 
   submittedAt DateTime @default(now())
 
-  form  Form   @relation(fields: [formId], references: [id], onDelete: Cascade)
-  staff Staff? @relation("FormRespondent", fields: [staffId], references: [id])
+  /// Onboarding forms only: HR's decision, the staff record it created, and who decided.
+  onboardingStatus FormReviewStatus?
+  onboardedStaffId String?           @unique
+  reviewedById     String?
+  reviewedAt       DateTime?
+  reviewNote       String?
+
+  form           Form   @relation(fields: [formId], references: [id], onDelete: Cascade)
+  staff          Staff? @relation("FormRespondent", fields: [staffId], references: [id])
+  onboardedStaff Staff? @relation("OnboardedStaff", fields: [onboardedStaffId], references: [id])
+  reviewedBy     Staff? @relation("OnboardingReviewer", fields: [reviewedById], references: [id])
 
   @@index([formId, submittedAt])
   @@index([formId, staffId])
+  @@index([onboardingStatus])
 }

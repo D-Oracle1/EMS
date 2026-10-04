@@ -4,10 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { staffScopeFor, inScope } from '@/lib/branch-scope';
 import { requirePermission, getSession } from '@/lib/auth-utils';
 import { auditLog } from '@/lib/audit';
-import { generateReference } from '@/lib/utils';
-import { hash } from 'bcryptjs';
-import { randomUUID } from 'crypto';
-import { issueTempPassword } from '@/lib/temp-password';
+import { createStaffRecord } from '@/lib/staff-create';
 import type { ActionResult } from '@/types';
 
 export async function createStaff(data: {
@@ -27,47 +24,7 @@ export async function createStaff(data: {
 }): Promise<ActionResult> {
   try {
     const user = await requirePermission('HR:STAFF_CREATE');
-
-    // Check email uniqueness
-    const existing = await prisma.staff.findUnique({ where: { email: data.email } });
-    if (existing) return { success: false, error: 'Email already in use' };
-
-    const employeeId = await generateReference('EMPLOYEE');
-    const staffId = randomUUID();
-    const { password: tempPassword, issuedAt } = issueTempPassword(staffId);
-    const passwordHash = await hash(tempPassword, 12);
-
-    const staff = await prisma.staff.create({
-      data: {
-        id: staffId,
-        employeeId,
-        email: data.email,
-        passwordHash,
-        firstName: data.firstName,
-        lastName: data.lastName,
-        middleName: data.middleName,
-        phone: data.phone,
-        dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : undefined,
-        gender: data.gender,
-        address: data.address,
-        nationalId: data.nationalId,
-        departmentId: data.departmentId,
-        roleId: data.roleId,
-        branchId: data.branchId || undefined,
-        supervisorId: data.supervisorId || undefined,
-        mustChangePassword: true,
-        passwordChangedAt: issuedAt,
-        createdBy: user.id,
-      },
-    });
-
-    await auditLog({
-      userId: user.id, action: 'CREATE', module: 'HR',
-      entityType: 'STAFF', entityId: staff.id,
-      description: `Created staff: ${data.firstName} ${data.lastName} (${employeeId})`,
-      newValues: { employeeId, email: data.email, departmentId: data.departmentId, roleId: data.roleId },
-    });
-
+    const { employeeId, tempPassword } = await createStaffRecord(data, user);
     return { success: true, message: `Staff created. Employee ID: ${employeeId}. Temp password: ${tempPassword}`, data: { employeeId, tempPassword } };
   } catch (error: any) {
     return { success: false, error: error.message };

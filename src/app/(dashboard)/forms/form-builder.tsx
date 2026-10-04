@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
   ArrowLeft, ArrowDown, ArrowUp, Copy, Eye, Globe2, Loader2, Plus, Save, Trash2, Users, X, AlertTriangle,
+  Lock, UserPlus,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -17,7 +18,8 @@ import { cn } from '@/lib/utils';
 import { saveForm, type FormInput } from '@/actions/form.actions';
 import {
   QUESTION_TYPES, QUESTION_TYPE_LABEL, blankQuestion, hasOptions, newQuestionId, normalizeQuestions,
-  FILE_KINDS, FILE_KIND_LABEL, FILE_LIMITS, type FormQuestion, type QuestionType, type FileKind,
+  FILE_KINDS, FILE_KIND_LABEL, FILE_LIMITS, isOnboardingField, isOnboardingRequired,
+  type FormQuestion, type QuestionType, type FileKind,
 } from '@/lib/forms';
 
 export interface BuilderForm {
@@ -26,6 +28,8 @@ export interface BuilderForm {
   title: string;
   description: string;
   audience: 'PUBLIC' | 'STAFF';
+  /** A staff onboarding form keeps its staff fields; see lib/forms ONBOARDING_FIELDS. */
+  purpose?: 'GENERAL' | 'STAFF_ONBOARDING';
   confirmationMessage: string;
   oneResponsePerStaff: boolean;
   closesAt: string | null;
@@ -59,6 +63,9 @@ export function FormBuilder({ initial }: { initial: BuilderForm }) {
   const [form, setForm] = useState<BuilderForm>(initial);
   const [saving, setSaving] = useState(false);
   const isNew = !initial.id;
+  const onboarding = initial.purpose === 'STAFF_ONBOARDING';
+  /** A staff field on an onboarding form: rewordable, but its type and presence are fixed. */
+  const locked = (q: FormQuestion) => onboarding && isOnboardingField(q.id);
 
   const set = <K extends keyof BuilderForm>(key: K, value: BuilderForm[K]) => setForm((f) => ({ ...f, [key]: value }));
 
@@ -177,6 +184,17 @@ export function FormBuilder({ initial }: { initial: BuilderForm }) {
             maxLength={2000}
           />
 
+          {onboarding ? (
+            <p className="flex items-start gap-2 rounded-xl bg-indigo-50 px-4 py-3 text-sm text-indigo-900 dark:bg-indigo-500/10 dark:text-indigo-200">
+              <UserPlus className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                Staff onboarding form. Anyone with the link can fill it. Each response waits under{' '}
+                <Link href="/hr/joiners" className="font-medium underline">HR &gt; New Joiners</Link>, where HR sets the
+                department and role and approves it to create the account and email the login. The locked questions fill the
+                staff record: you can reword them, and add your own questions below.
+              </span>
+            </p>
+          ) : (
           <div className="space-y-2">
             <Label>Who can respond</Label>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -197,7 +215,9 @@ export function FormBuilder({ initial }: { initial: BuilderForm }) {
             </div>
           </div>
 
-          {form.audience === 'STAFF' && (
+          )}
+
+          {!onboarding && form.audience === 'STAFF' && (
             <label className="flex items-center justify-between gap-4 rounded-xl border px-4 py-3">
               <span>
                 <span className="block text-sm font-medium">One response per person</span>
@@ -251,8 +271,9 @@ export function FormBuilder({ initial }: { initial: BuilderForm }) {
               <select
                 value={q.type}
                 onChange={(e) => changeType(q, e.target.value as QuestionType)}
-                className={cn(selectClass, 'sm:w-48')}
+                className={cn(selectClass, 'sm:w-48', locked(q) && 'opacity-60')}
                 aria-label="Question type"
+                disabled={locked(q)}
               >
                 {QUESTION_TYPES.map((t) => (
                   <option key={t} value={t}>{QUESTION_TYPE_LABEL[t]}</option>
@@ -268,7 +289,15 @@ export function FormBuilder({ initial }: { initial: BuilderForm }) {
               className="text-sm"
             />
 
-            {hasOptions(q.type) && <OptionsEditor q={q} onChange={(options) => updateQuestion(q.id, { options })} />}
+            {locked(q) && (
+              <p className="flex items-center gap-1.5 text-xs font-medium text-indigo-700 dark:text-indigo-300">
+                <Lock className="h-3 w-3" />Staff record field: fills the new staff member&apos;s profile
+              </p>
+            )}
+            {hasOptions(q.type) && !locked(q) && <OptionsEditor q={q} onChange={(options) => updateQuestion(q.id, { options })} />}
+            {hasOptions(q.type) && locked(q) && (
+              <p className="text-sm text-muted-foreground">Options: {(q.options ?? []).join(', ')}</p>
+            )}
             {q.type === 'SCALE' && <ScaleEditor q={q} onChange={(patch) => updateQuestion(q.id, patch)} />}
             {q.type === 'FILE' && <FileEditor q={q} onChange={(patch) => updateQuestion(q.id, patch)} />}
             {!hasOptions(q.type) && q.type !== 'SCALE' && q.type !== 'FILE' && (
@@ -282,11 +311,15 @@ export function FormBuilder({ initial }: { initial: BuilderForm }) {
                 <IconButton label="Move up" onClick={() => move(index, -1)} disabled={index === 0}><ArrowUp className="h-4 w-4" /></IconButton>
                 <IconButton label="Move down" onClick={() => move(index, 1)} disabled={index === form.questions.length - 1}><ArrowDown className="h-4 w-4" /></IconButton>
                 <IconButton label="Duplicate" onClick={() => duplicate(index)}><Copy className="h-4 w-4" /></IconButton>
-                <IconButton label="Delete" onClick={() => remove(q.id)} className="hover:text-rose-600"><Trash2 className="h-4 w-4" /></IconButton>
+                <IconButton label={locked(q) ? 'Staff fields cannot be deleted' : 'Delete'} onClick={() => remove(q.id)} disabled={locked(q)} className="hover:text-rose-600"><Trash2 className="h-4 w-4" /></IconButton>
               </div>
               <label className="flex items-center gap-2 text-sm">
                 Required
-                <Switch checked={q.required} onCheckedChange={(v) => updateQuestion(q.id, { required: v })} />
+                <Switch
+                  checked={q.required}
+                  onCheckedChange={(v) => updateQuestion(q.id, { required: v })}
+                  disabled={onboarding && isOnboardingRequired(q.id)}
+                />
               </label>
             </div>
           </CardContent>
