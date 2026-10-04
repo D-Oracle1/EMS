@@ -22,7 +22,7 @@ import {
   Briefcase, GraduationCap, Laptop, Megaphone, Network, ArrowRightLeft,
   ClipboardList, Receipt, HeartHandshake, Package, Percent, Layers,
   CalendarDays, XCircle, LayoutTemplate, Newspaper, ShieldCheck,
-  MonitorSmartphone, Building2, SlidersHorizontal, TrendingUp, Banknote,
+  MonitorSmartphone, Building2, SlidersHorizontal, TrendingUp, Banknote, ListChecks,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -115,6 +115,8 @@ export const navItems: NavItem[] = [
   // holds SYSTEM:CONFIG_MANAGE and must not reach it. The server applies the
   // same rule (canOpenBranchesConsole in lib/branch-scope).
   { label: 'Branches',            href: '/branches',               icon: Building2,          color: 'indigo', section: 'Security & Admin', anyOf: { minRoleLevel: 85, permissions: ['ADMIN:SYSTEM'] } },
+  // Form builder and responses: the same admins (canManageForms in lib/forms).
+  { label: 'Forms',               href: '/forms',                  icon: ClipboardList,      color: 'teal',  anyOf: { minRoleLevel: 85, permissions: ['ADMIN:SYSTEM'] } },
   { label: 'Roles & Permissions', href: '/settings/roles',         icon: ShieldCheck,        color: 'rose',  permissions: ['SYSTEM:USER_MANAGE', 'ADMIN:SYSTEM'] },
   { label: 'Active Sessions',     href: '/settings/sessions',      icon: MonitorSmartphone,  color: 'rose',  permission: 'SYSTEM:USER_MANAGE' },
   { label: 'Audit Logs',          href: '/audit-logs',             icon: Shield,             color: 'slate', permission: 'AUDIT:READ' },
@@ -131,6 +133,7 @@ export const navItems: NavItem[] = [
   { label: 'Attendance',     href: '/hr/attendance',    icon: Clock,      color: 'teal' },
   { label: 'Leave',          href: '/hr/leave',         icon: CalendarOff,color: 'amber' },
   { label: 'Announcements',  href: '/hr/announcements', icon: Megaphone,  color: 'fuchsia' },
+  { label: 'My Forms',       href: '/my-forms',         icon: ListChecks, color: 'teal' },
   { label: 'Documents',      href: '/documents',        icon: FileText,   color: 'rose',    permission: 'DOCUMENTS:READ' },
   { label: 'Notifications',  href: '/notifications',    icon: Bell,       color: 'fuchsia' },
 ];

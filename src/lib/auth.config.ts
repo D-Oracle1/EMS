@@ -32,7 +32,12 @@ export const authConfig = {
       // themselves against CRON_SECRET inside the route instead.
       const isCronApi = nextUrl.pathname.startsWith('/api/cron');
 
-      if (isApiAuth || isPublicApi || isCronApi) return true;
+      // Shared form links. A public form answers anyone; a staff form asks for
+      // a sign-in itself, so a signed-out visitor sees why rather than a bare
+      // login screen. Customers are not bounced to the portal either.
+      const isFormLink = nextUrl.pathname.startsWith('/f/');
+
+      if (isApiAuth || isPublicApi || isCronApi || isFormLink) return true;
 
       const userType = (auth?.user as any)?.userType ?? 'staff';
       // HR-only staff open onto the HR overview rather than the generic dashboard.

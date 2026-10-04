@@ -209,6 +209,8 @@ model Staff {
   marketingTargetsSet          MarketingTarget[]    @relation("TargetSetter")
   expensesRecorded             Expense[]            @relation("ExpenseRecorder")
   expensesReviewed             Expense[]            @relation("ExpenseReviewer")
+  formsCreated                 Form[]               @relation("FormCreator")
+  formResponses                FormResponse[]       @relation("FormRespondent")
   disciplinaryActions          DisciplinaryAction[] @relation("DisciplinedStaff")
   disciplinaryIssued           DisciplinaryAction[] @relation("DisciplinaryIssuer")
   createdLoans                 Loan[]               @relation("LoanCreatedBy")
@@ -3455,4 +3457,71 @@ model Expense {
   @@index([expenseDate])
   @@index([branchId])
   @@index([expenseAccountId])
+}
+
+// ============================================================================
+// FORMS — Google-Forms-style questionnaires
+// ============================================================================
+
+/// Who may answer a form: anyone with the link, or signed-in staff only.
+enum FormAudience {
+  PUBLIC
+  STAFF
+}
+
+enum FormStatus {
+  DRAFT
+  OPEN
+  CLOSED
+}
+
+model Form {
+  id          String  @id @default(uuid())
+  /// The share link: /f/<slug>.
+  slug        String  @unique
+  title       String
+  description String?
+
+  audience FormAudience @default(PUBLIC)
+  status   FormStatus   @default(DRAFT)
+
+  /// The questions, in order (FormQuestion[] in lib/forms.ts). Each carries a
+  /// stable id that responses key their answers by.
+  questions Json @default("[]")
+
+  /// Shown after a response is submitted.
+  confirmationMessage String?
+  /// Staff forms only: one response per staff member.
+  oneResponsePerStaff Boolean   @default(false)
+  /// Stops taking responses after this moment.
+  closesAt            DateTime?
+  /// First opened; staff are notified once, on this transition.
+  publishedAt         DateTime?
+
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdBy Staff          @relation("FormCreator", fields: [createdById], references: [id])
+  responses FormResponse[]
+
+  @@index([status])
+  @@index([createdById])
+}
+
+model FormResponse {
+  id      String  @id @default(uuid())
+  formId  String
+  /// The staff member who answered; null for a public, signed-out response.
+  staffId String?
+  /// Answers keyed by question id: string, string[] or number.
+  answers Json
+
+  submittedAt DateTime @default(now())
+
+  form  Form   @relation(fields: [formId], references: [id], onDelete: Cascade)
+  staff Staff? @relation("FormRespondent", fields: [staffId], references: [id])
+
+  @@index([formId, submittedAt])
+  @@index([formId, staffId])
 }

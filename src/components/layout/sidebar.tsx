@@ -3,11 +3,12 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { Pin, PinOff } from 'lucide-react';
+import { ChevronDown, Pin, PinOff } from 'lucide-react';
 import { BrandTile, BrandLogo } from '@/components/brand';
 import { cn } from '@/lib/utils';
 import { resolveNav } from '@/lib/navigation';
 import { hidesGenericDashboard } from '@/lib/landing';
+import { groupNav, isNavActive, isSectionOpen, useNavSections } from '@/lib/nav-sections';
 import type { SessionUser } from '@/types';
 
 // All class names written out statically for Tailwind JIT
@@ -55,19 +56,20 @@ export function Sidebar({ pinned = false, onPinnedChange }: SidebarProps) {
   const pathname = usePathname();
   const { data: session } = useSession();
   const user = session?.user as SessionUser | undefined;
+  const { choices, setOpen } = useNavSections();
 
   if (!user) return null;
 
   // For HR-only staff the HR overview is their dashboard, so the generic one
   // would just be a thinner copy of the same numbers.
-  const { items: filteredNav, headings: headingFor } = resolveNav(user, {
-    hideDashboard: hidesGenericDashboard(user),
-  });
+  const groups = groupNav(resolveNav(user, { hideDashboard: hidesGenericDashboard(user) }));
 
   // Labels and headings fade in together with the width.
   const reveal = pinned
     ? 'opacity-100'
     : 'opacity-0 group-hover/rail:opacity-100 lg:delay-75';
+  // The reverse: shown only while the rail is closed to its icons.
+  const atRest = pinned ? 'hidden' : 'opacity-100 group-hover/rail:opacity-0';
 
   return (
     <>
@@ -98,58 +100,98 @@ export function Sidebar({ pinned = false, onPinnedChange }: SidebarProps) {
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-2 no-scrollbar">
-          <ul className="space-y-0.5">
-            {filteredNav.map((item) => {
-              const Icon = item.icon;
-              const colors = colorConfig[item.color] ?? colorConfig.blue;
-              // Exact match for a section's landing page, prefix match otherwise,
-              // so /hr does not stay lit while sitting on /hr/payroll.
-              const isActive =
-                item.href === '/hr' || item.href === '/dashboard'
-                  ? pathname === item.href
-                  : pathname === item.href || pathname.startsWith(item.href + '/');
-              const heading = headingFor.get(item.href);
+          {groups.map((group, index) => {
+            const open = isSectionOpen(group, pathname, choices);
+            const list = (
+              <ul className="space-y-0.5">
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  const colors = colorConfig[item.color] ?? colorConfig.blue;
+                  const isActive = isNavActive(item.href, pathname);
 
-              return (
-                <li key={item.href}>
-                  {heading && (
-                    <p
-                      className={cn(
-                        'overflow-hidden whitespace-nowrap px-2 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-widest text-slate-500 transition-opacity duration-200',
-                        reveal
-                      )}
-                    >
-                      {heading}
-                    </p>
-                  )}
-                  <Link
-                    href={item.href}
-                    // The icon never moves as the rail opens: it sits in a fixed
-                    // 44px box at the same offset in both states.
+                  return (
+                    <li key={item.href}>
+                      <Link
+                        href={item.href}
+                        // The icon never moves as the rail opens: it sits in a fixed
+                        // 44px box at the same offset in both states.
+                        className={cn(
+                          'flex items-center gap-3 rounded-2xl py-2 pl-[0.35rem] pr-3 text-sm font-medium transition-colors duration-200',
+                          isActive
+                            ? `${colors.activeBg} text-white ring-1 ${colors.activeRing}`
+                            : `text-slate-400 hover:text-white ${colors.hoverBg}`
+                        )}
+                        title={item.label}
+                        tabIndex={open ? undefined : -1}
+                      >
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center">
+                          <Icon className={cn('h-5 w-5', colors.icon)} />
+                        </span>
+                        <span
+                          className={cn(
+                            'overflow-hidden whitespace-nowrap transition-opacity duration-200',
+                            reveal
+                          )}
+                        >
+                          {item.label}
+                        </span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            );
+
+            if (group.heading === null) return <div key={`top-${index}`}>{list}</div>;
+            const heading = group.heading;
+
+            return (
+              <div key={`${heading}-${index}`}>
+                <button
+                  type="button"
+                  onClick={() => setOpen(heading, !open)}
+                  aria-expanded={open}
+                  className="group/head relative mt-3 flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-slate-500 transition-colors hover:text-slate-200"
+                  title={open ? `Hide ${heading}` : `Show ${heading}`}
+                >
+                  {/* In the closed rail a folded section would leave a gap with
+                      no sign of what is there, so each heading keeps a short
+                      rule under the icon column. */}
+                  <span
+                    aria-hidden
                     className={cn(
-                      'flex items-center gap-3 rounded-2xl py-2 pl-[0.35rem] pr-3 text-sm font-medium transition-colors duration-200',
-                      isActive
-                        ? `${colors.activeBg} text-white ring-1 ${colors.activeRing}`
-                        : `text-slate-400 hover:text-white ${colors.hoverBg}`
+                      'absolute left-[0.85rem] top-1/2 h-0.5 w-5 -translate-y-1/2 rounded-full bg-slate-600 transition-opacity duration-200',
+                      atRest
                     )}
-                    title={item.label}
+                  />
+                  <span
+                    className={cn(
+                      'min-w-0 flex-1 overflow-hidden whitespace-nowrap text-[10px] font-semibold uppercase tracking-widest transition-opacity duration-200',
+                      reveal
+                    )}
                   >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center">
-                      <Icon className={cn('h-5 w-5', colors.icon)} />
-                    </span>
-                    <span
-                      className={cn(
-                        'overflow-hidden whitespace-nowrap transition-opacity duration-200',
-                        reveal
-                      )}
-                    >
-                      {item.label}
-                    </span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+                    {heading}
+                  </span>
+                  <ChevronDown
+                    className={cn(
+                      'h-3.5 w-3.5 shrink-0 transition-[transform,opacity] duration-200',
+                      open ? 'rotate-0' : '-rotate-90',
+                      reveal
+                    )}
+                  />
+                </button>
+                {/* Rows animate open by easing the grid track between 0fr and 1fr. */}
+                <div
+                  className={cn(
+                    'grid transition-[grid-template-rows] duration-300 ease-out',
+                    open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+                  )}
+                >
+                  <div className="min-h-0 overflow-hidden">{list}</div>
+                </div>
+              </div>
+            );
+          })}
         </nav>
 
         {/* Who is signed in, and the pin */}

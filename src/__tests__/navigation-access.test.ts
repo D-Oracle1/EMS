@@ -101,6 +101,7 @@ describe('nav structure', () => {
         '/hr/leave',
         '/hr/my-payslips',
         '/hr/my-profile',
+        '/my-forms',
         '/notifications',
       ].sort()
     );
@@ -519,5 +520,24 @@ describe('landing page', () => {
   it('does not divert a super admin who also holds CMS permissions', () => {
     // isCmsFocused must mean "only CMS", never "has CMS".
     expect(isCmsFocused(viewer('SUPER_ADMIN'))).toBe(false);
+  });
+});
+
+describe('Forms', () => {
+  const sees = (v: { permissions: string[]; roleLevel?: number }) =>
+    resolveNav(v).items.some((i) => i.href === '/forms');
+
+  it('opens the builder to the superuser and level 85+, and to no one else', () => {
+    expect(sees(viewer('SUPER_ADMIN'))).toBe(true);
+    expect(sees(viewer('HR_ADMIN'))).toBe(true);
+    expect(sees({ permissions: [], roleLevel: 85 })).toBe(true);
+    expect(sees({ ...viewer('IT_ADMIN'), roleLevel: 80 })).toBe(false);
+    expect(sees(viewer('SAVINGS_OFFICER'))).toBe(false);
+  });
+
+  it('gives every staff member My Forms', () => {
+    for (const role of Object.keys(ROLES) as Array<keyof typeof ROLES>) {
+      expect(resolveNav(viewer(role)).items.some((i) => i.href === '/my-forms'), role).toBe(true);
+    }
   });
 });

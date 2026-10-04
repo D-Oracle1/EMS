@@ -18,15 +18,17 @@ import { useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
-import { X, LogOut } from 'lucide-react';
+import { X, LogOut, ChevronDown } from 'lucide-react';
 import { resolveNav } from '@/lib/navigation';
 import { hidesGenericDashboard } from '@/lib/landing';
+import { groupNav, isNavActive, isSectionOpen, useNavSections } from '@/lib/nav-sections';
 import type { SessionUser } from '@/types';
 
 export function MobileNavGrid({ open, onClose }: { open: boolean; onClose: () => void }) {
   const pathname = usePathname();
   const { data: session } = useSession();
   const user = session?.user as SessionUser | undefined;
+  const { choices, setOpen } = useNavSections();
 
   // Navigating away closes the sheet. Subscribing to the path rather than
   // setting state keeps this a single effect with no cascading render.
@@ -57,19 +59,9 @@ export function MobileNavGrid({ open, onClose }: { open: boolean; onClose: () =>
 
   if (!user || !open) return null;
 
-  const { items, headings } = resolveNav(user, { hideDashboard: hidesGenericDashboard(user) });
-
-  // Group the entries under their section headings, so a long menu still reads
-  // as a set of places rather than forty identical squares.
-  const groups: { heading: string; items: typeof items }[] = [];
-  for (const item of items) {
-    const heading = headings.get(item.href);
-    if (heading || groups.length === 0) {
-      groups.push({ heading: heading ?? 'Workspace', items: [item] });
-    } else {
-      groups[groups.length - 1].items.push(item);
-    }
-  }
+  // Grouped under the section headings, so a long menu still reads as a set of
+  // places rather than forty identical squares. Sections fold like the rail's.
+  const groups = groupNav(resolveNav(user, { hideDashboard: hidesGenericDashboard(user) }));
 
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-background lg:hidden">
@@ -97,47 +89,65 @@ export function MobileNavGrid({ open, onClose }: { open: boolean; onClose: () =>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 pb-28">
-        {groups.map((group, index) => (
-          <section key={`${group.heading}-${index}`} className="mb-6 last:mb-0">
-            <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-              {group.heading}
-            </h2>
-            <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
-              {group.items.map((item) => {
-                const Icon = item.icon;
-                const active =
-                  item.href === '/hr' || item.href === '/dashboard'
-                    ? pathname === item.href
-                    : pathname === item.href || pathname.startsWith(`${item.href}/`);
-
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={onClose}
-                    // A generous tap target: the whole tile, not just the icon.
-                    className={`flex min-h-[84px] flex-col items-center justify-center gap-2 rounded-3xl border p-3 text-center transition-colors ${
-                      active
-                        ? 'border-primary/40 bg-primary/10'
-                        : 'border-border/60 bg-card hover:bg-foreground/5'
-                    }`}
-                  >
-                    <span className={`icon-tile icon-tile-sm ${iconTileClass(item.color)}`}>
-                      <Icon className="h-4 w-4" />
-                    </span>
-                    <span
-                      className={`w-full text-[11px] leading-tight ${
-                        active ? 'font-semibold text-foreground' : 'text-muted-foreground'
-                      }`}
-                    >
-                      {item.label}
-                    </span>
-                  </Link>
-                );
-              })}
-            </div>
-          </section>
-        ))}
+        {groups.map((group, index) => {
+          const heading = group.heading;
+          const expanded = isSectionOpen(group, pathname, choices);
+          return (
+            <section key={`${heading}-${index}`} className="mb-4 last:mb-0">
+              {heading === null ? (
+                <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                  Workspace
+                </h2>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setOpen(heading, !expanded)}
+                  aria-expanded={expanded}
+                  className="mb-2 flex w-full items-center justify-between gap-2 rounded-xl py-2 text-left text-[11px] font-semibold uppercase tracking-widest text-muted-foreground"
+                >
+                  <span className="min-w-0 truncate">{heading}</span>
+                  <span className="flex shrink-0 items-center gap-1.5 normal-case tracking-normal">
+                    {!expanded && <span className="text-[11px] font-medium">{group.items.length}</span>}
+                    <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${expanded ? '' : '-rotate-90'}`} />
+                  </span>
+                </button>
+              )}
+              {expanded && (
+                <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+                  {group.items.map((item) => {
+                    const Icon = item.icon;
+                    const active = isNavActive(item.href, pathname);
+  
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={onClose}
+                        // A generous tap target: the whole tile, not just the icon.
+                        className={`flex min-h-[84px] flex-col items-center justify-center gap-2 rounded-3xl border p-3 text-center transition-colors ${
+                          active
+                            ? 'border-primary/40 bg-primary/10'
+                            : 'border-border/60 bg-card hover:bg-foreground/5'
+                        }`}
+                      >
+                        <span className={`icon-tile icon-tile-sm ${iconTileClass(item.color)}`}>
+                          <Icon className="h-4 w-4" />
+                        </span>
+                        <span
+                          className={`w-full text-[11px] leading-tight ${
+                            active ? 'font-semibold text-foreground' : 'text-muted-foreground'
+                          }`}
+                        >
+                          {item.label}
+                        </span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          );
+        })}
 
         <button
           onClick={() => signOut({ callbackUrl: '/login' })}
