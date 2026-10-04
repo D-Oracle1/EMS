@@ -6,13 +6,17 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
   ArrowLeft, Pencil, Link2, Download, Play, Square, ChevronLeft, ChevronRight, Trash2, Inbox, Eye, User,
+  FileText, ImageIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { formatDateTime } from '@/lib/utils';
-import { answerText, responsesCsv, summarize, QUESTION_TYPE_LABEL, type FormQuestion, type QuestionSummary } from '@/lib/forms';
+import {
+  answerText, responsesCsv, summarize, isFileAnswer, formatFileSize, QUESTION_TYPE_LABEL,
+  type Answer, type FileAnswer, type FormQuestion, type QuestionSummary,
+} from '@/lib/forms';
 import { setFormStatus, deleteFormResponse, type getFormResponses } from '@/actions/form.actions';
 import { StatusBadge, AudienceBadge, copyShareLink, useShareUrl } from '../form-bits';
 
@@ -169,13 +173,18 @@ export function ResponsesClient({ form }: { form: FormData }) {
                 </CardHeader>
                 <CardContent className="divide-y p-0">
                   {form.questions.map((q) => {
-                    const text = answerText(current.answers[q.id]);
+                    const value = current.answers[q.id];
+                    const text = answerText(value);
                     return (
                       <div key={q.id} className="px-5 py-4">
                         <p className="text-sm font-medium">{q.label}</p>
-                        <p className={text ? 'mt-1 whitespace-pre-line break-words' : 'mt-1 text-sm italic text-muted-foreground'}>
-                          {text || 'No answer'}
-                        </p>
+                        {isFileAnswer(value) ? (
+                          <FileList files={value} className="mt-2" />
+                        ) : (
+                          <p className={text ? 'mt-1 whitespace-pre-line break-words' : 'mt-1 text-sm italic text-muted-foreground'}>
+                            {text || 'No answer'}
+                          </p>
+                        )}
                       </div>
                     );
                   })}
@@ -208,7 +217,7 @@ export function ResponsesClient({ form }: { form: FormData }) {
                         <td className="whitespace-nowrap px-4 py-3">{r.respondent ?? 'Anonymous'}</td>
                         {form.questions.map((q) => (
                           <td key={q.id} className="max-w-64 truncate px-4 py-3" title={answerText(r.answers[q.id])}>
-                            {answerText(r.answers[q.id])}
+                            <Cell value={r.answers[q.id]} />
                           </td>
                         ))}
                       </tr>
@@ -258,6 +267,21 @@ function SummaryCard({ question: q, summary: s, total }: { question: FormQuestio
             ))}
           </div>
         )}
+        {s.kind === 'files' && (
+          s.latest.length ? (
+            <>
+              <p className="mb-2 text-sm text-muted-foreground">
+                <span className="font-semibold text-foreground">{s.fileCount.toLocaleString()}</span> file{s.fileCount === 1 ? '' : 's'} uploaded
+              </p>
+              <FileList files={s.latest} />
+              {s.fileCount > s.latest.length && (
+                <p className="mt-2 text-xs text-muted-foreground">Showing the latest {s.latest.length}. See Individual or Table for the rest.</p>
+              )}
+            </>
+          ) : (
+            <p className="text-sm italic text-muted-foreground">No files yet</p>
+          )
+        )}
         {s.kind === 'text' && (
           s.latest.length ? (
             <ul className="space-y-2">
@@ -301,5 +325,52 @@ function Bars({ counts, denominator }: { counts: { option: string; count: number
         );
       })}
     </ul>
+  );
+}
+
+/** Uploaded files as links that open in a new tab. */
+function FileList({ files, className }: { files: FileAnswer[]; className?: string }) {
+  return (
+    <ul className={`space-y-1.5 ${className ?? ''}`}>
+      {files.map((f) => (
+        <li key={f.url}>
+          <a
+            href={f.url}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-2 rounded-lg bg-muted/60 px-3 py-2 text-sm hover:bg-muted"
+          >
+            {f.type.startsWith('image/') ? (
+              <ImageIcon className="h-4 w-4 shrink-0 text-indigo-500" />
+            ) : (
+              <FileText className="h-4 w-4 shrink-0 text-indigo-500" />
+            )}
+            <span className="min-w-0 flex-1 truncate text-indigo-700 underline-offset-2 hover:underline dark:text-indigo-300">{f.name}</span>
+            <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{formatFileSize(f.size)}</span>
+          </a>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** A table cell: file links stay clickable without opening the row. */
+function Cell({ value }: { value: Answer | undefined }) {
+  if (!isFileAnswer(value)) return <>{answerText(value)}</>;
+  return (
+    <span className="flex gap-2">
+      {value.map((f) => (
+        <a
+          key={f.url}
+          href={f.url}
+          target="_blank"
+          rel="noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="truncate text-indigo-700 underline-offset-2 hover:underline dark:text-indigo-300"
+        >
+          {f.name}
+        </a>
+      ))}
+    </span>
   );
 }

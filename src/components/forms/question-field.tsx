@@ -3,7 +3,8 @@
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
-import type { Answer, FormQuestion } from '@/lib/forms';
+import { readFiles, type Answer, type FormQuestion } from '@/lib/forms';
+import { FileUploadField } from './file-upload-field';
 
 interface QuestionFieldProps {
   question: FormQuestion;
@@ -11,16 +12,20 @@ interface QuestionFieldProps {
   onChange: (value: Answer) => void;
   error?: string;
   disabled?: boolean;
+  /** The form's share slug, for file uploads. */
+  slug?: string;
+  /** File questions report when an upload is in flight. */
+  onBusyChange?: (busy: boolean) => void;
 }
 
 /**
  * One question as the person answering sees it. Used by the share page and by
  * the builder's preview, so what an admin previews is what people get.
  */
-export function QuestionField({ question: q, value, onChange, error, disabled }: QuestionFieldProps) {
+export function QuestionField({ question: q, value, onChange, error, disabled, slug, onBusyChange }: QuestionFieldProps) {
   const id = `field-${q.id}`;
   const text = typeof value === 'string' || typeof value === 'number' ? String(value) : '';
-  const list = Array.isArray(value) ? value : [];
+  const list = Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
 
   return (
     <fieldset
@@ -112,6 +117,16 @@ export function QuestionField({ question: q, value, onChange, error, disabled }:
           </div>
         )}
         {q.type === 'SCALE' && <Scale q={q} value={text} disabled={disabled} onChange={onChange} />}
+        {q.type === 'FILE' && (
+          <FileUploadField
+            question={q}
+            slug={slug}
+            files={readFiles(value) ?? []}
+            onChange={onChange}
+            onBusyChange={onBusyChange}
+            disabled={disabled}
+          />
+        )}
       </div>
 
       {error && <p className="mt-2 text-sm font-medium text-rose-600 dark:text-rose-400">{error}</p>}
@@ -120,7 +135,7 @@ export function QuestionField({ question: q, value, onChange, error, disabled }:
 }
 
 function hasSingleInput(q: FormQuestion) {
-  return !['MULTIPLE_CHOICE', 'CHECKBOXES', 'SCALE'].includes(q.type);
+  return !['MULTIPLE_CHOICE', 'CHECKBOXES', 'SCALE', 'FILE'].includes(q.type);
 }
 
 function Scale({ q, value, disabled, onChange }: { q: FormQuestion; value: string; disabled?: boolean; onChange: (v: Answer) => void }) {

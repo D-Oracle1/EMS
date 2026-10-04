@@ -16,6 +16,7 @@
  */
 
 import { Prisma } from '@prisma/client';
+import { del } from '@vercel/blob';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { getSession } from '@/lib/auth-utils';
@@ -23,7 +24,7 @@ import { auditLog } from '@/lib/audit';
 import { createNotificationForUsers } from '@/lib/notifications';
 import {
   canManageForms, normalizeQuestions, readQuestions, validateAnswers, isAcceptingResponses,
-  makeSlug, LIMITS, type FormQuestion, type Answers,
+  makeSlug, LIMITS, readFiles, type FormQuestion, type Answers,
 } from '@/lib/forms';
 import type { ActionResult, SessionUser } from '@/types';
 
@@ -33,6 +34,23 @@ const fullName = (s?: { firstName: string; lastName: string } | null) => (s ? `$
 const FLOOD_PER_MINUTE = 60;
 /** Largest answers payload accepted, in characters of JSON. */
 const MAX_PAYLOAD = 100_000;
+
+/** Every uploaded file's link in a set of responses. */
+function uploadedUrls(answersList: unknown[]): string[] {
+  return answersList.flatMap((answers) =>
+    Object.values((answers ?? {}) as Record<string, unknown>).flatMap((v) => readFiles(v)?.map((f) => f.url) ?? [])
+  );
+}
+
+/** Removes uploaded files from storage. Best effort: a failure never blocks the delete. */
+async function removeUploads(urls: string[]) {
+  if (urls.length === 0) return;
+  try {
+    await del(urls);
+  } catch (error) {
+    console.error('Could not remove form uploads:', error);
+  }
+}
 
 async function requireManager(): Promise<SessionUser> {
   const { user } = await getSession();
@@ -213,9 +231,13 @@ export async function setFormStatus(id: string, status: 'DRAFT' | 'OPEN' | 'CLOS
 export async function deleteForm(id: string): Promise<ActionResult> {
   try {
     const user = await requireManager();
-    const form = await prisma.form.findUnique({ where: { id }, include: { _count: { select: { responses: true } } } });
+    const form = await prisma.form.findUnique({
+      where: { id },
+      include: { _count: { select: { responses: true } }, responses: { select: { answers: true } } },
+    });
     if (!form) return { success: false, error: 'Form not found' };
     await prisma.form.delete({ where: { id } });
+    await removeUploads(uploadedUrls(form.responses.map((r) => r.answers)));
     await auditLog({
       userId: user.id, action: 'DELETE', module: 'FORMS', entityType: 'FORM', entityId: id,
       description: `Deleted form "${form.title}" and its ${form._count.responses} response(s)`,
@@ -289,6 +311,7 @@ export async function deleteFormResponse(id: string): Promise<ActionResult> {
     const response = await prisma.formResponse.findUnique({ where: { id }, include: { form: { select: { title: true } } } });
     if (!response) return { success: false, error: 'Response not found' };
     await prisma.formResponse.delete({ where: { id } });
+    await removeUploads(uploadedUrls([response.answers]));
     await auditLog({
       userId: user.id, action: 'DELETE', module: 'FORMS', entityType: 'FORM_RESPONSE', entityId: id,
       description: `Deleted a response to "${response.form.title}"`,
@@ -372,7 +395,8 @@ export async function submitFormResponse(
     }
     if (payloadSize > MAX_PAYLOAD) return { success: false, error: 'The response is too long' };
 
-    const result = validateAnswers(readQuestions(form.questions), answers);
+    // The slug ties every attached file to this form's own upload folder.
+    const result = validateAnswers(readQuestions(form.questions), answers, form.slug);
     if (!result.ok) {
       return { success: false, error: 'Some answers need attention', data: { errors: result.errors } };
     }

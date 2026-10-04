@@ -21,6 +21,16 @@ export function PublicForm({ slug, form, preview, respondent }: PublicFormProps)
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  // Questions with an upload in flight. Submitting waits for them.
+  const [uploading, setUploading] = useState<Set<string>>(new Set());
+
+  const setBusy = (id: string, busy: boolean) =>
+    setUploading((s) => {
+      const next = new Set(s);
+      if (busy) next.add(id);
+      else next.delete(id);
+      return next;
+    });
 
   const setAnswer = (id: string, value: Answer) => {
     setAnswers((a) => ({ ...a, [id]: value }));
@@ -103,7 +113,15 @@ export function PublicForm({ slug, form, preview, respondent }: PublicFormProps)
 
       {form.questions.map((q) => (
         <div key={q.id} id={`q-${q.id}`}>
-          <QuestionField question={q} value={answers[q.id]} onChange={(v) => setAnswer(q.id, v)} error={errors[q.id]} disabled={preview} />
+          <QuestionField
+            question={q}
+            value={answers[q.id]}
+            onChange={(v) => setAnswer(q.id, v)}
+            error={errors[q.id]}
+            disabled={preview}
+            slug={preview ? undefined : slug}
+            onBusyChange={(busy) => setBusy(q.id, busy)}
+          />
         </div>
       ))}
 
@@ -122,9 +140,9 @@ export function PublicForm({ slug, form, preview, respondent }: PublicFormProps)
       )}
 
       <div className="flex items-center justify-between gap-3">
-        <Button type="submit" size="lg" disabled={submitting || preview} className="px-8">
-          {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Submit
+        <Button type="submit" size="lg" disabled={submitting || preview || uploading.size > 0} className="px-8">
+          {(submitting || uploading.size > 0) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {uploading.size > 0 ? 'Uploading...' : 'Submit'}
         </Button>
         {!preview && Object.keys(answers).length > 0 && (
           <button

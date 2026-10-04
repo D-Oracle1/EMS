@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils';
 import { saveForm, type FormInput } from '@/actions/form.actions';
 import {
   QUESTION_TYPES, QUESTION_TYPE_LABEL, blankQuestion, hasOptions, newQuestionId, normalizeQuestions,
-  type FormQuestion, type QuestionType,
+  FILE_KINDS, FILE_KIND_LABEL, FILE_LIMITS, type FormQuestion, type QuestionType, type FileKind,
 } from '@/lib/forms';
 
 export interface BuilderForm {
@@ -69,6 +69,7 @@ export function FormBuilder({ initial }: { initial: BuilderForm }) {
     const patch: Partial<FormQuestion> = { type };
     if (hasOptions(type) && !(q.options && q.options.length)) patch.options = ['Option 1'];
     if (type === 'SCALE' && q.scaleMax == null) Object.assign(patch, { scaleMin: 1, scaleMax: 5 });
+    if (type === 'FILE' && q.maxFiles == null) Object.assign(patch, { maxFiles: 1, maxSizeMb: FILE_LIMITS.maxSizeMb });
     updateQuestion(q.id, patch);
   };
 
@@ -269,7 +270,8 @@ export function FormBuilder({ initial }: { initial: BuilderForm }) {
 
             {hasOptions(q.type) && <OptionsEditor q={q} onChange={(options) => updateQuestion(q.id, { options })} />}
             {q.type === 'SCALE' && <ScaleEditor q={q} onChange={(patch) => updateQuestion(q.id, patch)} />}
-            {!hasOptions(q.type) && q.type !== 'SCALE' && (
+            {q.type === 'FILE' && <FileEditor q={q} onChange={(patch) => updateQuestion(q.id, patch)} />}
+            {!hasOptions(q.type) && q.type !== 'SCALE' && q.type !== 'FILE' && (
               <p className="rounded-lg border border-dashed px-3 py-2 text-sm text-muted-foreground">
                 {QUESTION_TYPE_LABEL[q.type]} answer
               </p>
@@ -404,6 +406,56 @@ function ScaleEditor({ q, onChange }: { q: FormQuestion; onChange: (patch: Parti
       <div className="grid grid-cols-2 gap-2">
         <Input value={q.scaleMinLabel ?? ''} onChange={(e) => onChange({ scaleMinLabel: e.target.value })} placeholder="Low label" maxLength={60} className="h-10" />
         <Input value={q.scaleMaxLabel ?? ''} onChange={(e) => onChange({ scaleMaxLabel: e.target.value })} placeholder="High label" maxLength={60} className="h-10" />
+      </div>
+    </div>
+  );
+}
+
+function FileEditor({ q, onChange }: { q: FormQuestion; onChange: (patch: Partial<FormQuestion>) => void }) {
+  // No kinds stored means every kind is accepted.
+  const kinds: FileKind[] = q.fileKinds && q.fileKinds.length ? q.fileKinds : [...FILE_KINDS];
+  const toggle = (kind: FileKind) => {
+    const next = kinds.includes(kind) ? kinds.filter((k) => k !== kind) : [...kinds, kind];
+    if (next.length === 0) return; // at least one kind stays ticked
+    onChange({ fileKinds: next.length === FILE_KINDS.length ? undefined : next });
+  };
+  return (
+    <div className="space-y-3 rounded-xl border border-dashed p-3">
+      <div>
+        <p className="mb-2 text-xs font-medium text-muted-foreground">Accepted files</p>
+        <div className="flex flex-wrap gap-2">
+          {FILE_KINDS.map((kind) => {
+            const on = kinds.includes(kind);
+            return (
+              <button
+                key={kind}
+                type="button"
+                onClick={() => toggle(kind)}
+                aria-pressed={on}
+                className={cn(
+                  'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                  on ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-200' : 'text-muted-foreground hover:bg-muted'
+                )}
+              >
+                {FILE_KIND_LABEL[kind]}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <label className="space-y-1">
+          <span className="block text-xs font-medium text-muted-foreground">Most files</span>
+          <select value={q.maxFiles ?? 1} onChange={(e) => onChange({ maxFiles: Number(e.target.value) })} className={selectClass}>
+            {Array.from({ length: FILE_LIMITS.maxFiles }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </label>
+        <label className="space-y-1">
+          <span className="block text-xs font-medium text-muted-foreground">Largest file</span>
+          <select value={q.maxSizeMb ?? FILE_LIMITS.maxSizeMb} onChange={(e) => onChange({ maxSizeMb: Number(e.target.value) })} className={selectClass}>
+            {[1, 2, 5, 10].map((n) => <option key={n} value={n}>{n} MB</option>)}
+          </select>
+        </label>
       </div>
     </div>
   );

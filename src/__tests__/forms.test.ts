@@ -40,7 +40,7 @@ vi.mock('@/lib/notifications', () => ({ createNotificationForUsers: vi.fn(async 
 import { getPublicForm, submitFormResponse } from '@/actions/form.actions';
 import {
   canManageForms, normalizeQuestions, validateAnswers, summarize, responsesCsv, makeSlug,
-  isAcceptingResponses, type FormQuestion, type Answers,
+  isAcceptingResponses, isOwnUpload, type FormQuestion, type Answers,
 } from '@/lib/forms';
 
 const questions: FormQuestion[] = [
@@ -250,5 +250,48 @@ describe('submitFormResponse', () => {
     expect((await submitFormResponse('survey-abc123', good)).error).toMatch(/already responded/);
     h.existing = null;
     expect((await submitFormResponse('survey-abc123', good)).success).toBe(true);
+  });
+});
+
+describe('file questions', () => {
+  const fileQ: FormQuestion = { id: 'cv', type: 'FILE', label: 'Your CV', required: true, maxFiles: 2, maxSizeMb: 5, fileKinds: ['PDF'] };
+  const host = 'https://abc123xyz.public.blob.vercel-storage.com';
+  const file = (path: string, size = 1000) => ({ url: `${host}/${path}`, name: 'cv.pdf', size, type: 'application/pdf' });
+
+  it('keeps kinds, count and size within bounds when saved', () => {
+    const [q] = normalizeQuestions([{ id: 'cv', type: 'FILE', label: 'CV', fileKinds: ['PDF', 'NOPE'], maxFiles: 99, maxSizeMb: 500 }]);
+    expect(q).toMatchObject({ fileKinds: ['PDF'], maxFiles: 5, maxSizeMb: 10 });
+    const [all] = normalizeQuestions([{ type: 'FILE', label: 'Any', fileKinds: ['IMAGE', 'PDF', 'DOCUMENT', 'SPREADSHEET'] }]);
+    expect(all.fileKinds).toBeUndefined();
+  });
+
+  it('accepts only files uploaded to this form and question', () => {
+    expect(isOwnUpload(`${host}/forms/survey-abc123/cv/cv-Xy12.pdf`, 'survey-abc123', 'cv')).toBe(true);
+    expect(isOwnUpload(`${host}/forms/other-form/cv/cv.pdf`, 'survey-abc123', 'cv')).toBe(false);
+    expect(isOwnUpload(`${host}/forms/survey-abc123/photo/cv.pdf`, 'survey-abc123', 'cv')).toBe(false);
+    expect(isOwnUpload('https://evil.example.com/forms/survey-abc123/cv/x.pdf', 'survey-abc123', 'cv')).toBe(false);
+    expect(isOwnUpload('http://abc.public.blob.vercel-storage.com/forms/survey-abc123/cv/x.pdf', 'survey-abc123', 'cv')).toBe(false);
+  });
+
+  it('checks count, size and origin on submission', () => {
+    const ok = validateAnswers([fileQ], { cv: [file('forms/s1/cv/a.pdf')] }, 's1');
+    expect(ok.ok).toBe(true);
+    const tooMany = validateAnswers([fileQ], { cv: [1, 2, 3].map((i) => file(`forms/s1/cv/${i}.pdf`)) }, 's1');
+    expect(!tooMany.ok && tooMany.errors.cv).toMatch(/at most 2/);
+    const tooBig = validateAnswers([fileQ], { cv: [file('forms/s1/cv/a.pdf', 6 * 1024 * 1024)] }, 's1');
+    expect(!tooBig.ok && tooBig.errors.cv).toMatch(/under 5 MB/);
+    const foreign = validateAnswers([fileQ], { cv: [file('forms/s2/cv/a.pdf')] }, 's1');
+    expect(!foreign.ok && foreign.errors.cv).toMatch(/verified/);
+    const junk = validateAnswers([fileQ], { cv: 'C:/cv.pdf' }, 's1');
+    expect(!junk.ok && junk.errors.cv).toMatch(/could not be read/);
+    const missing = validateAnswers([fileQ], { cv: [] }, 's1');
+    expect(!missing.ok && missing.errors.cv).toMatch(/required/);
+  });
+
+  it('summarises uploads and exports their links', () => {
+    const answers: Answers[] = [{ cv: [file('forms/s1/cv/a.pdf'), file('forms/s1/cv/b.pdf')] }, {}];
+    expect(summarize(fileQ, answers)).toMatchObject({ kind: 'files', answered: 1, fileCount: 2 });
+    const csv = responsesCsv([fileQ], [{ submittedAt: '2026-10-04T09:00:00.000Z', respondent: 'Ada', answers: answers[0] }]);
+    expect(csv.split('\r\n')[1]).toBe(`2026-10-04T09:00:00.000Z,Ada,${host}/forms/s1/cv/a.pdf ${host}/forms/s1/cv/b.pdf`);
   });
 });

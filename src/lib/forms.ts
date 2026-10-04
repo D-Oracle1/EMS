@@ -21,6 +21,7 @@ export const QUESTION_TYPES = [
   'PHONE',
   'DATE',
   'SCALE',
+  'FILE',
 ] as const;
 
 export type QuestionType = (typeof QUESTION_TYPES)[number];
@@ -36,7 +37,67 @@ export const QUESTION_TYPE_LABEL: Record<QuestionType, string> = {
   PHONE: 'Phone number',
   DATE: 'Date',
   SCALE: 'Linear scale',
+  FILE: 'File upload',
 };
+
+/** The kinds of file a FILE question can accept. */
+export const FILE_KINDS = ['IMAGE', 'PDF', 'DOCUMENT', 'SPREADSHEET'] as const;
+export type FileKind = (typeof FILE_KINDS)[number];
+
+export const FILE_KIND_LABEL: Record<FileKind, string> = {
+  IMAGE: 'Images',
+  PDF: 'PDF',
+  DOCUMENT: 'Documents',
+  SPREADSHEET: 'Spreadsheets',
+};
+
+/** Media types per kind: what the upload token allows. */
+export const FILE_KIND_TYPES: Record<FileKind, string[]> = {
+  IMAGE: ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif'],
+  PDF: ['application/pdf'],
+  DOCUMENT: [
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'text/plain',
+  ],
+  SPREADSHEET: [
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'text/csv',
+  ],
+};
+
+/** File extensions per kind, for the picker (some phones report no media type). */
+export const FILE_KIND_EXTENSIONS: Record<FileKind, string[]> = {
+  IMAGE: ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.heic', '.heif'],
+  PDF: ['.pdf'],
+  DOCUMENT: ['.doc', '.docx', '.txt'],
+  SPREADSHEET: ['.xls', '.xlsx', '.csv'],
+};
+
+export const FILE_LIMITS = { maxFiles: 5, maxSizeMb: 10 };
+
+export function fileKindsOf(q: Pick<FormQuestion, 'fileKinds'>): FileKind[] {
+  return q.fileKinds && q.fileKinds.length ? q.fileKinds : [...FILE_KINDS];
+}
+
+export function allowedFileTypes(q: Pick<FormQuestion, 'fileKinds'>): string[] {
+  return fileKindsOf(q).flatMap((k) => FILE_KIND_TYPES[k]);
+}
+
+/** The `accept` attribute for the file picker. */
+export function fileAccept(q: Pick<FormQuestion, 'fileKinds'>): string {
+  return fileKindsOf(q).flatMap((k) => [...FILE_KIND_EXTENSIONS[k], ...FILE_KIND_TYPES[k]]).join(',');
+}
+
+/**
+ * Where a question's uploads live in Blob storage. The upload route only
+ * issues a token for paths under this prefix, and a submission only accepts
+ * files whose links sit under it, so nobody can attach a file from elsewhere.
+ */
+export function fileUploadPrefix(slug: string, questionId: string): string {
+  return `forms/${slug}/${questionId}/`;
+}
 
 export interface FormQuestion {
   id: string;
@@ -51,9 +112,21 @@ export interface FormQuestion {
   scaleMax?: number;
   scaleMinLabel?: string;
   scaleMaxLabel?: string;
+  /** FILE: accepted kinds (all when empty), how many files, how large each. */
+  fileKinds?: FileKind[];
+  maxFiles?: number;
+  maxSizeMb?: number;
 }
 
-export type Answer = string | string[] | number;
+/** An uploaded file, as stored in a response. */
+export interface FileAnswer {
+  url: string;
+  name: string;
+  size: number;
+  type: string;
+}
+
+export type Answer = string | string[] | number | FileAnswer[];
 export type Answers = Record<string, Answer>;
 
 export const LIMITS = {
@@ -91,6 +164,7 @@ export function blankQuestion(type: QuestionType = 'SHORT_TEXT'): FormQuestion {
     required: false,
     ...(hasOptions(type) ? { options: ['Option 1'] } : {}),
     ...(type === 'SCALE' ? { scaleMin: 1, scaleMax: 5 } : {}),
+    ...(type === 'FILE' ? { maxFiles: 1, maxSizeMb: FILE_LIMITS.maxSizeMb } : {}),
   };
 }
 
@@ -155,9 +229,20 @@ export function normalizeQuestions(input: unknown): FormQuestion[] {
       if (hi) question.scaleMaxLabel = hi;
     }
 
+    if (type === 'FILE') {
+      const ticked = Array.isArray(q.fileKinds) ? (q.fileKinds as unknown[]) : [];
+      const kinds = FILE_KINDS.filter((k) => ticked.includes(k));
+      // Every kind ticked is the same as none: store none, meaning "any".
+      if (kinds.length && kinds.length < FILE_KINDS.length) question.fileKinds = kinds;
+      question.maxFiles = clamp(Math.round(Number(q.maxFiles) || 1), 1, FILE_LIMITS.maxFiles);
+      question.maxSizeMb = clamp(Math.round(Number(q.maxSizeMb) || FILE_LIMITS.maxSizeMb), 1, FILE_LIMITS.maxSizeMb);
+    }
+
     return question;
   });
 }
+
+const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n));
 
 /** Reads the stored JSON back as questions, dropping anything malformed. */
 export function readQuestions(value: unknown): FormQuestion[] {
@@ -177,7 +262,9 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
  */
 export function validateAnswers(
   questions: FormQuestion[],
-  input: unknown
+  input: unknown,
+  /** The form's slug. The server passes it, so uploaded files must belong to this form. */
+  slug?: string
 ): { ok: true; answers: Answers } | { ok: false; errors: Record<string, string> } {
   const raw = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
   const answers: Answers = {};
@@ -263,10 +350,61 @@ export function validateAnswers(
         answers[q.id] = v;
         break;
       }
+      case 'FILE': {
+        const files = readFiles(value);
+        const most = q.maxFiles ?? 1;
+        const mb = q.maxSizeMb ?? FILE_LIMITS.maxSizeMb;
+        if (!files) { errors[q.id] = 'The upload could not be read. Please attach the file again'; break; }
+        if (files.length > most) { errors[q.id] = `Attach at most ${most} file${most === 1 ? '' : 's'}`; break; }
+        if (files.some((f) => f.size > mb * 1024 * 1024)) { errors[q.id] = `Each file must be under ${mb} MB`; break; }
+        if (slug && !files.every((f) => isOwnUpload(f.url, slug, q.id))) {
+          errors[q.id] = 'The upload could not be verified. Please attach the file again';
+          break;
+        }
+        answers[q.id] = files;
+        break;
+      }
     }
   }
 
   return Object.keys(errors).length ? { ok: false, errors } : { ok: true, answers };
+}
+
+/** File answers from the page or the database, or null when malformed. */
+export function readFiles(value: unknown): FileAnswer[] | null {
+  if (!Array.isArray(value)) return null;
+  const files: FileAnswer[] = [];
+  for (const f of value) {
+    if (!f || typeof f !== 'object') return null;
+    const { url, name, size, type } = f as Record<string, unknown>;
+    if (typeof url !== 'string' || typeof name !== 'string' || typeof size !== 'number') return null;
+    files.push({ url, name: name.slice(0, 200), size, type: typeof type === 'string' ? type.slice(0, 120) : '' });
+  }
+  return files;
+}
+
+export function isFileAnswer(value: Answer | undefined): value is FileAnswer[] {
+  return Array.isArray(value) && value.length > 0 && typeof value[0] === 'object';
+}
+
+/** A link in this project's Blob store, under the form's own upload prefix for the question. */
+export function isOwnUpload(url: string, slug: string, questionId: string): boolean {
+  try {
+    const u = new URL(url);
+    return (
+      u.protocol === 'https:' &&
+      /^[a-z0-9]+\.public\.blob\.vercel-storage\.com$/i.test(u.hostname) &&
+      decodeURIComponent(u.pathname).startsWith(`/${fileUploadPrefix(slug, questionId)}`)
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 /** Whether a form takes responses right now. */
@@ -278,6 +416,7 @@ export function isAcceptingResponses(form: { status: string; closesAt: Date | st
 /** One answer as plain text, for tables and CSV. */
 export function answerText(value: Answer | undefined): string {
   if (value == null) return '';
+  if (isFileAnswer(value)) return value.map((f) => f.name).join(', ');
   if (Array.isArray(value)) return value.join(', ');
   return String(value);
 }
@@ -286,7 +425,8 @@ export type QuestionSummary =
   | { kind: 'choices'; answered: number; counts: { option: string; count: number }[] }
   | { kind: 'scale'; answered: number; average: number | null; counts: { option: string; count: number }[] }
   | { kind: 'number'; answered: number; average: number | null; min: number | null; max: number | null }
-  | { kind: 'text'; answered: number; latest: string[] };
+  | { kind: 'text'; answered: number; latest: string[] }
+  | { kind: 'files'; answered: number; fileCount: number; latest: FileAnswer[] };
 
 /** Per-question roll-up for the responses page. */
 export function summarize(question: FormQuestion, responses: Answers[], latestCount = 10): QuestionSummary {
@@ -297,7 +437,7 @@ export function summarize(question: FormQuestion, responses: Answers[], latestCo
     const options = question.options ?? [];
     const tally = new Map<string, number>(options.map((o) => [o, 0]));
     for (const v of values) {
-      for (const choice of Array.isArray(v) ? v : [String(v)]) {
+      for (const choice of Array.isArray(v) ? v.map(String) : [String(v)]) {
         tally.set(choice, (tally.get(choice) ?? 0) + 1);
       }
     }
@@ -325,6 +465,11 @@ export function summarize(question: FormQuestion, responses: Answers[], latestCo
     };
   }
 
+  if (question.type === 'FILE') {
+    const files = values.flatMap((v) => (isFileAnswer(v) ? v : []));
+    return { kind: 'files', answered, fileCount: files.length, latest: files.slice(0, latestCount) };
+  }
+
   return { kind: 'text', answered, latest: values.slice(0, latestCount).map((v) => answerText(v)) };
 }
 
@@ -345,7 +490,11 @@ export function responsesCsv(
   const rows = responses.map((r) => [
     new Date(r.submittedAt).toISOString(),
     r.respondent ?? 'Anonymous',
-    ...questions.map((q) => answerText(r.answers[q.id])),
+    // Files export as their links, so the sheet opens straight onto them.
+    ...questions.map((q) => {
+      const v = r.answers[q.id];
+      return isFileAnswer(v) ? v.map((f) => f.url).join(' ') : answerText(v);
+    }),
   ]);
   return [header, ...rows].map((row) => row.map(csvCell).join(',')).join('\r\n');
 }
