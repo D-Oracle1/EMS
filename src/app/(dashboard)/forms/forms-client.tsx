@@ -16,6 +16,7 @@ import { setFormStatus, deleteForm, duplicateForm, createOnboardingForm, type ge
 import { Badge } from '@/components/ui/badge';
 import type { ActionResult } from '@/types';
 import { StatusBadge, AudienceBadge, copyShareLink } from './form-bits';
+import { ShareFormButton } from './share-form-button';
 
 type FormRow = Awaited<ReturnType<typeof getForms>>[number];
 
@@ -140,9 +141,12 @@ export function FormsClient({ forms }: { forms: FormRow[] }) {
                     <Link href={`/forms/${f.id}/edit`}><Pencil className="mr-1.5 h-3.5 w-3.5" />Edit</Link>
                   </Button>
                   {f.status !== 'DRAFT' && (
-                    <Button size="sm" variant="secondary" onClick={() => copyShareLink(f.slug)}>
-                      <Link2 className="mr-1.5 h-3.5 w-3.5" />Link
-                    </Button>
+                    <>
+                      <ShareFormButton slug={f.slug} title={f.title} />
+                      <Button size="sm" variant="secondary" onClick={() => copyShareLink(f.slug)}>
+                        <Link2 className="mr-1.5 h-3.5 w-3.5" />Link
+                      </Button>
+                    </>
                   )}
                   {f.status === 'OPEN' ? (
                     <Button size="sm" variant="secondary" disabled={busy === f.id}

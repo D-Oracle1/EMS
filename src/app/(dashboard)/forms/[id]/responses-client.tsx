@@ -19,6 +19,7 @@ import {
 } from '@/lib/forms';
 import { setFormStatus, deleteFormResponse, type getFormResponses } from '@/actions/form.actions';
 import { StatusBadge, AudienceBadge, copyShareLink, useShareUrl } from '../form-bits';
+import { ShareFormButton } from '../share-form-button';
 
 type FormData = NonNullable<Awaited<ReturnType<typeof getFormResponses>>>;
 
@@ -117,9 +118,12 @@ export function ResponsesClient({ form }: { form: FormData }) {
           <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center">
             <span className="shrink-0 text-sm font-medium">Share link</span>
             <Input readOnly value={link} onFocus={(e) => e.currentTarget.select()} className="font-mono text-xs" />
-            <Button variant="secondary" className="shrink-0" onClick={() => copyShareLink(form.slug)}>
-              <Link2 className="mr-2 h-4 w-4" />Copy
-            </Button>
+            <div className="flex shrink-0 gap-2">
+              <Button variant="secondary" className="flex-1 sm:flex-none" onClick={() => copyShareLink(form.slug)}>
+                <Link2 className="mr-2 h-4 w-4" />Copy
+              </Button>
+              <ShareFormButton slug={form.slug} title={form.title} variant="full" />
+            </div>
           </CardContent>
         </Card>
       ) : (
