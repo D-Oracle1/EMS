@@ -1,14 +1,8 @@
-import { auth } from '@/lib/auth';
-import { redirect } from 'next/navigation';
-import type { SessionUser } from '@/types';
-import { PortalClient } from './portal-client';
+import { requireCustomerPage } from '@/lib/portal-session';
+import { getMyPortfolio } from '@/actions/portfolio.actions';
+import { HomeView } from '@/components/portal/home-view';
 
-export default async function PortalPage() {
-  const session = await auth();
-  if (!session) redirect('/login');
-  const user = session.user as SessionUser;
-  // Staff shouldn't be here; middleware also enforces this.
-  if (user.userType !== 'customer') redirect('/dashboard');
-
-  return <PortalClient />;
+export default async function PortalHome() {
+  await requireCustomerPage();
+  return <HomeView data={await getMyPortfolio()} />;
 }

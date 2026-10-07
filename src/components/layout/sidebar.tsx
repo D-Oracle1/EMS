@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { ChevronDown, Pin, PinOff } from 'lucide-react';
-import { BrandTile, BrandLogo } from '@/components/brand';
+import { BrandTile, BrandWordmark } from '@/components/brand';
 import { cn } from '@/lib/utils';
 import { resolveNav } from '@/lib/navigation';
 import { hidesGenericDashboard } from '@/lib/landing';
@@ -90,7 +90,7 @@ export function Sidebar({ pinned = false, onPinnedChange }: SidebarProps) {
           <Link href="/dashboard" className="group/logo relative flex items-center gap-2.5" aria-label="Hy-Link Finance home">
             <BrandTile className="h-9 w-9 transition-transform duration-200 group-hover/logo:scale-105" />
             <span className={cn('whitespace-nowrap transition-opacity duration-200', reveal)}>
-              <BrandLogo tone="light" className="w-32" />
+              <BrandWordmark className="w-[6.5rem]" />
               <span className="mt-0.5 block text-[10px] font-medium uppercase tracking-widest text-slate-500">
                 Enterprise System
               </span>

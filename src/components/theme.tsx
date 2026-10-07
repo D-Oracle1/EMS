@@ -28,6 +28,9 @@ export const themeScript = `
     var stored = localStorage.getItem('${STORAGE_KEY}');
     var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     var theme = stored === 'light' || stored === 'dark' ? stored : (prefersDark ? 'dark' : 'light');
+    // The customer app (/portal) is designed light only, like a bank app:
+    // a phone in dark mode must not turn half of it dark.
+    if (location.pathname.indexOf('/portal') === 0) theme = 'light';
     document.documentElement.classList.toggle('dark', theme === 'dark');
     document.documentElement.style.colorScheme = theme;
   } catch (e) {}

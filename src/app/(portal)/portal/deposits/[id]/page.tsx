@@ -25,17 +25,17 @@ export default async function MyDepositPage({ params }: { params: Promise<{ id: 
   if (!d) notFound();
 
   return (
-    <div className="space-y-6 animate-rise">
+    <div className="mx-auto max-w-3xl space-y-6">
       <div className="flex items-center justify-between gap-2">
-        <BackToPortfolio />
+        <BackToPortfolio href="/portal/accounts" label="Accounts" />
         <PrintButton label="Certificate" />
       </div>
 
-      <section className="premium-card space-y-5 p-6 print:border-2 print:shadow-none">
+      <section className="rounded-2xl border border-slate-200 bg-white space-y-5 p-6 print:border-2 print:shadow-none">
         <div className="flex flex-wrap items-start justify-between gap-4 border-b pb-4">
           <BrandLogo className="w-32" />
           <div className="text-right">
-            <p className="text-xs uppercase tracking-wider text-muted-foreground">Fixed deposit certificate</p>
+            <p className="text-xs uppercase tracking-wider text-slate-500">Fixed deposit certificate</p>
             <p className="font-mono text-lg font-bold">{d.certificateNumber}</p>
             <StatusPill {...accountStatus(d.status)} />
           </div>
@@ -60,7 +60,7 @@ export default async function MyDepositPage({ params }: { params: Promise<{ id: 
           <div className="space-y-2 border-t pt-4 print:hidden">
             <div className="flex flex-wrap justify-between gap-2 text-sm">
               <span>Interest earned so far <Money value={d.accruedInterest} className="font-semibold text-emerald-700 dark:text-emerald-300" /></span>
-              <span className="text-muted-foreground">{d.daysLeft} days to maturity</span>
+              <span className="text-slate-500">{d.daysLeft} days to maturity</span>
             </div>
             <ProgressBar value={d.progress} />
           </div>
@@ -71,7 +71,7 @@ export default async function MyDepositPage({ params }: { params: Promise<{ id: 
           </p>
         )}
 
-        <p className="border-t pt-4 text-[11px] text-muted-foreground">
+        <p className="border-t pt-4 text-[11px] text-slate-500">
           Hy-Link Finance Limited · Head office: Suite 24, Long John Plaza, 34 Agip Road, Rumueme, Port Harcourt · 0904 096 4934.
           This certificate shows Hy-Link&apos;s record of your deposit on the day it was printed.
         </p>

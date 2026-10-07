@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { ArrowLeft, Printer } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
+import { Amount } from './balance-privacy';
 
 /**
  * Pieces of the customer's portfolio screens.
@@ -19,12 +20,19 @@ export const HOLDING_COLOR: Record<string, string> = {
   FIXED_DEPOSIT: 'bg-[#1baf7a] dark:bg-[#199e70]',
 };
 
+/** An amount, hidden with the rest when the customer hides their balances. */
 export function Money({ value, className }: { value: number; className?: string }) {
-  return <span className={cn('tabular-nums', className)}>{formatCurrency(value)}</span>;
+  return <Amount value={value} className={className} />;
 }
 
 export function formatDay(iso: string) {
   return new Date(iso).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+/** A date for lists: "11 Oct", with the year only when it is not this year. */
+export function shortDay(iso: string, now = new Date()) {
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: d.getFullYear() === now.getFullYear() ? undefined : 'numeric' });
 }
 
 /** How far through a term or a loan: a thin track with a label. */
@@ -68,7 +76,7 @@ export function AllocationBar({ items }: { items: { kind: string; label: string;
             key={a.kind}
             className={cn('h-full first:rounded-l-full last:rounded-r-full', HOLDING_COLOR[a.kind])}
             style={{ width: `${Math.max(a.share * 100, 1.5)}%` }}
-            title={`${a.label}: ${formatCurrency(a.value)} (${Math.round(a.share * 100)}%)`}
+            title={`${a.label}: ${Math.round(a.share * 100)}%`}
           />
         ))}
       </div>
@@ -77,7 +85,7 @@ export function AllocationBar({ items }: { items: { kind: string; label: string;
           <li key={a.kind} className="flex items-center gap-2">
             <span className={cn('h-2.5 w-2.5 shrink-0 rounded-sm', HOLDING_COLOR[a.kind])} aria-hidden />
             <span className="min-w-0 flex-1 truncate text-muted-foreground">{a.label}</span>
-            <span className="font-medium tabular-nums">{formatCurrency(a.value)}</span>
+            <Amount value={a.value} className="font-medium" />
             <span className="w-9 text-right text-xs tabular-nums text-muted-foreground">{Math.round(a.share * 100)}%</span>
           </li>
         ))}
@@ -117,10 +125,10 @@ export function accountStatus(status: string): { label: string; tone: keyof type
   }
 }
 
-export function BackToPortfolio() {
+export function BackToPortfolio({ href = '/portal', label = 'Home' }: { href?: string; label?: string }) {
   return (
-    <Link href="/portal" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground print:hidden">
-      <ArrowLeft className="h-4 w-4" />Portfolio
+    <Link href={href} className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900 print:hidden">
+      <ArrowLeft className="h-4 w-4" />{label}
     </Link>
   );
 }

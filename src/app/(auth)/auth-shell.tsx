@@ -52,15 +52,20 @@ export function AuthShell({ eyebrow, title, lede, children, footer, panel }: Aut
   return (
     <main className="min-h-screen bg-white text-slate-800 lg:grid lg:grid-cols-2">
       {/* Form side */}
-      <div className="flex flex-col justify-center px-6 pb-12 pt-[calc(3rem+env(safe-area-inset-top))] sm:px-12 lg:px-16 xl:px-24">
+      {/* Full height on phones too, so a short form (sign-in) sits in the
+          middle of the screen as it does on desktop, not at the top. */}
+      <div className="flex min-h-screen flex-col justify-center px-6 pb-[calc(3rem+env(safe-area-inset-bottom))] pt-[calc(3rem+env(safe-area-inset-top))] sm:px-12 lg:px-16 xl:px-24">
         <div className="mx-auto w-full max-w-md">
-          <a href={SITE} className="mb-10 inline-block">
+          {/* Block, not inline-block: inline, the eyebrow below shared the
+              logo's line and started where the logo ended, out of line with
+              the heading. */}
+          <a href={SITE} className="mb-10 block w-fit">
             <BrandLogo className="w-36" />
           </a>
 
-          <span className="text-xs font-bold uppercase tracking-[0.18em] text-orange-600">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-orange-600">
             {eyebrow}
-          </span>
+          </p>
           <h1 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">{title}</h1>
           <p className="mt-3 text-sm leading-relaxed text-slate-500">{lede}</p>
 

@@ -22,8 +22,8 @@ import { requestMyWithdrawal, getPortalLoanProducts, applyForLoan, updateMyProfi
 
 type LoanProduct = Awaited<ReturnType<typeof getPortalLoanProducts>>[number];
 
-export function WithdrawDialog({ accountId, accountNumber, balance, onDone }: {
-  accountId: string; accountNumber: string; balance: number; onDone: () => void;
+export function WithdrawDialog({ accountId, accountNumber, balance, onDone, trigger }: {
+  accountId: string; accountNumber: string; balance: number; onDone: () => void; trigger?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState('');
@@ -41,9 +41,11 @@ export function WithdrawDialog({ accountId, accountNumber, balance, onDone }: {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="rounded-full">
-          <ArrowDownCircle className="h-4 w-4 mr-1" /> Withdraw
-        </Button>
+        {trigger ?? (
+          <Button variant="outline" size="sm" className="rounded-full">
+            <ArrowDownCircle className="h-4 w-4 mr-1" /> Withdraw
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader><DialogTitle>Request Withdrawal</DialogTitle></DialogHeader>
@@ -71,7 +73,7 @@ export function WithdrawDialog({ accountId, accountNumber, balance, onDone }: {
   );
 }
 
-export function LoanApplyDialog({ onDone }: { onDone: () => void }) {
+export function LoanApplyDialog({ onDone, trigger }: { onDone: () => void; trigger?: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [products, setProducts] = useState<LoanProduct[]>([]);
   const [productId, setProductId] = useState('');
@@ -97,7 +99,7 @@ export function LoanApplyDialog({ onDone }: { onDone: () => void }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" className="rounded-full"><Plus className="h-4 w-4 mr-1" /> Apply for Loan</Button>
+        {trigger ?? <Button size="sm" className="rounded-full"><Plus className="h-4 w-4 mr-1" /> Apply for Loan</Button>}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader><DialogTitle>Apply for a Loan</DialogTitle></DialogHeader>
@@ -144,9 +146,10 @@ export function LoanApplyDialog({ onDone }: { onDone: () => void }) {
   );
 }
 
-export function ProfileDialog({ customer: c, onDone }: {
+export function ProfileDialog({ customer: c, onDone, trigger }: {
   customer: { name: string; customerNumber: string; phone: string | null; email: string | null; address: string | null };
   onDone: () => void;
+  trigger?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [phone, setPhone] = useState(c?.phone ?? '');
@@ -165,7 +168,7 @@ export function ProfileDialog({ customer: c, onDone }: {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="rounded-full"><User className="h-4 w-4 mr-1" /> Profile</Button>
+        {trigger ?? <Button variant="outline" size="sm" className="rounded-full"><User className="h-4 w-4 mr-1" /> Profile</Button>}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader><DialogTitle>My Profile</DialogTitle></DialogHeader>

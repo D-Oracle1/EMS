@@ -5,6 +5,8 @@
  *   mark.png        the "H" mark (the homepage's favicon)
  *   logo.png        the colour wordmark, for light backgrounds
  *   logo-white.png  the white wordmark, for dark backgrounds
+ *   wordmark-white.png  the white wordmark's words alone (logo-white.png
+ *                   cropped past its mark), to sit beside the colour BrandTile
  * The favicon, app icons and launch screens (src/app/icon.png, apple-icon.png,
  * favicon.ico, public/icons, public/splash) are generated from the same files.
  * On a rebrand, replace these and regenerate the icons.
@@ -34,6 +36,16 @@ export function BrandLogo({ tone = 'color', className }: { tone?: 'color' | 'lig
       className={cn('h-auto w-36 object-contain', className)}
     />
   );
+}
+
+/**
+ * The white words alone, for beside a BrandTile on a dark background: the
+ * full white logo carries its own white mark, which beside the colour tile
+ * showed the mark twice in two colours.
+ */
+export function BrandWordmark({ className }: { className?: string }) {
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src="/brand/wordmark-white.png" alt={BRAND_NAME} width={632} height={182} className={cn('h-auto w-28 object-contain', className)} />;
 }
 
 /**
