@@ -9,6 +9,7 @@ import { generateReference } from '@/lib/utils';
 import { createJournalEntry, getAccountByCode } from '@/lib/accounting-engine';
 import { createCustomerInTx, validateNewCustomer, type NewCustomerInput } from '@/lib/customer-registration';
 import { provisionCustomerLogin } from '@/lib/customer-auth';
+import { linkOpenedAccount, openingApplicationProblem } from '@/lib/referrals';
 import type { ActionResult } from '@/types';
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
@@ -126,9 +127,15 @@ export async function createFixedDeposit(data: {
   interestPayment?: string;
   maturityInstruction?: string;
   branchId?: string;
+  /** The approved fixed deposit application it is opened from (lib/referrals). */
+  applicationId?: string;
 }): Promise<ActionResult<{ id: string; certificateNumber: string }>> {
   try {
     const user = await requirePermission('FIXED_DEPOSITS:CREATE');
+    if (data.applicationId) {
+      const problem = await openingApplicationProblem(data.applicationId, data.customerId ?? '', 'FIXED_DEPOSIT');
+      if (problem) return { success: false, error: problem };
+    }
 
     if (!Number.isFinite(data.principalAmount) || data.principalAmount <= 0) {
       return { success: false, error: 'Principal amount must be greater than 0' };
@@ -247,6 +254,19 @@ export async function createFixedDeposit(data: {
       userId: user.id, action: 'CREATE', module: 'FIXED_DEPOSITS', entityType: 'FIXED_DEPOSIT', entityId: fd.id,
       description: `Created FD ${certificateNumber} for ${customerName}: ${data.principalAmount} at ${data.interestRate}% for ${data.tenure} days`,
     });
+
+    // Opened from an application: link it, and credit whoever shared the form.
+    // The account is open by now, so this never turns into a reported failure.
+    if (data.applicationId) {
+      try {
+        await linkOpenedAccount({
+          applicationId: data.applicationId, customerId, kind: 'FIXED_DEPOSIT', accountId: fd.id,
+          amount: data.principalAmount, recordedById: user.id,
+        });
+      } catch (error) {
+        console.error('Could not link the account to its application:', error);
+      }
+    }
 
     return { success: true, message: `FD ${certificateNumber} created`, data: { id: fd.id, certificateNumber } };
   } catch (error: any) {

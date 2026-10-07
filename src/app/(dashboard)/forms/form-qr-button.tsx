@@ -15,6 +15,8 @@ interface FormQrButtonProps {
   title: string;
   /** "icon" for a form card; "full" shows the words QR code beside it. */
   variant?: 'icon' | 'full';
+  /** A staff member's referral code: their personal link (lib/referrals). */
+  by?: string;
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -132,7 +134,7 @@ const fileName = (title: string) =>
   `${title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50) || 'form'}-qr.png`;
 
 /** Shows a form's link as a QR code, to scan from a screen, download or print as a poster. */
-export function FormQrButton({ slug, title, variant = 'icon' }: FormQrButtonProps) {
+export function FormQrButton({ slug, title, variant = 'icon', by }: FormQrButtonProps) {
   const [open, setOpen] = useState(false);
   const [image, setImage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -140,11 +142,11 @@ export function FormQrButton({ slug, title, variant = 'icon' }: FormQrButtonProp
   useEffect(() => {
     if (!open) return;
     let live = true;
-    poster(shareUrl(slug), title)
+    poster(shareUrl(slug, by), title)
       .then((src) => { if (live) setImage(src); })
       .catch(() => { if (live) toast.error('Could not make the QR code'); });
     return () => { live = false; };
-  }, [open, slug, title]);
+  }, [open, slug, title, by]);
 
   const download = () => {
     if (!image) return;

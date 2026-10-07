@@ -289,6 +289,7 @@ function PendingCard({
             <p className="text-xs text-muted-foreground">
               Submitted {formatDateTime(a.submittedAt)} · {a.formTitle}{a.branch ? ` · ${a.branch}` : ''}
             </p>
+            {a.referredBy && <p className="text-xs font-medium text-indigo-700 dark:text-indigo-300">Referred by {a.referredBy}</p>}
           </div>
           {a.reference && <Badge variant="outline" className="font-mono">{a.reference}</Badge>}
         </div>

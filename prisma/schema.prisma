@@ -216,6 +216,7 @@ model Staff {
   onboardedFrom                FormResponse?        @relation("OnboardedStaff")
   onboardingReviews            FormResponse[]       @relation("OnboardingReviewer")
   feeDiscountsGiven            FormResponse[]       @relation("FeeDiscountGiver")
+  formReferrals                FormResponse[]       @relation("FormReferrer")
   feePaymentsReceived          FeePayment[]         @relation("FeePaymentReceiver")
   feePaymentsReversed          FeePayment[]         @relation("FeePaymentReverser")
   penaltyWaivers               LoanPenaltyWaiver[]
@@ -1259,6 +1260,8 @@ model SavingsAccount {
   journalEntries     JournalEntry[]
   interestPostings   SavingsInterest[]
   marketingSales     MarketingSale[]
+  /// The application form it was opened from.
+  application        FormResponse?
 
   @@index([accountNumber])
   @@index([customerId])
@@ -1583,6 +1586,8 @@ model FixedDeposit {
   interestPayments FixedDepositInterest[]
   journalEntries   JournalEntry[]
   marketingSales   MarketingSale[]
+  /// The application form it was opened from.
+  application      FormResponse?
 
   @@index([certificateNumber])
   @@index([customerId])
@@ -3584,27 +3589,38 @@ model FormResponse {
 
   /// The form's fee, fixed when it was submitted (lib/fees): what the admin
   /// had set then, e.g. 7% of the amount applied for. Null: no fee.
-  feeDue         Decimal?  @db.Decimal(18, 2)
+  feeDue           Decimal?  @db.Decimal(18, 2)
   /// How the fee was worked out, e.g. "7% of NGN 500,000.00".
-  feeBasis       String?
+  feeBasis         String?
   /// Taken off the fee by a manager or admin, with their reason.
-  feeDiscount    Decimal   @default(0) @db.Decimal(18, 2)
-  discountReason String?
-  discountById   String?
-  discountAt     DateTime?
+  feeDiscount      Decimal   @default(0) @db.Decimal(18, 2)
+  discountReason   String?
+  discountById     String?
+  discountAt       DateTime?
   /// Loan applications: the loan created from it. Its processing fee was
   /// paid here, upfront, so the loan does not deduct it again.
-  loanId         String?   @unique
+  loanId           String?   @unique
+  /// Savings and partnership applications: the account opened from it.
+  savingsAccountId String?   @unique
+  /// Fixed deposit applications: the deposit opened from it.
+  fixedDepositId   String?   @unique
+  /// The staff member whose personal link the applicant used. When what
+  /// was applied for is opened (or a loan paid out), a sale is recorded in
+  /// their name, earning commission if they sell (lib/referrals).
+  referredById     String?
 
-  form           Form           @relation(fields: [formId], references: [id], onDelete: Cascade)
-  staff          Staff?         @relation("FormRespondent", fields: [staffId], references: [id])
-  onboardedStaff Staff?         @relation("OnboardedStaff", fields: [onboardedStaffId], references: [id])
-  reviewedBy     Staff?         @relation("OnboardingReviewer", fields: [reviewedById], references: [id])
-  customer       Customer?      @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  guarantorFor   FormResponse?  @relation("GuarantorFor", fields: [guarantorForId], references: [id], onDelete: SetNull)
-  guarantors     FormResponse[] @relation("GuarantorFor")
-  discountBy     Staff?         @relation("FeeDiscountGiver", fields: [discountById], references: [id])
-  loan           Loan?          @relation(fields: [loanId], references: [id], onDelete: SetNull)
+  form           Form            @relation(fields: [formId], references: [id], onDelete: Cascade)
+  staff          Staff?          @relation("FormRespondent", fields: [staffId], references: [id])
+  onboardedStaff Staff?          @relation("OnboardedStaff", fields: [onboardedStaffId], references: [id])
+  reviewedBy     Staff?          @relation("OnboardingReviewer", fields: [reviewedById], references: [id])
+  customer       Customer?       @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  guarantorFor   FormResponse?   @relation("GuarantorFor", fields: [guarantorForId], references: [id], onDelete: SetNull)
+  guarantors     FormResponse[]  @relation("GuarantorFor")
+  discountBy     Staff?          @relation("FeeDiscountGiver", fields: [discountById], references: [id])
+  loan           Loan?           @relation(fields: [loanId], references: [id], onDelete: SetNull)
+  savingsAccount SavingsAccount? @relation(fields: [savingsAccountId], references: [id], onDelete: SetNull)
+  fixedDeposit   FixedDeposit?   @relation(fields: [fixedDepositId], references: [id], onDelete: SetNull)
+  referredBy     Staff?          @relation("FormReferrer", fields: [referredById], references: [id], onDelete: SetNull)
   feePayments    FeePayment[]
 
   @@index([formId, submittedAt])
@@ -3612,6 +3628,7 @@ model FormResponse {
   @@index([onboardingStatus])
   @@index([customerId])
   @@index([guarantorForId])
+  @@index([referredById])
 }
 
 // ============================================================================

@@ -9,7 +9,7 @@ import { PublicForm } from './public-form';
  * A form's share link. Outside the dashboard on purpose: whoever opens it —
  * a customer, a job applicant, a member of staff — sees only the form.
  */
-type PageProps = { params: Promise<{ slug: string }>; searchParams: Promise<{ app?: string | string[] }> };
+type PageProps = { params: Promise<{ slug: string }>; searchParams: Promise<{ app?: string | string[]; by?: string | string[] }> };
 
 /** A guarantor's link carries the loan application's reference: /f/<slug>?app=LA-7K2M9Q. */
 const appParam = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
@@ -23,8 +23,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function FormPage({ params, searchParams }: PageProps) {
   const { slug } = await params;
-  const app = appParam((await searchParams).app);
-  const form = await getPublicForm(slug, app);
+  const query = await searchParams;
+  const app = appParam(query.app);
+  // A staff member's personal link: /f/<slug>?by=<employee id>.
+  const by = appParam(query.by);
+  const form = await getPublicForm(slug, app, by);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-indigo-50 via-background to-background px-4 pb-16 pt-[calc(1.5rem+env(safe-area-inset-top))] dark:from-indigo-950/40">
@@ -40,6 +43,8 @@ export default async function FormPage({ params, searchParams }: PageProps) {
             preview={form.preview}
             respondent={form.respondent}
             guaranteeing={form.guaranteeing}
+            sharedBy={form.sharedBy}
+            referralCode={form.sharedBy ? by : undefined}
           />
         ) : (
           <div className="rounded-3xl border bg-card p-8 text-center shadow-sm">

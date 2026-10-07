@@ -27,6 +27,7 @@ import {
 import { createCustomerInTx, validateNewCustomer, type NewCustomerInput } from '@/lib/customer-registration';
 import { notifyCustomerByEmail } from '@/lib/email';
 import { provisionCustomerLogin } from '@/lib/customer-auth';
+import { linkOpenedAccount, openingApplicationProblem } from '@/lib/referrals';
 import type { ActionResult } from '@/types';
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
@@ -354,9 +355,15 @@ export async function createFixedSavingsAccount(data: {
   initialDeposit: number;
   branchId?: string;
   startDate?: string;
+  /** The approved savings or partnership application it is opened from (lib/referrals). */
+  applicationId?: string;
 }): Promise<ActionResult<{ id: string; accountNumber: string }>> {
   try {
     const user = await requirePermission('SAVINGS:CREATE');
+    if (data.applicationId) {
+      const problem = await openingApplicationProblem(data.applicationId, data.customerId ?? '', 'SAVINGS');
+      if (problem) return { success: false, error: problem };
+    }
 
     // Resolve borrower: existing customer, or auto-register a new one.
     const registerNew = !data.customerId && !!data.newCustomer;
@@ -507,6 +514,19 @@ export async function createFixedSavingsAccount(data: {
       `Fixed savings account ${accountNumber} opened`,
       `Your fixed savings account ${accountNumber} has been opened with an initial deposit of ${Number(data.initialDeposit).toLocaleString('en-NG', { style: 'currency', currency: 'NGN' })}, earning ${terms.totalRate}% over the term (${interestTarget.toLocaleString('en-NG', { style: 'currency', currency: 'NGN' })} of interest)${terms.isPromo ? ` under our ${terms.promoName} offer` : ''}. Interest is credited daily from ${earning.earningStartDate.toLocaleDateString('en-NG', { year: 'numeric', month: 'long', day: 'numeric' })}. It matures on ${maturityDate.toLocaleDateString('en-NG', { year: 'numeric', month: 'long', day: 'numeric' })}.`
     );
+
+    // Opened from an application: link it, and credit whoever shared the form.
+    // The account is open by now, so this never turns into a reported failure.
+    if (data.applicationId) {
+      try {
+        await linkOpenedAccount({
+          applicationId: data.applicationId, customerId, kind: 'SAVINGS', accountId: account.id,
+          amount: Number(data.initialDeposit), recordedById: user.id,
+        });
+      } catch (error) {
+        console.error('Could not link the account to its application:', error);
+      }
+    }
 
     return {
       success: true,

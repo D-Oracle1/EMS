@@ -140,6 +140,7 @@ export async function getApplications(kind: ApplicantPurpose, status: ReviewStat
       form: { select: { title: true, questions: true, branchId: true, branch: { select: { name: true } } } },
       customer: { select: { id: true, customerNumber: true, firstName: true, lastName: true } },
       reviewedBy: { select: { firstName: true, lastName: true } },
+      referredBy: { select: { firstName: true, lastName: true } },
       guarantors: {
         orderBy: { submittedAt: 'asc' },
         include: { form: { select: { questions: true } }, reviewedBy: { select: { firstName: true, lastName: true } } },
@@ -180,6 +181,8 @@ export async function getApplications(kind: ApplicantPurpose, status: ReviewStat
       reviewNote: r.reviewNote,
       fee: feeOf(r.id),
       loanCreated: !!r.loanId,
+      /** The staff member whose personal link the applicant used (lib/referrals). */
+      referredBy: fullName(r.referredBy),
       guarantors: r.guarantors.map((g) => {
         const ga = (g.answers ?? {}) as Answers;
         return {

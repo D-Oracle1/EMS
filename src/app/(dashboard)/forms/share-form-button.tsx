@@ -13,6 +13,8 @@ interface ShareFormButtonProps {
   title: string;
   /** "icon" for a form card; "full" shows the word Share beside it. */
   variant?: 'icon' | 'full';
+  /** A staff member's referral code: their personal link (lib/referrals). */
+  by?: string;
 }
 
 /**
@@ -21,13 +23,13 @@ interface ShareFormButtonProps {
  * Where the browser has no share sheet, a small menu offers WhatsApp, email,
  * SMS and copying the link.
  */
-export function ShareFormButton({ slug, title, variant = 'icon' }: ShareFormButtonProps) {
+export function ShareFormButton({ slug, title, variant = 'icon', by }: ShareFormButtonProps) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   const message = () => `Please fill in this form: ${title}`;
 
   const share = async () => {
-    const url = shareUrl(slug);
+    const url = shareUrl(slug, by);
     if (typeof navigator.share === 'function') {
       try {
         await navigator.share({ title, text: message(), url });
@@ -41,7 +43,7 @@ export function ShareFormButton({ slug, title, variant = 'icon' }: ShareFormButt
   };
 
   const open = (href: string) => window.open(href, '_blank', 'noopener,noreferrer');
-  const text = () => `${message()}\n${shareUrl(slug)}`;
+  const text = () => `${message()}\n${shareUrl(slug, by)}`;
 
   return (
     <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
@@ -84,7 +86,7 @@ export function ShareFormButton({ slug, title, variant = 'icon' }: ShareFormButt
           <MessageSquareText className="mr-2 h-4 w-4 text-indigo-600" />SMS
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => copyShareLink(slug)}>
+        <DropdownMenuItem onSelect={() => copyShareLink(slug, by)}>
           <Link2 className="mr-2 h-4 w-4" />Copy link
         </DropdownMenuItem>
       </DropdownMenuContent>

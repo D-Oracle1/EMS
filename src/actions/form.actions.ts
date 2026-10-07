@@ -40,6 +40,7 @@ import {
   applicationTerms, type CustomerPurpose,
 } from '@/lib/customer-forms';
 import { computeFee, DEFAULT_FEES, type FeeSetting } from '@/lib/fees';
+import { findReferrer } from '@/lib/referrals';
 import type { ActionResult, SessionUser } from '@/types';
 
 const fullName = (s?: { firstName: string; lastName: string } | null) => (s ? `${s.firstName} ${s.lastName}` : null);
@@ -516,12 +517,18 @@ export type PublicFormState =
        * page asks for the application number instead.
        */
       guaranteeing: { reference: string; applicant: string; amount: string | null } | null;
+      /** A customer form opened from a staff member's personal link: who shared it. */
+      sharedBy: string | null;
     };
 
 const DEFAULT_CONFIRMATION = 'Thank you. Your response has been recorded.';
 
-/** What the share link shows. PUBLIC. `app` is a loan application's reference, on a guarantor's link. */
-export async function getPublicForm(slug: string, app?: string): Promise<PublicFormState> {
+/**
+ * What the share link shows. PUBLIC. `app` is a loan application's reference,
+ * on a guarantor's link; `by` is the referral code on a staff member's
+ * personal link (lib/referrals).
+ */
+export async function getPublicForm(slug: string, app?: string, by?: string): Promise<PublicFormState> {
   const form = await prisma.form.findUnique({ where: { slug: String(slug).slice(0, 80) } });
   if (!form) return { state: 'not-found' };
 
@@ -569,6 +576,7 @@ export async function getPublicForm(slug: string, app?: string): Promise<PublicF
     },
     respondent: staff ? fullName(staff) : null,
     guaranteeing,
+    sharedBy: by && isCustomerPurpose(form.purpose) ? fullName(await findReferrer(by)) : null,
   };
 }
 
@@ -592,13 +600,18 @@ async function feeSettingFor(purpose: CustomerPurpose): Promise<FeeSetting | nul
   return { kind: row.kind, amount: row.amount.toNumber(), isActive: row.isActive };
 }
 
-/** Records an answer. PUBLIC for public forms. `app` is the loan application a guarantor stands behind. */
+/**
+ * Records an answer. PUBLIC for public forms. `app` is the loan application a
+ * guarantor stands behind; `by` the referral code of the staff member whose
+ * link was used.
+ */
 export async function submitFormResponse(
   slug: string,
   answers: Record<string, unknown>,
   /** Honeypot. Real people never see this field, so anything in it is a bot. */
   website?: string,
-  app?: string
+  app?: string,
+  by?: string
 ): Promise<ActionResult<SubmitReceipt>> {
   try {
     const form = await prisma.form.findUnique({ where: { slug: String(slug).slice(0, 80) } });
@@ -660,6 +673,9 @@ export async function submitFormResponse(
       guaranteeing = `${d.firstName} ${d.lastName}`.trim();
     }
 
+    // A staff member's personal link: credit them. An unknown code is ignored, not an error.
+    const referrer = customer && by ? await findReferrer(by) : null;
+
     // The fee in force now is the one this applicant owes, whatever it is changed to later.
     const fee = customer ? computeFee(await feeSettingFor(customer), applicationTerms(customer, result.answers).amount) : null;
 
@@ -677,6 +693,7 @@ export async function submitFormResponse(
             ...(onboarding || customer ? { onboardingStatus: 'PENDING' as const } : {}),
             ...(customer ? { reference: makeReference(customer), guarantorForId } : {}),
             ...(fee ? { feeDue: fee.due, feeBasis: fee.basis } : {}),
+            ...(referrer ? { referredById: referrer.id } : {}),
           },
           select: { id: true, reference: true },
         });
@@ -708,11 +725,23 @@ export async function submitFormResponse(
         message:
           customer === 'GUARANTOR'
             ? `${name} filled the guarantor form${guaranteeing ? ` for ${guaranteeing}` : ', not yet attached to an application'}.`
-            : `${name} applied (${response.reference}). Review and profile them.`,
+            : `${name} applied (${response.reference})${referrer ? `, referred by ${referrer.firstName} ${referrer.lastName}` : ''}. Review and profile them.`,
         entityType: 'FORM_RESPONSE',
         entityId: response.id,
         actionUrl: `/applications?kind=${customer === 'GUARANTOR' ? 'LOAN_APPLICATION' : customer}`,
       });
+
+      // Tell the referrer their client applied.
+      if (referrer) {
+        await createNotificationForUsers([referrer.id], {
+          type: 'TASK_ASSIGNED',
+          title: 'Your client applied',
+          message: `${name} filled the ${info.title.toLowerCase()} from your link (${response.reference}).`,
+          entityType: 'FORM_RESPONSE',
+          entityId: response.id,
+          actionUrl: '/my-forms',
+        });
+      }
 
       const receipt: SubmitReceipt = { reference: response.reference ?? undefined, guaranteeing, fee: fee ?? undefined };
       if (customer === 'LOAN_APPLICATION') {

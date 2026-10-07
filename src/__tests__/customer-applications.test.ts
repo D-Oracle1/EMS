@@ -52,7 +52,12 @@ vi.mock('@/lib/prisma', () => ({
       findUnique: vi.fn(async () => h.form),
       findFirst: vi.fn(async () => ({ slug: 'guarantor-abc123' })),
     },
-    staff: { findMany: vi.fn(async () => []) },
+    staff: {
+      findMany: vi.fn(async () => []),
+      // A staff member's personal link: /f/<slug>?by=EMP0042.
+      findFirst: vi.fn(async (args: any) =>
+        args.where.employeeId?.equals === 'EMP0042' ? { id: 'mk-1', firstName: 'Bola', lastName: 'Ade', employeeId: 'EMP0042' } : null),
+    },
     // No fee set by an admin yet: the paper forms' fees apply (lib/fees DEFAULT_FEES).
     applicationFee: { findUnique: vi.fn(async () => null) },
     $transaction: vi.fn(async (fn: any) => fn({
@@ -357,6 +362,17 @@ describe('a guarantor\'s form', () => {
     h.target = { ...loanApp(0), form: { purpose: 'SAVINGS_APPLICATION' } };
     const result = await submitFormResponse('guarantor-abc123', answers(), '', 'LA-ABC234');
     expect(result.success).toBe(false);
+  });
+
+  it('credits the staff member whose link the applicant used, and ignores an unknown code', async () => {
+    const loanQuestions = customerFormTemplate('LOAN_APPLICATION');
+    h.form = { ...guarantorForm(), id: 'form-l', slug: 'loan-xyz', purpose: 'LOAN_APPLICATION', questions: loanQuestions };
+    const loan: Record<string, unknown> = { firstName: 'Kuebari', lastName: 'Gift', phone: '08031234567', address: 'x', amount: 500000, loanPurpose: 'Stock', tenure: 3 };
+    for (const q of loanQuestions.filter((x) => x.type === 'CHECKBOXES')) loan[q.id] = q.options;
+    expect((await submitFormResponse('loan-xyz', loan, '', undefined, 'emp0042')).success).toBe(true);
+    expect(h.saved[0]).toMatchObject({ referredById: 'mk-1' });
+    expect((await submitFormResponse('loan-xyz', loan, '', undefined, 'EMP9999')).success).toBe(true);
+    expect(h.saved[1].referredById).toBeUndefined();
   });
 
   it('waits unattached when the guarantor has no application number', async () => {

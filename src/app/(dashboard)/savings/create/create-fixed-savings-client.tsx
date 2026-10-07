@@ -103,6 +103,8 @@ export function CreateFixedSavingsClient({ user }: Props) {
         productId: selectedProductId,
         initialDeposit: parseFloat(initialDeposit),
         startDate,
+        // Still the applicant: link the account to their application.
+        applicationId: prefill && customerSel.mode === 'existing' && customerSel.customerId === prefill.customer.id ? prefill.id : undefined,
       });
       if (result.success) {
         toast.success(result.message);

@@ -146,6 +146,8 @@ export default function NewFixedDepositPage() {
           fundingReference: form.fundingReference.trim() || undefined,
           interestPayment: form.interestPayment,
           maturityInstruction: form.maturityInstruction,
+          // Still the applicant: link the deposit to their application.
+          applicationId: prefill && customerSel.mode === 'existing' && customerSel.customerId === prefill.customer.id ? prefill.id : undefined,
         });
 
         if (result.success && result.data) {

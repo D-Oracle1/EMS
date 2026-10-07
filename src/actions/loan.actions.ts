@@ -14,6 +14,7 @@ import {
   formatCurrency,
 } from '@/lib/utils';
 import { feeSummaries } from '@/lib/fee-ledger';
+import { recordReferralSale } from '@/lib/referrals';
 import { createJournalEntry, getAccountByCode } from '@/lib/accounting-engine';
 import { createNotification, createNotificationForUsers, getUsersWithPermission, getUsersWithAnyPermission } from '@/lib/notifications';
 import { recordApprovalHistory } from '@/lib/approval-history';
@@ -1091,6 +1092,21 @@ export async function disburseLoan(data: {
       entityId: data.loanId,
       actionUrl: `/loans/${data.loanId}`,
     });
+
+    // A loan from an application shared by a staff member's link counts as
+    // their sale once paid out (lib/referrals). The money has gone out by
+    // now, so a failure here is logged, never reported as a failed payout.
+    try {
+      const application = await prisma.formResponse.findUnique({ where: { loanId: loan.id }, select: { id: true, referredById: true } });
+      if (application?.referredById) {
+        await recordReferralSale({
+          responseId: application.id, type: 'LOAN', customerId: loan.customerId, link: { loanId: loan.id },
+          amount: loan.principalAmount.toNumber(), recordedById: user.id,
+        });
+      }
+    } catch (error) {
+      console.error(`Referral sale for loan ${loan.loanNumber} not recorded:`, error);
+    }
 
     return { success: true, message: `Loan disbursed: ${disbursedAmount}` };
   } catch (error: any) {

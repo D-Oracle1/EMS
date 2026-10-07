@@ -4,10 +4,16 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { formatDateTime } from '@/lib/utils';
 import { getMyForms } from '@/actions/form.actions';
+import { getMyFormLinks, getMyReferrals } from '@/actions/referral.actions';
+import { ShareCustomerForms, MyReferrals } from './referrals';
 
-/** Staff forms open to everyone, and whether this staff member has answered each. */
+/**
+ * A staff member's forms: their personal links to the customer forms and the
+ * clients they referred, then the staff forms open to everyone and whether
+ * they have answered each.
+ */
 export default async function MyFormsPage() {
-  const forms = await getMyForms();
+  const [forms, links, referrals] = await Promise.all([getMyForms(), getMyFormLinks(), getMyReferrals()]);
   const pending = forms.filter((f) => !f.respondedAt);
 
   return (
@@ -20,6 +26,11 @@ export default async function MyFormsPage() {
             : 'Forms the company asks staff to fill in appear here'}
         </p>
       </div>
+
+      <ShareCustomerForms links={links} />
+      <MyReferrals referrals={referrals} />
+
+      {(links.forms.length > 0 || referrals.length > 0) && <h2 className="pt-2 text-lg font-semibold">Staff forms</h2>}
 
       {forms.length === 0 ? (
         <Card>

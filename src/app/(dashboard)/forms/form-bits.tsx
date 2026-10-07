@@ -5,8 +5,9 @@ import { toast } from 'sonner';
 import { Globe2, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
-export function shareUrl(slug: string): string {
-  return `${window.location.origin}/f/${slug}`;
+/** A form's share link; `by` makes it a staff member's personal link (lib/referrals). */
+export function shareUrl(slug: string, by?: string): string {
+  return `${window.location.origin}/f/${slug}${by ? `?by=${encodeURIComponent(by)}` : ''}`;
 }
 
 const noSubscribe = () => () => {};
@@ -17,9 +18,9 @@ export function useShareUrl(slug: string): string {
   return origin ? `${origin}/f/${slug}` : `/f/${slug}`;
 }
 
-export async function copyShareLink(slug: string) {
+export async function copyShareLink(slug: string, by?: string) {
   try {
-    await navigator.clipboard.writeText(shareUrl(slug));
+    await navigator.clipboard.writeText(shareUrl(slug, by));
     toast.success('Link copied');
   } catch {
     toast.error('Could not copy. Select the link and copy it instead.');

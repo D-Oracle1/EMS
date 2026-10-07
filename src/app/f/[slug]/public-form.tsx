@@ -18,9 +18,12 @@ interface PublicFormProps {
   respondent: string | null;
   /** A guarantor form opened from a loan applicant's link. */
   guaranteeing: { reference: string; applicant: string; amount: string | null } | null;
+  /** The staff member whose personal link this is, and their code. */
+  sharedBy?: string | null;
+  referralCode?: string;
 }
 
-export function PublicForm({ slug, form, preview, respondent, guaranteeing }: PublicFormProps) {
+export function PublicForm({ slug, form, preview, respondent, guaranteeing, sharedBy, referralCode }: PublicFormProps) {
   const [answers, setAnswers] = useState<Record<string, Answer>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [website, setWebsite] = useState('');
@@ -68,7 +71,7 @@ export function PublicForm({ slug, form, preview, respondent, guaranteeing }: Pu
     setSubmitting(true);
     try {
       const app = guaranteeing?.reference ?? (guarantorForm ? appRef : undefined);
-      const result = await submitFormResponse(slug, answers, website, app);
+      const result = await submitFormResponse(slug, answers, website, app, referralCode);
       if (result.success) {
         setDone(result.message ?? 'Thank you. Your response has been recorded.');
         setReceipt(result.data ?? null);
@@ -140,6 +143,9 @@ export function PublicForm({ slug, form, preview, respondent, guaranteeing }: Pu
             {respondent ? (
               <span className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5" />Responding as {respondent}</span>
             ) : null}
+            {sharedBy && (
+              <span className="flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5 text-indigo-600" />Shared by your Hy-Link officer, {sharedBy}</span>
+            )}
             {form.questions.some((q) => q.required) && <span><span className="text-rose-600">*</span> Required</span>}
           </div>
         </div>
