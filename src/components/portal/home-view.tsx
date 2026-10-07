@@ -29,10 +29,24 @@ export function HomeView({ data }: { data: Portfolio }) {
       id: d.id, href: `/portal/deposits/${d.id}`, icon: TrendingUp, tone: 'violet' as const,
       title: 'Fixed deposit', subtitle: d.certificateNumber, amount: d.principal,
     })),
-  ];
+    // Loans are accounts too: being repaid, they show what is owed; on their
+    // way, how much was asked for.
+    ...data.loans
+      .filter((l) => l.repaying || !['CLOSED', 'WRITTEN_OFF', 'REJECTED'].includes(l.status))
+      .map((l) => ({
+        id: l.id, href: `/portal/loans/${l.id}`, icon: Landmark, tone: (l.overdue > 0 ? 'red' : 'orange') as 'red' | 'orange',
+        title: l.product,
+        subtitle: l.repaying ? `Loan · ${l.loanNumber}` : `Loan application · ${l.stage.label}`,
+        amount: l.repaying ? l.outstanding : l.principal,
+        note: l.repaying ? 'owed' : 'applied for',
+      })),
+  ] as { id: string; href: string; icon: React.ComponentType<{ className?: string }>; tone: 'navy' | 'orange' | 'violet' | 'red'; title: string; subtitle: string; amount: number; note?: string }[];
   const due = data.loans
     .filter((l) => l.repaying && l.next)
     .sort((a, b) => a.next!.dueDate.localeCompare(b.next!.dueDate))[0];
+  // A customer with only a loan: the card leads with what they owe, not an empty balance.
+  const borrowerOnly = totals.invested === 0 && totals.owed > 0;
+  const repaid = data.loans.reduce((t, l) => t + (l.repaying ? l.repaid : 0), 0);
   const call = customer.branchPhone ? `tel:${customer.branchPhone.replace(/[^\d+]/g, '')}` : 'tel:+2349040964934';
 
   return (
@@ -43,20 +57,30 @@ export function HomeView({ data }: { data: Portfolio }) {
           <div className="pointer-events-none absolute -right-12 -top-20 h-56 w-56 rounded-full border-[28px] border-white/[0.06]" aria-hidden />
           <div className="relative">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-medium uppercase tracking-wider text-blue-100/90">Total balance</p>
+              <p className="text-xs font-medium uppercase tracking-wider text-blue-100/90">{borrowerOnly ? 'Loan balance' : 'Total balance'}</p>
               <PrivacyToggle className="-mr-1.5 text-blue-100 hover:bg-white/10" />
             </div>
-            <Amount value={totals.invested} className="mt-1 block text-3xl font-bold tracking-tight sm:text-4xl" />
+            <Amount value={borrowerOnly ? totals.owed : totals.invested} className="mt-1 block text-3xl font-bold tracking-tight sm:text-4xl" />
             <p className="mt-1 text-xs text-blue-100/80">Customer no. {customer.customerNumber}</p>
 
             <div className="mt-5 grid grid-cols-2 gap-4 border-t border-white/15 pt-4">
-              <div>
-                <p className="text-[11px] text-blue-100/80">Interest earned</p>
-                <Amount value={totals.earned} sign="+" className="text-sm font-semibold text-emerald-300" />
-              </div>
+              {borrowerOnly ? (
+                <div>
+                  <p className="text-[11px] text-blue-100/80">Repaid so far</p>
+                  <Amount value={repaid} className="text-sm font-semibold text-emerald-300" />
+                </div>
+              ) : (
+                <div>
+                  <p className="text-[11px] text-blue-100/80">Interest earned</p>
+                  <Amount value={totals.earned} sign="+" className="text-sm font-semibold text-emerald-300" />
+                </div>
+              )}
               <div className="text-right">
-                <p className="text-[11px] text-blue-100/80">{totals.owed > 0 ? 'Loan balance' : 'At maturity'}</p>
-                <Amount value={totals.owed > 0 ? totals.owed : totals.atMaturity} className="text-sm font-semibold" />
+                <p className="text-[11px] text-blue-100/80">{borrowerOnly ? (due ? `Next payment · ${shortDay(due.next!.dueDate)}` : 'Next payment') : totals.owed > 0 ? 'Loan balance' : 'At maturity'}</p>
+                <Amount
+                  value={borrowerOnly ? (due ? due.next!.amount : 0) : totals.owed > 0 ? totals.owed : totals.atMaturity}
+                  className="text-sm font-semibold"
+                />
               </div>
             </div>
           </div>
@@ -77,12 +101,12 @@ export function HomeView({ data }: { data: Portfolio }) {
             <EmptyState
               icon={Wallet}
               title="No accounts yet"
-              body={`Your savings and deposits appear here once opened. Visit or call ${customer.branch ?? 'your branch'} to start.`}
+              body={`Your savings, deposits and loans appear here once opened. Visit or call ${customer.branch ?? 'your branch'} to start.`}
             />
           ) : (
             <Divided>
               {accounts.slice(0, 4).map((a) => (
-                <ListRow key={a.id} href={a.href} icon={a.icon} tone={a.tone} title={a.title} subtitle={a.subtitle} amount={a.amount} />
+                <ListRow key={a.id} href={a.href} icon={a.icon} tone={a.tone} title={a.title} subtitle={a.subtitle} amount={a.amount} amountNote={a.note} />
               ))}
             </Divided>
           )}

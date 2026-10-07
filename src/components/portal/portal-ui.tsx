@@ -153,3 +153,63 @@ export function PageTitle({ title, subtitle, children }: { title: string; subtit
     </div>
   );
 }
+
+/**
+ * The navy summary card at the top of a detail page, matching Home's balance
+ * card: a label, the headline amount, and up to two figures beneath.
+ */
+export function HeroCard({ label, amount, sub, badge, figures, children }: {
+  label: string;
+  amount: number;
+  sub?: React.ReactNode;
+  badge?: React.ReactNode;
+  figures?: { label: string; value: number; sign?: '+' | '-'; tone?: 'good' }[];
+  children?: React.ReactNode;
+}) {
+  return (
+    <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#001a63] via-[#002078] to-[#1446b8] p-5 text-white shadow-lg shadow-blue-950/20 sm:p-6 print:bg-none print:text-slate-900 print:shadow-none print:ring-1 print:ring-slate-300">
+      <div className="pointer-events-none absolute -right-12 -top-20 h-56 w-56 rounded-full border-[28px] border-white/[0.06] print:hidden" aria-hidden />
+      <div className="relative">
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-xs font-medium uppercase tracking-wider text-blue-100/90 print:text-slate-500">{label}</p>
+          {badge}
+        </div>
+        <Amount value={amount} className="mt-1 block text-3xl font-bold tracking-tight sm:text-4xl" />
+        {sub && <p className="mt-1 text-xs text-blue-100/80 print:text-slate-500">{sub}</p>}
+        {figures && figures.length > 0 && (
+          <div className="mt-5 grid grid-cols-2 gap-4 border-t border-white/15 pt-4 print:border-slate-200">
+            {figures.map((f, i) => (
+              <div key={f.label} className={i % 2 ? 'text-right' : undefined}>
+                <p className="text-[11px] text-blue-100/80 print:text-slate-500">{f.label}</p>
+                <Amount value={f.value} sign={f.sign} className={cn('text-sm font-semibold', f.tone === 'good' && 'text-emerald-300 print:text-emerald-700')} />
+              </div>
+            ))}
+          </div>
+        )}
+        {children}
+      </div>
+    </section>
+  );
+}
+
+/** A label on the left and its value on the right, as on a bank statement. */
+export function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-start justify-between gap-4 px-4 py-3 text-sm">
+      <span className="shrink-0 text-slate-500">{label}</span>
+      <span className="min-w-0 break-words text-right font-medium text-slate-900">{children}</span>
+    </div>
+  );
+}
+
+/** A pill for the dark summary card. */
+export function HeroBadge({ children, tone = 'plain' }: { children: React.ReactNode; tone?: 'plain' | 'bad' | 'good' }) {
+  return (
+    <span className={cn(
+      'rounded-full px-2.5 py-0.5 text-[11px] font-semibold print:text-slate-700',
+      tone === 'bad' ? 'bg-rose-500/90 text-white' : tone === 'good' ? 'bg-emerald-400/20 text-emerald-200' : 'bg-white/15 text-white'
+    )}>
+      {children}
+    </span>
+  );
+}

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { ChevronDown, Pin, PinOff } from 'lucide-react';
-import { BrandTile, BrandWordmark } from '@/components/brand';
+import { BrandTile, BrandLogo } from '@/components/brand';
 import { cn } from '@/lib/utils';
 import { resolveNav } from '@/lib/navigation';
 import { hidesGenericDashboard } from '@/lib/landing';
@@ -85,13 +85,21 @@ export function Sidebar({ pinned = false, onPinnedChange }: SidebarProps) {
           pinned ? 'lg:w-64' : 'lg:w-[76px] lg:hover:w-64'
         )}
       >
-        {/* Logo */}
-        <div className="flex h-16 shrink-0 items-center gap-2.5 px-[1.15rem]">
-          <Link href="/dashboard" className="group/logo relative flex items-center gap-2.5" aria-label="Hy-Link Finance home">
-            <BrandTile className="h-9 w-9 transition-transform duration-200 group-hover/logo:scale-105" />
-            <span className={cn('whitespace-nowrap transition-opacity duration-200', reveal)}>
-              <BrandWordmark className="w-[6.5rem]" />
-              <span className="mt-0.5 block text-[10px] font-medium uppercase tracking-widest text-slate-500">
+        {/* Logo: shown once. Closed to its icons, the rail shows the mark;
+            open, the full colour logo on a white panel takes its place. Both
+            sit in the same spot and cross-fade, so the mark never appears
+            twice. The panel keeps its full width while the rail opens, and
+            the rail clips it, so the logo is never squeezed. */}
+        <div className={cn('relative shrink-0', pinned ? 'h-[5.5rem]' : 'h-16 group-hover/rail:h-[5.5rem]', 'transition-[height] duration-300')}>
+          <Link href="/dashboard" className="absolute inset-0" aria-label="Hy-Link Finance home">
+            <span className={cn('absolute left-[1.15rem] top-3.5 transition-opacity duration-200', atRest)}>
+              <BrandTile className="h-9 w-9" />
+            </span>
+            <span className={cn('absolute left-3 top-3 w-[13.25rem] transition-opacity duration-200', reveal)}>
+              <span className="flex items-center justify-center rounded-2xl bg-white px-4 py-2.5 shadow-sm">
+                <BrandLogo className="w-40" />
+              </span>
+              <span className="mt-1.5 block text-center text-[10px] font-medium uppercase tracking-widest text-slate-500">
                 Enterprise System
               </span>
             </span>
