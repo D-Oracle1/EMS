@@ -20,6 +20,8 @@ import {
 import { resolveContractedTerms } from '@/lib/savings-promo';
 import { projectSchedule } from '@/lib/savings-projection';
 import { InterestSchedule } from '@/components/savings/interest-schedule';
+import { useApplicationPrefill, ApplicationPrefillBanner } from '@/components/application-prefill';
+import { pickSavingsPlan } from '@/lib/customer-forms';
 import type { SessionUser } from '@/types';
 
 interface Props { user: SessionUser; }
@@ -32,6 +34,20 @@ export function CreateFixedSavingsClient({ user }: Props) {
   const [initialDeposit, setInitialDeposit] = useState('');
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [submitting, setSubmitting] = useState(false);
+  // Opened from an approved application: the customer and amount fill in, and
+  // the plan they asked for once the plans have loaded.
+  const [planPicked, setPlanPicked] = useState<'pending' | 'picked' | 'none'>('pending');
+  const prefill = useApplicationPrefill((p) => {
+    setCustomerSel({ ...emptyCustomerSelection, mode: 'existing', customerId: p.customer.id, customer: p.customer });
+    if (p.amount) setInitialDeposit(String(p.amount));
+  });
+
+  useEffect(() => {
+    if (!prefill?.savings || planPicked !== 'pending' || products.length === 0) return;
+    const plan = pickSavingsPlan(products, prefill.savings);
+    if (plan) setSelectedProductId(plan.id);
+    setPlanPicked(plan ? 'picked' : 'none');
+  }, [prefill, products, planPicked]);
 
   const selectedProduct = products.find((p) => p.id === selectedProductId) ?? null;
 
@@ -117,6 +133,17 @@ export function CreateFixedSavingsClient({ user }: Props) {
           </div>
         </div>
       </div>
+
+      <ApplicationPrefillBanner
+        prefill={prefill}
+        notes={[
+          planPicked === 'none' && prefill?.savings?.partnership &&
+            'No savings plan is set up for the mutual partnership (5 months, 20%). Choose one below, or add it under Savings Products.',
+          planPicked === 'none' && !prefill?.savings?.partnership &&
+            `No single plan matched the duration asked for${prefill?.savings?.durationText ? ` ("${prefill.savings.durationText}")` : ''}. Choose one below.`,
+          prefill && !prefill.amount && 'The applicant gave no starting amount. Enter the initial deposit.',
+        ]}
+      />
 
       {/* Step 1: Customer */}
       <div className="premium-card p-5 space-y-4">

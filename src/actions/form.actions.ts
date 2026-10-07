@@ -13,20 +13,33 @@
  * for a public form. They read only what the form shows, validate every
  * answer against the form's own questions (lib/forms validateAnswers), cap the
  * payload, drop honeypot submissions and refuse a sudden flood.
+ *
+ * Customer application forms (lib/customer-forms: savings, partnership, fixed
+ * deposit, loan, guarantor) are public forms whose responses wait for the
+ * product's officers under Applications (application.actions). Each applicant
+ * gets a reference; a loan applicant also gets the link for their guarantors.
  */
 
-import { Prisma } from '@prisma/client';
+import { Prisma, type FormPurpose } from '@prisma/client';
 import { del } from '@vercel/blob';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { getSession } from '@/lib/auth-utils';
 import { auditLog } from '@/lib/audit';
 import { createNotificationForUsers } from '@/lib/notifications';
+import { ALL_BRANCHES_ROLE_LEVEL } from '@/lib/branch-scope';
+import { formatCurrency } from '@/lib/utils';
 import {
   canManageForms, normalizeQuestions, readQuestions, validateAnswers, isAcceptingResponses,
   makeSlug, LIMITS, readFiles, onboardingTemplate, enforceOnboardingFields, onboardingDetails,
   type FormQuestion, type Answers,
 } from '@/lib/forms';
+import {
+  isCustomerPurpose, enforceCustomerFields, customerFormTemplate, applicantDetails, makeReference,
+  normalizeReference, PURPOSE_INFO, GUARANTORS_REQUIRED, CUSTOMER_FORM_DESCRIPTION, CUSTOMER_FORM_CONFIRMATION,
+  applicationTerms, type CustomerPurpose,
+} from '@/lib/customer-forms';
+import { computeFee, DEFAULT_FEES, type FeeSetting } from '@/lib/fees';
 import type { ActionResult, SessionUser } from '@/types';
 
 const fullName = (s?: { firstName: string; lastName: string } | null) => (s ? `${s.firstName} ${s.lastName}` : null);
@@ -76,6 +89,8 @@ export interface FormInput {
   /** ISO date-time, or empty for no deadline. */
   closesAt?: string | null;
   questions: FormQuestion[];
+  /** Customer application forms: the branch that receives them, or empty for any branch. */
+  branchId?: string | null;
 }
 
 export async function getFormAccess() {
@@ -116,7 +131,12 @@ export async function getFormForEdit(id: string) {
   await requireManager();
   const f = await prisma.form.findUnique({ where: { id }, include: { _count: { select: { responses: true } } } });
   if (!f) return null;
+  const branches = isCustomerPurpose(f.purpose)
+    ? await prisma.branch.findMany({ where: { isActive: true }, select: { id: true, name: true }, orderBy: { name: 'asc' } })
+    : [];
   return {
+    branchId: f.branchId,
+    branches,
     id: f.id,
     slug: f.slug,
     title: f.title,
@@ -132,12 +152,13 @@ export async function getFormForEdit(id: string) {
   };
 }
 
-function cleanInput(data: FormInput, purpose: 'GENERAL' | 'STAFF_ONBOARDING' = 'GENERAL') {
+async function cleanInput(data: FormInput, purpose: FormPurpose = 'GENERAL') {
   const title = (data.title ?? '').trim().slice(0, LIMITS.title);
   if (!title) throw new Error('Give the form a title');
   const onboarding = purpose === 'STAFF_ONBOARDING';
-  // New joiners have no login yet, so an onboarding form is always public.
-  const audience = !onboarding && data.audience === 'STAFF' ? 'STAFF' : 'PUBLIC';
+  const customer = isCustomerPurpose(purpose);
+  // New joiners and customers have no staff login, so these forms are always public.
+  const audience: 'STAFF' | 'PUBLIC' = !onboarding && !customer && data.audience === 'STAFF' ? 'STAFF' : 'PUBLIC';
   const questions = normalizeQuestions(data.questions);
   let closesAt: Date | null = null;
   if (data.closesAt) {
@@ -152,8 +173,19 @@ function cleanInput(data: FormInput, purpose: 'GENERAL' | 'STAFF_ONBOARDING' = '
     // One response each needs to know who answered, so it means nothing on a public form.
     oneResponsePerStaff: audience === 'STAFF' && data.oneResponsePerStaff === true,
     closesAt,
-    questions: (onboarding ? enforceOnboardingFields(questions) : questions) as unknown as Prisma.InputJsonValue,
-  } as const;
+    questions: (
+      onboarding ? enforceOnboardingFields(questions) : customer ? enforceCustomerFields(purpose, questions) : questions
+    ) as unknown as Prisma.InputJsonValue,
+    ...(customer ? { branchId: await formBranch(data.branchId) } : {}),
+  };
+}
+
+/** The branch a customer form routes to: an active one, or none. */
+async function formBranch(id: string | null | undefined): Promise<string | null> {
+  if (!id) return null;
+  const branch = await prisma.branch.findFirst({ where: { id, isActive: true }, select: { id: true } });
+  if (!branch) throw new Error('That branch is not available');
+  return branch.id;
 }
 
 /** Creates a form (no id) or saves changes to one. New forms start as drafts. */
@@ -162,10 +194,10 @@ export async function saveForm(data: FormInput, id?: string): Promise<ActionResu
     const user = await requireManager();
     const existing = id ? await prisma.form.findUnique({ where: { id }, select: { id: true, purpose: true } }) : null;
     if (id && !existing) return { success: false, error: 'Form not found' };
-    const values = cleanInput(data, existing?.purpose);
+    const values = await cleanInput(data, existing?.purpose);
 
     if (id) {
-      await prisma.form.update({ where: { id }, data: values });
+      await prisma.form.update({ where: { id }, data: values satisfies Prisma.FormUncheckedUpdateInput });
       await auditLog({
         userId: user.id, action: 'UPDATE', module: 'FORMS', entityType: 'FORM', entityId: id,
         description: `Edited form "${values.title}"`,
@@ -218,6 +250,83 @@ export async function createOnboardingForm(): Promise<ActionResult<{ id: string 
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Could not create the form' };
   }
+}
+
+/**
+ * A ready-made customer application form (savings, partnership, fixed
+ * deposit, loan or guarantor), as a draft to review and open. Its responses
+ * wait under Applications for the product's officers.
+ */
+export async function createCustomerForm(purpose: CustomerPurpose): Promise<ActionResult<{ id: string }>> {
+  try {
+    const user = await requireManager();
+    if (!isCustomerPurpose(purpose)) return { success: false, error: 'Unknown kind of form' };
+    const info = PURPOSE_INFO[purpose];
+    const form = await prisma.form.create({
+      data: {
+        title: info.title,
+        slug: makeSlug(info.title),
+        description: CUSTOMER_FORM_DESCRIPTION[purpose],
+        audience: 'PUBLIC',
+        purpose,
+        confirmationMessage: CUSTOMER_FORM_CONFIRMATION[purpose],
+        questions: customerFormTemplate(purpose) as unknown as Prisma.InputJsonValue,
+        createdById: user.id,
+      },
+    });
+    await auditLog({
+      userId: user.id, action: 'CREATE', module: 'FORMS', entityType: 'FORM', entityId: form.id,
+      description: `Created ${info.label.toLowerCase()} application form "${info.title}"`,
+    });
+    return { success: true, message: `${info.title} created`, data: { id: form.id } };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Could not create the form' };
+  }
+}
+
+/**
+ * The officers an application goes to: anyone holding one of its reviewer
+ * permissions, in the form's branch when it has one, plus senior staff, who
+ * see every branch.
+ */
+async function applicationReviewerIds(purpose: CustomerPurpose, branchId: string | null): Promise<string[]> {
+  const rows = await prisma.staff.findMany({
+    where: {
+      status: 'ACTIVE',
+      isDeleted: false,
+      role: { permissions: { some: { permission: { code: { in: PURPOSE_INFO[purpose].reviewers } } } } },
+      ...(branchId ? { OR: [{ branchId }, { role: { level: { gte: ALL_BRANCHES_ROLE_LEVEL } } }] } : {}),
+    },
+    select: { id: true },
+  });
+  return rows.map((r) => r.id);
+}
+
+/** The guarantor form a loan applicant's guarantors are sent to: the newest one open. */
+async function openGuarantorForm() {
+  const now = new Date();
+  return prisma.form.findFirst({
+    where: { purpose: 'GUARANTOR', status: 'OPEN', OR: [{ closesAt: null }, { closesAt: { gt: now } }] },
+    orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
+    select: { slug: true },
+  });
+}
+
+/** The loan application a guarantor's reference points at, unless it was turned down. */
+async function guaranteeTarget(reference: string | null) {
+  if (!reference) return null;
+  const app = await prisma.formResponse.findUnique({
+    where: { reference },
+    select: {
+      id: true,
+      answers: true,
+      onboardingStatus: true,
+      form: { select: { purpose: true } },
+      _count: { select: { guarantors: { where: { onboardingStatus: { not: 'REJECTED' } } } } },
+    },
+  });
+  if (!app || app.form.purpose !== 'LOAN_APPLICATION' || app.onboardingStatus === 'REJECTED') return null;
+  return app;
 }
 
 /** Everyone who can create staff: the people an onboarding request goes to. */
@@ -289,6 +398,9 @@ export async function deleteForm(id: string): Promise<ActionResult> {
       include: { _count: { select: { responses: true } }, responses: { select: { answers: true } } },
     });
     if (!form) return { success: false, error: 'Form not found' };
+    // Fee payments are financial records, never deleted (lib/fees).
+    const paid = await prisma.feePayment.count({ where: { response: { formId: id } } });
+    if (paid) return { success: false, error: `This form has ${paid} fee payment(s) recorded against it, so it cannot be deleted. Close it instead.` };
     await prisma.form.delete({ where: { id } });
     await removeUploads(uploadedUrls(form.responses.map((r) => r.answers)));
     await auditLog({
@@ -317,6 +429,7 @@ export async function duplicateForm(id: string): Promise<ActionResult<{ id: stri
         confirmationMessage: form.confirmationMessage,
         oneResponsePerStaff: form.oneResponsePerStaff,
         purpose: form.purpose,
+        branchId: form.branchId,
         questions: form.questions as Prisma.InputJsonValue,
         createdById: user.id,
       },
@@ -366,6 +479,9 @@ export async function deleteFormResponse(id: string): Promise<ActionResult> {
     const user = await requireManager();
     const response = await prisma.formResponse.findUnique({ where: { id }, include: { form: { select: { title: true } } } });
     if (!response) return { success: false, error: 'Response not found' };
+    if (await prisma.feePayment.count({ where: { responseId: id } })) {
+      return { success: false, error: 'A fee payment is recorded against this response, so it cannot be deleted' };
+    }
     await prisma.formResponse.delete({ where: { id } });
     await removeUploads(uploadedUrls([response.answers]));
     await auditLog({
@@ -382,21 +498,30 @@ export async function deleteFormResponse(id: string): Promise<ActionResult> {
 
 export type PublicFormState =
   | { state: 'not-found' }
-  | { state: 'closed'; title: string }
+  | { state: 'closed'; title: string; message?: string }
   | { state: 'login'; title: string }
   | { state: 'answered'; title: string; message: string }
   | {
       state: 'open';
       /** A manager looking at a draft: shown, but it cannot be submitted. */
       preview: boolean;
-      form: { title: string; description: string | null; audience: 'PUBLIC' | 'STAFF'; questions: FormQuestion[] };
+      form: {
+        title: string; description: string | null; audience: 'PUBLIC' | 'STAFF'; questions: FormQuestion[];
+        purpose: FormPurpose;
+      };
       respondent: string | null;
+      /**
+       * A guarantor form opened from an applicant's link: whom they are
+       * guaranteeing. Null on a guarantor form opened without one, where the
+       * page asks for the application number instead.
+       */
+      guaranteeing: { reference: string; applicant: string; amount: string | null } | null;
     };
 
 const DEFAULT_CONFIRMATION = 'Thank you. Your response has been recorded.';
 
-/** What the share link shows. PUBLIC. */
-export async function getPublicForm(slug: string): Promise<PublicFormState> {
+/** What the share link shows. PUBLIC. `app` is a loan application's reference, on a guarantor's link. */
+export async function getPublicForm(slug: string, app?: string): Promise<PublicFormState> {
   const form = await prisma.form.findUnique({ where: { slug: String(slug).slice(0, 80) } });
   if (!form) return { state: 'not-found' };
 
@@ -415,21 +540,66 @@ export async function getPublicForm(slug: string): Promise<PublicFormState> {
     }
   }
 
+  let guaranteeing: { reference: string; applicant: string; amount: string | null } | null = null;
+  const reference = normalizeReference(app);
+  if (form.purpose === 'GUARANTOR' && reference) {
+    const target = await guaranteeTarget(reference);
+    if (!target) {
+      return { state: 'closed', title: form.title, message: `We could not find loan application ${reference}. Check the link with the applicant.` };
+    }
+    if (target._count.guarantors >= GUARANTORS_REQUIRED) {
+      return { state: 'closed', title: form.title, message: `Application ${reference} already has its ${GUARANTORS_REQUIRED} guarantors. Thank you.` };
+    }
+    const answers = (target.answers ?? {}) as Answers;
+    const d = applicantDetails(answers);
+    const amount = Number(answers.amount);
+    guaranteeing = {
+      reference,
+      applicant: [d.firstName, d.lastName].filter(Boolean).join(' ') || 'the applicant',
+      amount: Number.isFinite(amount) && amount > 0 ? formatCurrency(amount) : null,
+    };
+  }
+
   return {
     state: 'open',
     preview,
-    form: { title: form.title, description: form.description, audience: form.audience, questions: readQuestions(form.questions) },
+    form: {
+      title: form.title, description: form.description, audience: form.audience, questions: readQuestions(form.questions),
+      purpose: form.purpose,
+    },
     respondent: staff ? fullName(staff) : null,
+    guaranteeing,
   };
 }
 
-/** Records an answer. PUBLIC for public forms. */
+/** What the respondent is shown after submitting. */
+export interface SubmitReceipt {
+  errors?: Record<string, string>;
+  /** Customer applications: the reference to quote. */
+  reference?: string;
+  /** Loan applications: the path guarantors open (/f/<slug>?app=REF), or null when no guarantor form is open. */
+  guarantorPath?: string | null;
+  /** A guarantor's form: the applicant they now stand behind. */
+  guaranteeing?: string;
+  /** The form's fee, to pay at the office, and how it was worked out. */
+  fee?: { due: number; basis: string };
+}
+
+/** The fee an admin has set for a kind of form, or the paper form's until they do. */
+async function feeSettingFor(purpose: CustomerPurpose): Promise<FeeSetting | null> {
+  const row = await prisma.applicationFee.findUnique({ where: { purpose } });
+  if (!row) return DEFAULT_FEES[purpose] ?? null;
+  return { kind: row.kind, amount: row.amount.toNumber(), isActive: row.isActive };
+}
+
+/** Records an answer. PUBLIC for public forms. `app` is the loan application a guarantor stands behind. */
 export async function submitFormResponse(
   slug: string,
   answers: Record<string, unknown>,
   /** Honeypot. Real people never see this field, so anything in it is a bot. */
-  website?: string
-): Promise<ActionResult<{ errors?: Record<string, string> }>> {
+  website?: string,
+  app?: string
+): Promise<ActionResult<SubmitReceipt>> {
   try {
     const form = await prisma.form.findUnique({ where: { slug: String(slug).slice(0, 80) } });
     if (!form || form.status === 'DRAFT') return { success: false, error: 'This form does not exist' };
@@ -470,16 +640,51 @@ export async function submitFormResponse(
     }
 
     const onboarding = form.purpose === 'STAFF_ONBOARDING';
-    const response = await prisma.formResponse.create({
-      data: {
-        formId: form.id,
-        // A staff member answering a public form is still named, which is
-        // what lets an admin see who said what.
-        staffId: staff?.id ?? null,
-        answers: result.answers as Prisma.InputJsonValue,
-        ...(onboarding ? { onboardingStatus: 'PENDING' as const } : {}),
-      },
-    });
+    const customer = isCustomerPurpose(form.purpose) ? form.purpose : null;
+
+    // A guarantor names the application they stand behind: from their link,
+    // or typed on the form. Without one, an officer attaches them by hand.
+    let guarantorForId: string | null = null;
+    let guaranteeing: string | undefined;
+    if (customer === 'GUARANTOR' && app && app.trim()) {
+      const reference = normalizeReference(app);
+      const target = await guaranteeTarget(reference);
+      if (!target) {
+        return { success: false, error: 'We could not find that application number. Check it with the applicant, or leave it empty.' };
+      }
+      if (target._count.guarantors >= GUARANTORS_REQUIRED) {
+        return { success: false, error: `Application ${reference} already has its ${GUARANTORS_REQUIRED} guarantors.` };
+      }
+      guarantorForId = target.id;
+      const d = applicantDetails((target.answers ?? {}) as Answers);
+      guaranteeing = `${d.firstName} ${d.lastName}`.trim();
+    }
+
+    // The fee in force now is the one this applicant owes, whatever it is changed to later.
+    const fee = customer ? computeFee(await feeSettingFor(customer), applicationTerms(customer, result.answers).amount) : null;
+
+    let response: { id: string; reference: string | null } | null = null;
+    // A reference is random; on the rare clash, draw another.
+    for (let attempt = 0; !response; attempt++) {
+      try {
+        response = await prisma.formResponse.create({
+          data: {
+            formId: form.id,
+            // A staff member answering a public form is still named, which is
+            // what lets an admin see who said what.
+            staffId: staff?.id ?? null,
+            answers: result.answers as Prisma.InputJsonValue,
+            ...(onboarding || customer ? { onboardingStatus: 'PENDING' as const } : {}),
+            ...(customer ? { reference: makeReference(customer), guarantorForId } : {}),
+            ...(fee ? { feeDue: fee.due, feeBasis: fee.basis } : {}),
+          },
+          select: { id: true, reference: true },
+        });
+      } catch (error) {
+        const clash = error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+        if (!clash || attempt >= 4) throw error;
+      }
+    }
 
     if (onboarding) {
       const who = onboardingDetails(result.answers);
@@ -491,6 +696,30 @@ export async function submitFormResponse(
         entityId: response.id,
         actionUrl: '/hr/joiners',
       });
+    }
+
+    if (customer) {
+      const who = applicantDetails(result.answers);
+      const name = `${who.firstName} ${who.lastName}`.trim() || 'Someone';
+      const info = PURPOSE_INFO[customer];
+      await createNotificationForUsers(await applicationReviewerIds(customer, form.branchId), {
+        type: 'APPROVAL_REQUIRED',
+        title: customer === 'GUARANTOR' ? 'New guarantor form' : `New ${info.label.toLowerCase()} application`,
+        message:
+          customer === 'GUARANTOR'
+            ? `${name} filled the guarantor form${guaranteeing ? ` for ${guaranteeing}` : ', not yet attached to an application'}.`
+            : `${name} applied (${response.reference}). Review and profile them.`,
+        entityType: 'FORM_RESPONSE',
+        entityId: response.id,
+        actionUrl: `/applications?kind=${customer === 'GUARANTOR' ? 'LOAN_APPLICATION' : customer}`,
+      });
+
+      const receipt: SubmitReceipt = { reference: response.reference ?? undefined, guaranteeing, fee: fee ?? undefined };
+      if (customer === 'LOAN_APPLICATION') {
+        const guarantorForm = await openGuarantorForm();
+        receipt.guarantorPath = guarantorForm ? `/f/${guarantorForm.slug}?app=${response.reference}` : null;
+      }
+      return { success: true, message: confirmation, data: receipt };
     }
 
     return { success: true, message: confirmation };

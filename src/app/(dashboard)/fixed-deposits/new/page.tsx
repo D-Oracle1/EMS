@@ -25,6 +25,7 @@ import {
   toActionCustomer,
   type CustomerSelection,
 } from '@/components/customer-picker';
+import { useApplicationPrefill, ApplicationPrefillBanner } from '@/components/application-prefill';
 
 interface FormData {
   principalAmount: string;
@@ -60,6 +61,16 @@ export default function NewFixedDepositPage() {
   const [errors, setErrors] = useState<Partial<Record<keyof FormData | 'customer', string>>>(
     {}
   );
+
+  // Opened from an approved application: customer, amount and the contract chosen on the form.
+  const prefill = useApplicationPrefill((p) => {
+    setCustomerSel({ ...emptyCustomerSelection, mode: 'existing', customerId: p.customer.id, customer: p.customer });
+    setForm((prev) => ({
+      ...prev,
+      ...(p.amount ? { principalAmount: String(p.amount) } : {}),
+      ...(p.fixedDeposit ? { tenure: String(p.fixedDeposit.tenureDays), interestRate: String(p.fixedDeposit.annualRate) } : {}),
+    }));
+  });
 
   const updateField = (field: keyof FormData, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -171,6 +182,14 @@ export default function NewFixedDepositPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        <ApplicationPrefillBanner
+          prefill={prefill}
+          notes={[
+            prefill?.fixedDeposit &&
+              `The applicant chose ${prefill.fixedDeposit.planLabel}. That is entered as ${prefill.fixedDeposit.tenureDays} days at ${prefill.fixedDeposit.annualRate}% a year, which pays the same total over the term.`,
+          ]}
+        />
+
         {/* Customer */}
         <Card>
           <CardHeader>

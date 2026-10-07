@@ -11,7 +11,9 @@ import {
   generateReference,
   calculateReducingBalanceSchedule,
   calculateFlatRateSchedule,
+  formatCurrency,
 } from '@/lib/utils';
+import { feeSummaries } from '@/lib/fee-ledger';
 import { createJournalEntry, getAccountByCode } from '@/lib/accounting-engine';
 import { createNotification, createNotificationForUsers, getUsersWithPermission, getUsersWithAnyPermission } from '@/lib/notifications';
 import { recordApprovalHistory } from '@/lib/approval-history';
@@ -180,12 +182,19 @@ export async function getLoan(id: string) {
       interestPaid: s.interestPaid.toNumber(),
       totalPaid: s.totalPaid.toNumber(),
       outstandingBalance: s.outstandingBalance.toNumber(),
+      feesDue: s.feesDue.toNumber(),
+      feesPaid: s.feesPaid.toNumber(),
+      penaltyDue: s.penaltyDue.toNumber(),
+      penaltyPaid: s.penaltyPaid.toNumber(),
+      penaltyWaived: s.penaltyWaived.toNumber(),
     })),
     repayments: loan.repayments.map((r) => ({
       ...r,
       amount: r.amount.toNumber(),
       principalPortion: r.principalPortion.toNumber(),
       interestPortion: r.interestPortion.toNumber(),
+      feesPortion: r.feesPortion.toNumber(),
+      penaltyPortion: r.penaltyPortion.toNumber(),
     })),
     guarantors: loan.guarantors.map((g) => ({
       ...g,
@@ -306,9 +315,36 @@ export async function createLoan(data: {
   branchId?: string;
   owingBypass?: boolean;
   owingBypassReason?: string;
+  /**
+   * The approved loan application this loan is created from. Its processing
+   * fee was paid upfront on the application (lib/fees), so it must be settled
+   * first and the loan does not charge it again.
+   */
+  applicationId?: string;
 }): Promise<ActionResult<{ id: string; loanNumber: string }>> {
   try {
     const user = await requirePermission('LOANS:CREATE');
+
+    let application: { id: string; reference: string | null } | null = null;
+    if (data.applicationId) {
+      const app = await prisma.formResponse.findUnique({
+        where: { id: String(data.applicationId).slice(0, 64) },
+        select: { id: true, reference: true, customerId: true, loanId: true, onboardingStatus: true, form: { select: { purpose: true } } },
+      });
+      if (!app || app.form.purpose !== 'LOAN_APPLICATION' || app.onboardingStatus !== 'APPROVED') {
+        return { success: false, error: 'Loan application not found or not approved' };
+      }
+      if (app.loanId) return { success: false, error: `A loan was already created from application ${app.reference}` };
+      if (app.customerId !== data.customerId) return { success: false, error: 'This loan is not for the applicant on that application' };
+      const fee = (await feeSummaries([app.id])).get(app.id);
+      if (fee && (fee.state === 'UNPAID' || fee.state === 'PART_PAID')) {
+        return {
+          success: false,
+          error: `The processing fee on application ${app.reference} is not fully paid (${formatCurrency(fee.balance)} owed). Record it under Applications first.`,
+        };
+      }
+      application = { id: app.id, reference: app.reference };
+    }
 
     // Resolve the borrower: either an existing customer or a new one to auto-register.
     // For a brand-new customer there can be no outstanding loans, so those checks are skipped.
@@ -390,8 +426,10 @@ export async function createLoan(data: {
       ? calculateReducingBalanceSchedule(data.principalAmount, finalRate, data.tenure, startDate)
       : calculateFlatRateSchedule(data.principalAmount, finalRate, data.tenure, startDate);
 
-    // Calculate fees
-    const processingFee = new Decimal(data.principalAmount).times(product.processingFee).div(100).toDecimalPlaces(2).toNumber();
+    // Calculate fees. From an application, the processing fee was paid upfront.
+    const processingFee = application
+      ? 0
+      : new Decimal(data.principalAmount).times(product.processingFee).div(100).toDecimalPlaces(2).toNumber();
     const insuranceFee = product.insuranceFee
       ? new Decimal(data.principalAmount).times(product.insuranceFee).div(100).toDecimalPlaces(2).toNumber()
       : 0;
@@ -509,6 +547,12 @@ export async function createLoan(data: {
             status: ScheduleStatus.PENDING,
           },
         });
+      }
+
+      if (application) {
+        // Claimed inside the transaction: a second loan from the same application fails here.
+        const claimed = await tx.formResponse.updateMany({ where: { id: application.id, loanId: null }, data: { loanId: newLoan.id } });
+        if (claimed.count === 0) throw new Error(`A loan was already created from application ${application.reference}`);
       }
 
       return { loan: newLoan, registeredCustomerNumber: newCustomerNumber };

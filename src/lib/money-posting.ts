@@ -17,6 +17,7 @@ import { auditLog } from '@/lib/audit';
 import { generateReference } from '@/lib/utils';
 import { createJournalEntry, getAccountByCode } from '@/lib/accounting-engine';
 import { createNotification } from '@/lib/notifications';
+import { allocateToInstalment, penaltyOwed, FEE_GL } from '@/lib/fees';
 import type { ActionResult } from '@/types';
 
 const SAVINGS_GL = {
@@ -120,9 +121,10 @@ export async function postSavingsDeposit(
 }
 
 /**
- * Repayment on a loan - Posts GL: Dr Cash, Cr Loans Receivable (principal),
- * Cr Interest Income. Allocated FIFO to the oldest unpaid instalment,
- * interest before principal. The caller has already authorised the actor.
+ * Repayment on a loan - Posts GL: Dr Cash, Cr Penalty & Late Fees (default
+ * charges), Cr Interest Income, Cr Loans Receivable (principal). Allocated
+ * FIFO to the oldest unpaid instalment: its default charges first (lib/fees),
+ * then interest, then principal. The caller has already authorised the actor.
  */
 export async function postLoanRepayment(
   actor: PostingActor,
@@ -133,7 +135,7 @@ export async function postLoanRepayment(
     paymentReference?: string;
     notes?: string;
   }
-): Promise<ActionResult<{ receiptNumber: string; principalPaid: number; interestPaid: number }>> {
+): Promise<ActionResult<{ receiptNumber: string; principalPaid: number; interestPaid: number; penaltyPaid: number }>> {
   const loan = await prisma.loan.findUnique({
     where: { id: data.loanId },
     include: {
@@ -149,43 +151,44 @@ export async function postLoanRepayment(
   let remainingAmount = new Decimal(data.amount);
   let totalPrincipal = new Decimal(0);
   let totalInterest = new Decimal(0);
+  let totalPenalty = new Decimal(0);
   let scheduleId: string | null = null;
 
   const receiptNumber = await generateReference('RECEIPT');
 
   await withTransaction(async (tx) => {
-    // FIFO: Allocate to oldest unpaid schedule first, interest before principal
+    // FIFO: the oldest unpaid instalment first; within it, default charges,
+    // then interest, then principal.
     for (const schedule of loan.schedule) {
       if (remainingAmount.lte(0)) break;
 
-      const interestOwed = new Decimal(schedule.interestDue.toString()).minus(schedule.interestPaid.toString());
-      const principalOwed = new Decimal(schedule.principalDue.toString()).minus(schedule.principalPaid.toString());
+      const owed = {
+        penalty: penaltyOwed({
+          penaltyDue: schedule.penaltyDue.toNumber(),
+          penaltyPaid: schedule.penaltyPaid.toNumber(),
+          penaltyWaived: schedule.penaltyWaived.toNumber(),
+        }),
+        interest: new Decimal(schedule.interestDue.toString()).minus(schedule.interestPaid.toString()).toNumber(),
+        principal: new Decimal(schedule.principalDue.toString()).minus(schedule.principalPaid.toString()).toNumber(),
+      };
+      const part = allocateToInstalment(remainingAmount.toNumber(), owed);
+      remainingAmount = new Decimal(part.remaining);
+      totalPenalty = totalPenalty.plus(part.penalty);
+      totalInterest = totalInterest.plus(part.interest);
+      totalPrincipal = totalPrincipal.plus(part.principal);
 
-      let interestPaid = new Decimal(0);
-      let principalPaid = new Decimal(0);
-
-      // Pay interest first
-      if (interestOwed.gt(0) && remainingAmount.gt(0)) {
-        interestPaid = Decimal.min(interestOwed, remainingAmount);
-        remainingAmount = remainingAmount.minus(interestPaid);
-        totalInterest = totalInterest.plus(interestPaid);
-      }
-
-      // Then principal
-      if (principalOwed.gt(0) && remainingAmount.gt(0)) {
-        principalPaid = Decimal.min(principalOwed, remainingAmount);
-        remainingAmount = remainingAmount.minus(principalPaid);
-        totalPrincipal = totalPrincipal.plus(principalPaid);
-      }
-
-      if (interestPaid.gt(0) || principalPaid.gt(0)) {
-        const newInterestPaid = new Decimal(schedule.interestPaid.toString()).plus(interestPaid);
-        const newPrincipalPaid = new Decimal(schedule.principalPaid.toString()).plus(principalPaid);
+      if (part.penalty > 0 || part.interest > 0 || part.principal > 0) {
+        const newInterestPaid = new Decimal(schedule.interestPaid.toString()).plus(part.interest);
+        const newPrincipalPaid = new Decimal(schedule.principalPaid.toString()).plus(part.principal);
+        const newPenaltyPaid = new Decimal(schedule.penaltyPaid.toString()).plus(part.penalty);
+        // totalPaid stays principal and interest, matched against totalDue;
+        // default charges are tracked on their own.
         const newTotalPaid = newInterestPaid.plus(newPrincipalPaid);
         const totalDue = new Decimal(schedule.totalDue.toString());
+        const chargesLeft = new Decimal(owed.penalty).minus(part.penalty);
 
-        const newStatus = newTotalPaid.gte(totalDue) ? ScheduleStatus.PAID
-          : newTotalPaid.gt(0) ? ScheduleStatus.PARTIAL
+        const newStatus = newTotalPaid.gte(totalDue) && chargesLeft.lte(0) ? ScheduleStatus.PAID
+          : newTotalPaid.gt(0) || newPenaltyPaid.gt(0) ? ScheduleStatus.PARTIAL
           : schedule.status;
 
         await tx.loanSchedule.update({
@@ -193,6 +196,7 @@ export async function postLoanRepayment(
           data: {
             interestPaid: newInterestPaid.toNumber(),
             principalPaid: newPrincipalPaid.toNumber(),
+            penaltyPaid: newPenaltyPaid.toNumber(),
             totalPaid: newTotalPaid.toNumber(),
             status: newStatus,
             paidDate: newStatus === 'PAID' ? new Date() : undefined,
@@ -212,6 +216,7 @@ export async function postLoanRepayment(
         amount: data.amount,
         principalPortion: totalPrincipal.toNumber(),
         interestPortion: totalInterest.toNumber(),
+        penaltyPortion: totalPenalty.toNumber(),
         paymentMode: data.paymentMode as any,
         paymentReference: data.paymentReference,
         collectedById: actor.id,
@@ -236,8 +241,11 @@ export async function postLoanRepayment(
   const loansReceivable = await getAccountByCode(LOAN_GL.LOANS_RECEIVABLE);
   const cashBank = await getAccountByCode(LOAN_GL.CASH_BANK);
   const interestIncome = await getAccountByCode(LOAN_GL.INTEREST_INCOME);
+  const penaltyIncome = totalPenalty.gt(0)
+    ? (await getAccountByCode(FEE_GL.PENALTY_INCOME)) ?? (await getAccountByCode(FEE_GL.FEE_INCOME))
+    : null;
 
-  if (loansReceivable && cashBank && interestIncome) {
+  if (loansReceivable && cashBank && interestIncome && (totalPenalty.lte(0) || penaltyIncome)) {
     const glLines = [
       {
         accountId: cashBank.id,
@@ -257,6 +265,15 @@ export async function postLoanRepayment(
         referenceType: 'LOAN',
         referenceId: loan.id,
       } as any);
+    }
+
+    if (totalPenalty.gt(0) && penaltyIncome) {
+      glLines.push({
+        accountId: penaltyIncome.id,
+        debitAmount: 0,
+        creditAmount: totalPenalty.toNumber(),
+        description: `Default charges - ${loan.loanNumber}`,
+      });
     }
 
     if (totalInterest.gt(0)) {
@@ -302,6 +319,6 @@ export async function postLoanRepayment(
   return {
     success: true,
     message: `Payment of ${data.amount} received. Receipt: ${receiptNumber}`,
-    data: { receiptNumber, principalPaid: totalPrincipal.toNumber(), interestPaid: totalInterest.toNumber() },
+    data: { receiptNumber, principalPaid: totalPrincipal.toNumber(), interestPaid: totalInterest.toNumber(), penaltyPaid: totalPenalty.toNumber() },
   };
 }

@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
   ArrowLeft, ArrowDown, ArrowUp, Copy, Eye, Globe2, Loader2, Plus, Save, Trash2, Users, X, AlertTriangle,
-  Lock, UserPlus,
+  Lock, UserPlus, Contact,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -21,6 +21,7 @@ import {
   FILE_KINDS, FILE_KIND_LABEL, FILE_LIMITS, isOnboardingField, isOnboardingRequired,
   type FormQuestion, type QuestionType, type FileKind,
 } from '@/lib/forms';
+import { isCustomerPurpose, isLockedField, isRequiredField, PURPOSE_INFO } from '@/lib/customer-forms';
 
 export interface BuilderForm {
   id?: string;
@@ -28,8 +29,14 @@ export interface BuilderForm {
   title: string;
   description: string;
   audience: 'PUBLIC' | 'STAFF';
-  /** A staff onboarding form keeps its staff fields; see lib/forms ONBOARDING_FIELDS. */
-  purpose?: 'GENERAL' | 'STAFF_ONBOARDING';
+  /**
+   * A staff onboarding form keeps its staff fields (lib/forms ONBOARDING_FIELDS);
+   * a customer application form keeps its profile fields (lib/customer-forms).
+   */
+  purpose?: string;
+  /** Customer application forms: the branch that receives them, and the choices. */
+  branchId?: string | null;
+  branches?: { id: string; name: string }[];
   confirmationMessage: string;
   oneResponsePerStaff: boolean;
   closesAt: string | null;
@@ -64,8 +71,12 @@ export function FormBuilder({ initial }: { initial: BuilderForm }) {
   const [saving, setSaving] = useState(false);
   const isNew = !initial.id;
   const onboarding = initial.purpose === 'STAFF_ONBOARDING';
-  /** A staff field on an onboarding form: rewordable, but its type and presence are fixed. */
-  const locked = (q: FormQuestion) => onboarding && isOnboardingField(q.id);
+  const customerPurpose = isCustomerPurpose(initial.purpose) ? initial.purpose : null;
+  /** A record field on an onboarding or application form: rewordable, but its type and presence are fixed. */
+  const locked = (q: FormQuestion) =>
+    (onboarding && isOnboardingField(q.id)) || (!!customerPurpose && isLockedField(customerPurpose, q.id));
+  const mustBeRequired = (q: FormQuestion) =>
+    (onboarding && isOnboardingRequired(q.id)) || (!!customerPurpose && isRequiredField(customerPurpose, q.id));
 
   const set = <K extends keyof BuilderForm>(key: K, value: BuilderForm[K]) => setForm((f) => ({ ...f, [key]: value }));
 
@@ -122,6 +133,7 @@ export function FormBuilder({ initial }: { initial: BuilderForm }) {
       oneResponsePerStaff: form.oneResponsePerStaff,
       closesAt: form.closesAt,
       questions: form.questions,
+      branchId: form.branchId ?? null,
     };
     const result = await saveForm(input, form.id);
     setSaving(false);
@@ -184,7 +196,49 @@ export function FormBuilder({ initial }: { initial: BuilderForm }) {
             maxLength={2000}
           />
 
-          {onboarding ? (
+          {customerPurpose ? (
+            <div className="space-y-3">
+              <p className="flex items-start gap-2 rounded-xl bg-indigo-50 px-4 py-3 text-sm text-indigo-900 dark:bg-indigo-500/10 dark:text-indigo-200">
+                <Contact className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>
+                  {customerPurpose === 'GUARANTOR' ? (
+                    <>
+                      Guarantor form. Every loan applicant is given a link to the newest open guarantor form, carrying their
+                      application number, so each guarantor arrives attached to their application under{' '}
+                      <Link href="/applications?kind=LOAN_APPLICATION" className="font-medium underline">Applications</Link>.
+                    </>
+                  ) : (
+                    <>
+                      {PURPOSE_INFO[customerPurpose].label} application form. Anyone with the link can fill it, and each response waits
+                      under <Link href={`/applications?kind=${customerPurpose}`} className="font-medium underline">Applications</Link> for
+                      the {PURPOSE_INFO[customerPurpose].label.toLowerCase()} officers and their supervisors, who approve it to profile the
+                      customer.
+                      {customerPurpose === 'LOAN_APPLICATION' && ' Applicants get a link for their 2 guarantors, so keep a guarantor form open too.'}
+                    </>
+                  )}{' '}
+                  The locked questions fill the customer&apos;s profile: you can reword them, and add your own.
+                </span>
+              </p>
+              <div className="space-y-1.5">
+                <Label htmlFor="branch">Send applications to</Label>
+                <select
+                  id="branch"
+                  className={selectClass}
+                  value={form.branchId ?? ''}
+                  onChange={(e) => set('branchId', e.target.value || null)}
+                >
+                  <option value="">Any branch: officers in every branch see them</option>
+                  {(initial.branches ?? []).map((b) => (
+                    <option key={b.id} value={b.id}>{b.name} only</option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted-foreground">
+                  Make one form per branch to give each branch its own link. Approved customers join this branch, or the approving
+                  officer&apos;s branch when it is any.
+                </p>
+              </div>
+            </div>
+          ) : onboarding ? (
             <p className="flex items-start gap-2 rounded-xl bg-indigo-50 px-4 py-3 text-sm text-indigo-900 dark:bg-indigo-500/10 dark:text-indigo-200">
               <UserPlus className="mt-0.5 h-4 w-4 shrink-0" />
               <span>
@@ -217,7 +271,7 @@ export function FormBuilder({ initial }: { initial: BuilderForm }) {
 
           )}
 
-          {!onboarding && form.audience === 'STAFF' && (
+          {!onboarding && !customerPurpose && form.audience === 'STAFF' && (
             <label className="flex items-center justify-between gap-4 rounded-xl border px-4 py-3">
               <span>
                 <span className="block text-sm font-medium">One response per person</span>
@@ -291,7 +345,8 @@ export function FormBuilder({ initial }: { initial: BuilderForm }) {
 
             {locked(q) && (
               <p className="flex items-center gap-1.5 text-xs font-medium text-indigo-700 dark:text-indigo-300">
-                <Lock className="h-3 w-3" />Staff record field: fills the new staff member&apos;s profile
+                <Lock className="h-3 w-3" />
+                {onboarding ? "Staff record field: fills the new staff member's profile" : "Profile field: fills the customer's profile"}
               </p>
             )}
             {hasOptions(q.type) && !locked(q) && <OptionsEditor q={q} onChange={(options) => updateQuestion(q.id, { options })} />}
@@ -311,14 +366,14 @@ export function FormBuilder({ initial }: { initial: BuilderForm }) {
                 <IconButton label="Move up" onClick={() => move(index, -1)} disabled={index === 0}><ArrowUp className="h-4 w-4" /></IconButton>
                 <IconButton label="Move down" onClick={() => move(index, 1)} disabled={index === form.questions.length - 1}><ArrowDown className="h-4 w-4" /></IconButton>
                 <IconButton label="Duplicate" onClick={() => duplicate(index)}><Copy className="h-4 w-4" /></IconButton>
-                <IconButton label={locked(q) ? 'Staff fields cannot be deleted' : 'Delete'} onClick={() => remove(q.id)} disabled={locked(q)} className="hover:text-rose-600"><Trash2 className="h-4 w-4" /></IconButton>
+                <IconButton label={locked(q) ? 'Profile fields cannot be deleted' : 'Delete'} onClick={() => remove(q.id)} disabled={locked(q)} className="hover:text-rose-600"><Trash2 className="h-4 w-4" /></IconButton>
               </div>
               <label className="flex items-center gap-2 text-sm">
                 Required
                 <Switch
                   checked={q.required}
                   onCheckedChange={(v) => updateQuestion(q.id, { required: v })}
-                  disabled={onboarding && isOnboardingRequired(q.id)}
+                  disabled={mustBeRequired(q)}
                 />
               </label>
             </div>

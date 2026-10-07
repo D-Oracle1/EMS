@@ -14,6 +14,8 @@ const h = vi.hoisted(() => {
   const state = {
     staff: null as any,
     customer: null as any,
+    /** Further customers, for a phone number two people share. */
+    others: [] as any[],
     staffUpdates: [] as any[],
     customerUpdates: [] as any[],
     auditRows: [] as any[],
@@ -31,6 +33,10 @@ vi.mock('next-auth', () => ({
     signIn: vi.fn(),
     signOut: vi.fn(),
   })),
+  // lib/auth subclasses this to report why a sign-in failed (locked, inactive...).
+  CredentialsSignin: class CredentialsSignin extends Error {
+    code = 'credentials';
+  },
 }));
 
 vi.mock('next-auth/providers/credentials', () => ({
@@ -54,6 +60,18 @@ vi.mock('@/lib/prisma', () => {
         }),
       },
       customer: {
+        // Sign-in finds customers by email, or by the digits a phone number ends with.
+        findMany: vi.fn(async (args: any) => {
+          const w = args.where ?? {};
+          return [state.customer, ...state.others].filter((c: any) => {
+            if (!c) return false;
+            if (w.email !== undefined && c.email !== w.email) return false;
+            if (w.phone?.endsWith !== undefined && !String(c.phone ?? '').replace(/\D/g, '').endsWith(w.phone.endsWith)) return false;
+            if (w.portalEnabled !== undefined && c.portalEnabled !== w.portalEnabled) return false;
+            if (w.isDeleted !== undefined && !!c.isDeleted !== w.isDeleted) return false;
+            return true;
+          }).slice(0, args.take ?? 100);
+        }),
         findFirst: vi.fn(async (args: any) => {
           const c = state.customer;
           if (!c) return null;
@@ -135,6 +153,7 @@ function customerRow(overrides: Record<string, any> = {}) {
     id: 'cust-1',
     customerNumber: 'CUS000001',
     email: 'chidi@example.test',
+    phone: '0803 123 4567',
     firstName: 'Chidi',
     lastName: 'Eze',
     passwordHash: HASH,
@@ -152,6 +171,7 @@ function customerRow(overrides: Record<string, any> = {}) {
 beforeEach(() => {
   state.staff = null;
   state.customer = null;
+  state.others = [];
   state.staffUpdates = [];
   state.customerUpdates = [];
   state.auditRows = [];
@@ -209,7 +229,7 @@ describe('authorize - staff login', () => {
   it('refuses a locked account before checking the password', async () => {
     state.staff = staffRow({ lockedUntil: new Date(Date.now() + 60_000) });
 
-    await expect(authorize({ email: 'ada@hylink.test', password: PASSWORD })).rejects.toThrow(/locked/);
+    await expect(authorize({ email: 'ada@hylink.test', password: PASSWORD })).rejects.toMatchObject({ code: 'account_locked' });
     expect(state.staffUpdates).toHaveLength(0);
   });
 
@@ -224,7 +244,7 @@ describe('authorize - staff login', () => {
   it('refuses a suspended account', async () => {
     state.staff = staffRow({ status: 'SUSPENDED' });
 
-    await expect(authorize({ email: 'ada@hylink.test', password: PASSWORD })).rejects.toThrow(/not active/);
+    await expect(authorize({ email: 'ada@hylink.test', password: PASSWORD })).rejects.toMatchObject({ code: 'account_inactive' });
   });
 
   it('increments the failure counter and audits a wrong password', async () => {
@@ -311,13 +331,13 @@ describe('authorize - customer portal login', () => {
   it('refuses a locked portal account', async () => {
     state.customer = customerRow({ portalLockedUntil: new Date(Date.now() + 60_000) });
 
-    await expect(login()).rejects.toThrow(/locked/);
+    await expect(login()).rejects.toMatchObject({ code: 'account_locked' });
   });
 
   it('refuses a customer that is not ACTIVE', async () => {
     state.customer = customerRow({ status: 'INACTIVE' });
 
-    await expect(login()).rejects.toThrow(/not active/);
+    await expect(login()).rejects.toMatchObject({ code: 'account_inactive' });
   });
 
   it('increments the portal failure counter on a wrong password', async () => {
@@ -361,6 +381,35 @@ describe('authorize - customer portal login', () => {
 // ---------------------------------------------------------------------------
 // OTP generation
 // ---------------------------------------------------------------------------
+describe('authorize - customer sign-in by phone number', () => {
+  it('signs in a customer by their phone number, however it is written', async () => {
+    state.customer = customerRow({ email: null });
+    for (const phone of ['08031234567', '+234 803 123 4567', '0803-123-4567']) {
+      const user: any = await authorize({ email: phone, password: PASSWORD });
+      expect(user).toMatchObject({ id: 'cust-1', userType: 'customer', email: '' });
+    }
+  });
+
+  it('refuses a wrong password by phone, counting the failure', async () => {
+    state.customer = customerRow();
+    expect(await authorize({ email: '08031234567', password: 'wrong' })).toBeNull();
+    expect(state.customerUpdates.at(-1)).toMatchObject({ portalFailedAttempts: 1 });
+  });
+
+  it('signs no one in on a phone number two portal customers share', async () => {
+    state.customer = customerRow();
+    state.others = [customerRow({ id: 'cust-2', email: 'ngozi@example.test' })];
+    expect(await authorize({ email: '08031234567', password: PASSWORD })).toBeNull();
+    // Each can still use their email.
+    expect(await authorize({ email: 'chidi@example.test', password: PASSWORD })).toMatchObject({ id: 'cust-1' });
+  });
+
+  it('ignores something too short to be a phone number', async () => {
+    state.customer = customerRow();
+    expect(await authorize({ email: '4567', password: PASSWORD })).toBeNull();
+  });
+});
+
 describe('generateOtp', () => {
   it('defaults to 8 characters and honours an explicit length', () => {
     expect(generateOtp()).toHaveLength(8);

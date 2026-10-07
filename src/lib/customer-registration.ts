@@ -25,6 +25,12 @@ export interface NewCustomerInput {
   nokAddress?: string;
   companyName?: string;
   rcNumber?: string;
+  // Filled by customer application forms (lib/customer-forms).
+  maritalStatus?: string;
+  alternatePhone?: string;
+  passportNumber?: string;
+  driversLicense?: string;
+  employerAddress?: string;
 }
 
 /** Validate the minimum fields required to register a new customer. */
@@ -71,6 +77,11 @@ export async function createCustomerInTx(
       nokAddress: nc.nokAddress,
       companyName: nc.companyName,
       rcNumber: nc.rcNumber,
+      maritalStatus: nc.maritalStatus,
+      alternatePhone: nc.alternatePhone,
+      passportNumber: nc.passportNumber,
+      driversLicense: nc.driversLicense,
+      employerAddress: nc.employerAddress,
       branchId: ctx.branchId,
       createdBy: ctx.createdBy,
     },

@@ -2,6 +2,7 @@ import { randomBytes } from 'crypto';
 import NextAuth, { CredentialsSignin } from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import bcrypt from 'bcryptjs';
+import { phoneKey } from '@/lib/customer-forms';
 import { prisma } from './prisma';
 import { authConfig } from './auth.config';
 import { getConfigNumber } from './system-config';
@@ -109,9 +110,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!staff) {
           // Not a staff member — try customer portal login (additive; staff
           // authentication above is unchanged).
-          const customer = await prisma.customer.findFirst({
-            where: { email, portalEnabled: true, isDeleted: false },
-          });
+          // Customers sign in with their email, or with their phone number
+          // (staff hand phone-only customers a one-time password: portal-access
+          // actions). A phone shared by two portal customers signs in neither:
+          // they must use their email.
+          const phone = email.includes('@') ? null : phoneKey(email);
+          const found = phone
+            ? await prisma.customer.findMany({ where: { phone: { endsWith: phone }, portalEnabled: true, isDeleted: false }, take: 2 })
+            : await prisma.customer.findMany({ where: { email, portalEnabled: true, isDeleted: false }, take: 1 });
+          const customer = found.length === 1 ? found[0] : null;
           if (!customer || !customer.passwordHash) return null;
 
           if (customer.portalLockedUntil && new Date() < customer.portalLockedUntil) {
@@ -141,7 +148,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
           return {
             id: customer.id,
-            email: customer.email as string,
+            email: customer.email ?? '',
             employeeId: customer.customerNumber,
             firstName: customer.firstName,
             lastName: customer.lastName,

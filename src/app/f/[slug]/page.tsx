@@ -9,16 +9,22 @@ import { PublicForm } from './public-form';
  * A form's share link. Outside the dashboard on purpose: whoever opens it —
  * a customer, a job applicant, a member of staff — sees only the form.
  */
-export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+type PageProps = { params: Promise<{ slug: string }>; searchParams: Promise<{ app?: string | string[] }> };
+
+/** A guarantor's link carries the loan application's reference: /f/<slug>?app=LA-7K2M9Q. */
+const appParam = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
   const form = await getPublicForm(slug);
   const title = form.state === 'not-found' ? 'Form not found' : form.state === 'open' ? form.form.title : form.title;
   return { title: `${title} · Hy-Link Finance`, robots: { index: false, follow: false } };
 }
 
-export default async function FormPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function FormPage({ params, searchParams }: PageProps) {
   const { slug } = await params;
-  const form = await getPublicForm(slug);
+  const app = appParam((await searchParams).app);
+  const form = await getPublicForm(slug, app);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-indigo-50 via-background to-background px-4 pb-16 pt-[calc(1.5rem+env(safe-area-inset-top))] dark:from-indigo-950/40">
@@ -28,14 +34,20 @@ export default async function FormPage({ params }: { params: Promise<{ slug: str
         </div>
 
         {form.state === 'open' ? (
-          <PublicForm slug={slug} form={form.form} preview={form.preview} respondent={form.respondent} />
+          <PublicForm
+            slug={slug}
+            form={form.form}
+            preview={form.preview}
+            respondent={form.respondent}
+            guaranteeing={form.guaranteeing}
+          />
         ) : (
           <div className="rounded-3xl border bg-card p-8 text-center shadow-sm">
             {form.state === 'not-found' && (
               <Notice icon={FileQuestion} title="Form not found" body="This link may be mistyped, or the form has been removed." />
             )}
             {form.state === 'closed' && (
-              <Notice icon={CalendarX2} title={form.title} body="This form is no longer taking responses." />
+              <Notice icon={CalendarX2} title={form.title} body={form.message ?? 'This form is no longer taking responses.'} />
             )}
             {form.state === 'answered' && (
               <Notice icon={CheckCircle2} title={form.title} body={form.message} />

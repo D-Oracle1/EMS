@@ -12,8 +12,8 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/40">
-      <header className="hero-card rounded-none pt-safe">
-        <div className="mx-auto max-w-3xl px-4 py-4 flex items-center justify-between">
+      <header className="hero-card rounded-none pt-safe print:hidden">
+        <div className="mx-auto max-w-3xl px-4 py-4 flex items-center justify-between print:hidden">
           <div className="flex min-w-0 items-center gap-2.5">
             <BrandTile className="h-9 w-9" />
             <div className="min-w-0">

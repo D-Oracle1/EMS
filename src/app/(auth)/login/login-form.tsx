@@ -46,7 +46,7 @@ export function LoginForm() {
         // name. Echoing `error` raw is how a locked account used to reach this
         // screen as the bare word "Configuration".
         const code = (result as { code?: string }).code;
-        setError(SIGN_IN_MESSAGES[code ?? ''] ?? 'Invalid email or password');
+        setError(SIGN_IN_MESSAGES[code ?? ''] ?? 'Wrong email, phone number or password');
       } else {
         // With no explicit callback, hand off to '/', which resolves the
         // right home for this user server-side (HR staff open onto /hr).
@@ -90,19 +90,21 @@ export function LoginForm() {
 
         <div>
           <label htmlFor="email" className="mb-2 block text-xs font-semibold text-slate-600">
-            Email address
+            Email address or phone number
           </label>
           <input
             id="email"
             name="email"
-            type="email"
-            autoComplete="email"
+            type="text"
+            inputMode="email"
+            autoCapitalize="none"
+            autoComplete="username"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             disabled={loading}
             className={FIELD_CLASS}
-            placeholder="you@example.com"
+            placeholder="you@example.com or 0803 000 0000"
           />
         </div>
 

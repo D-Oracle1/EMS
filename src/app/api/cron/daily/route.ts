@@ -4,6 +4,7 @@ import Decimal from 'decimal.js';
 import { flagDormantAccounts } from '@/lib/savings-maintenance';
 import { refreshMaturityProgress } from '@/lib/savings-interest-engine';
 import { runDailySavingsInterest } from '@/lib/savings-daily-interest';
+import { runDailyLoanPenalties } from '@/lib/loan-penalties';
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
 
@@ -114,6 +115,12 @@ export async function GET(request: Request) {
       `${interest.processed} accounts credited ` +
       `${interest.totalInterest.toFixed(2)}, ${interest.notified} savers notified, ` +
       `${interest.skipped} skipped`;
+
+    // 7. Charge overdue loan instalments their daily default charge.
+    //    Idempotent on (scheduleId, date), so a retry cannot charge a day twice.
+    const penalties = await runDailyLoanPenalties(new Date());
+    results.loanDefaultCharges =
+      `${penalties.charges} day-charges on ${penalties.instalments} instalments, ${penalties.amount.toFixed(2)} in total`;
 
     return NextResponse.json({ success: true, results, timestamp: new Date().toISOString() });
   } catch (error: any) {

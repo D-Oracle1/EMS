@@ -1,375 +1,401 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import {
-  Wallet, Landmark, PiggyBank, Loader2, Plus, ArrowDownCircle, User, TrendingUp, Bell,
+  AlertTriangle, ArrowDownLeft, ArrowUpRight, Bell, CalendarClock, ChevronRight, FileText, Landmark, Loader2,
+  PiggyBank, Receipt, ShieldCheck, TrendingUp, Wallet,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter,
-} from '@/components/ui/dialog';
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
-import { formatCurrency, formatDateTime } from '@/lib/utils';
+import { cn, formatDateTime } from '@/lib/utils';
 import { getMyNotifications, markMyNotificationsRead } from '@/actions/portal.actions';
+import { getMyPortfolio, type Portfolio } from '@/actions/portfolio.actions';
+import { FEE_STATE_LABEL } from '@/lib/fees';
 import {
-  getMyPortalData, updateMyProfile, requestMyWithdrawal, getPortalLoanProducts, applyForLoan,
-} from '@/actions/portal.actions';
+  AllocationBar, Money, ProgressBar, StatusPill, accountStatus, formatDay,
+} from '@/components/portal/portfolio-bits';
+import { LoanApplyDialog, ProfileDialog } from '@/components/portal/portal-dialogs';
 
-type PortalData = Awaited<ReturnType<typeof getMyPortalData>>;
-type LoanProduct = Awaited<ReturnType<typeof getPortalLoanProducts>>[number];
+type Notice = { id: string; title: string; message: string; createdAt: string; isRead: boolean };
 
-const statusVariant: Record<string, 'success' | 'warning' | 'error' | 'secondary' | 'default'> = {
-  ACTIVE: 'success', DISBURSED: 'success', COMPLETED: 'secondary', CLOSED: 'secondary',
-  DRAFT: 'default', PENDING_VERIFICATION: 'warning', PENDING_APPROVAL: 'warning',
-  OVERDUE: 'error', DEFAULTED: 'error', REJECTED: 'error', MATURED: 'default',
-};
-
+/** The customer's whole Hy-Link portfolio on one screen, each holding opening its own page. */
 export function PortalClient() {
-  const [data, setData] = useState<PortalData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [notices, setNotices] = useState<{ unread: number; items: any[] }>({ unread: 0, items: [] });
+  const [data, setData] = useState<Portfolio | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [notices, setNotices] = useState<{ unread: number; items: Notice[] }>({ unread: 0, items: [] });
 
-  /**
-   * Fetch without touching `loading` synchronously. Every setState here
-   * happens inside a promise callback, which is the shape an effect is allowed
-   * to use — the component already starts in the loading state, so the first
-   * fetch has nothing to announce.
-   */
+  // setState only inside promise callbacks: the screen starts in its loading state.
   const refetch = () => {
-    getMyPortalData().then(setData).catch((e) => toast.error(e.message)).finally(() => setLoading(false));
-    // A failure here must not stop the accounts rendering.
-    getMyNotifications(20).then(setNotices).catch(() => undefined);
+    getMyPortfolio().then(setData).catch((e) => { setFailed(true); toast.error(e.message); });
+    getMyNotifications(20).then((r) => setNotices(r as never)).catch(() => undefined);
   };
-
-  /** A reload asked for by a dialog, which should show the spinner again. */
-  const load = () => {
-    setLoading(true);
-    refetch();
-  };
-
   useEffect(() => { refetch(); }, []);
 
-  if (loading && !data) {
+  if (!data) {
     return (
       <div className="flex items-center justify-center py-24 text-muted-foreground">
-        <Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading your accounts…
+        {failed ? 'Your portfolio could not be loaded. Please try again.' : <><Loader2 className="mr-2 h-6 w-6 animate-spin" />Loading your portfolio…</>}
       </div>
     );
   }
-  if (!data) return null;
 
-  const totalSavings = data.savings.reduce((s, a) => s + a.currentBalance, 0);
-  const activeLoans = data.loans.filter((l) => ['ACTIVE', 'DISBURSED', 'OVERDUE'].includes(l.status)).length;
+  const { totals } = data;
+  const overdueLoans = data.loans.filter((l) => l.overdue > 0);
+  const savings = data.savings.filter((s) => s.held || s.status === 'ACTIVE');
+  const pastSavings = data.savings.filter((s) => !savings.includes(s));
+  const deposits = data.deposits.filter((d) => d.held);
+  const pastDeposits = data.deposits.filter((d) => !d.held);
+  const nothing = !data.savings.length && !data.deposits.length && !data.loans.length;
 
   return (
-    <div className="space-y-5 animate-rise">
-      {/* Balance summary */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <div className="premium-card p-4">
-          <div className="icon-tile icon-tile-sm icon-tile-emerald"><Wallet className="h-4 w-4" /></div>
-          <p className="mt-2 text-xl font-bold">{formatCurrency(totalSavings)}</p>
-          <p className="text-xs text-muted-foreground">Total savings</p>
+    <div className="space-y-6 animate-rise">
+      {/* Who and when */}
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight">Hello, {data.customer.firstName}</h1>
+          <p className="text-xs text-muted-foreground">
+            Customer {data.customer.customerNumber}{data.customer.branch ? ` · ${data.customer.branch}` : ''} · figures as of {formatDateTime(data.asOf)}
+          </p>
         </div>
-        <div className="premium-card p-4">
-          <div className="icon-tile icon-tile-sm icon-tile-orange"><Landmark className="h-4 w-4" /></div>
-          <p className="mt-2 text-xl font-bold">{activeLoans}</p>
-          <p className="text-xs text-muted-foreground">Active loan{activeLoans !== 1 ? 's' : ''}</p>
+        <div className="flex flex-wrap gap-2">
+          <LoanApplyDialog onDone={refetch} />
+          <ProfileDialog customer={data.customer} onDone={refetch} />
         </div>
       </div>
 
-      {/* Actions */}
-      <div className="flex flex-wrap gap-2">
-        <LoanApplyDialog onDone={load} />
-        <ProfileDialog data={data} onDone={load} />
-      </div>
-
-      {/* What your money has been doing */}
-      {notices.items.length > 0 && (
-        <section className="space-y-2">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="font-semibold flex items-center gap-2">
-              <Bell className="h-4 w-4 text-emerald-600" /> Activity
-              {notices.unread > 0 && (
-                <Badge variant="success" className="text-[10px]">{notices.unread} new</Badge>
-              )}
-            </h2>
-            {notices.unread > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-xs"
-                onClick={async () => {
-                  await markMyNotificationsRead();
-                  getMyNotifications(20).then(setNotices).catch(() => undefined);
-                }}
-              >
-                Mark all read
-              </Button>
-            )}
+      {/* The headline: what they have with Hy-Link */}
+      <section className="premium-card space-y-5 p-5">
+        <div>
+          <p className="text-sm text-muted-foreground">Your money with Hy-Link</p>
+          <Money value={totals.invested} className="block text-4xl font-bold tracking-tight sm:text-5xl" />
+        </div>
+        <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <Headline label="Interest earned so far" value={totals.earned} tone="good" />
+          <Headline label="Expected at maturity" value={totals.atMaturity} hint="If nothing is added or withdrawn" />
+          <Headline label="Owed on loans" value={totals.owed} tone={totals.owed > 0 ? 'owe' : undefined} />
+          <Headline label="Net position" value={totals.net} hint="Your money less what you owe" />
+        </dl>
+        {totals.allocation.length > 0 && (
+          <div className="border-t pt-4">
+            <p className="mb-2 text-xs font-medium text-muted-foreground">Where your money is</p>
+            <AllocationBar items={totals.allocation} />
           </div>
+        )}
+      </section>
 
+      {overdueLoans.length > 0 && (
+        <Link
+          href={`/portal/loans/${overdueLoans[0].id}`}
+          className="flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-100"
+        >
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+          <span className="min-w-0 flex-1">
+            <span className="font-semibold">A loan payment is overdue.</span>{' '}
+            <Money value={overdueLoans.reduce((t, l) => t + l.overdue, 0)} /> is past due on loan {overdueLoans.map((l) => l.loanNumber).join(', ')}.
+            Default charges are added every day until it is paid.
+          </span>
+          <ChevronRight className="h-5 w-5 shrink-0" />
+        </Link>
+      )}
+
+      {nothing && (
+        <section className="premium-card p-6 text-center">
+          <ShieldCheck className="mx-auto h-10 w-10 text-blue-600" />
+          <p className="mt-3 font-semibold">Your portfolio is ready</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Your savings, deposits and loans appear here as soon as they are opened. Visit or call {data.customer.branch ?? 'your branch'}
+            {data.customer.branchPhone ? ` on ${data.customer.branchPhone}` : ''} to start.
+          </p>
+        </section>
+      )}
+
+      {/* Coming up */}
+      {data.upcoming.length > 0 && (
+        <Section icon={CalendarClock} title="Coming up" tone="text-blue-600">
+          <div className="premium-card divide-y">
+            {data.upcoming.slice(0, 6).map((u, i) => (
+              <Link key={`${u.href}-${i}`} href={u.href} className="flex items-center gap-3 p-3 hover:bg-muted/40">
+                <div className="w-14 shrink-0 text-center">
+                  <p className="text-[11px] uppercase text-muted-foreground">{new Date(u.date).toLocaleDateString('en-NG', { month: 'short' })}</p>
+                  <p className="text-lg font-bold leading-none">{new Date(u.date).getDate()}</p>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{u.title}</p>
+                  <p className={cn('text-xs', u.kind === 'OVERDUE' ? 'text-rose-700 dark:text-rose-300' : 'text-muted-foreground')}>
+                    {u.kind === 'MATURITY' ? 'You receive' : u.kind === 'OVERDUE' ? 'Overdue: please pay' : 'Payment due'}
+                  </p>
+                </div>
+                <Money value={u.amount} className="shrink-0 text-sm font-semibold" />
+              </Link>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {/* Savings and partnerships */}
+      {savings.length > 0 && (
+        <Section icon={PiggyBank} title="Savings" tone="text-emerald-600">
+          {savings.map((s) => {
+            const st = accountStatus(s.status);
+            return (
+              <Link key={s.id} href={`/portal/savings/${s.id}`} className="premium-card block space-y-3 p-4 hover:ring-1 hover:ring-blue-300">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{s.product}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {s.accountNumber}{s.rate != null && s.months ? ` · ${s.rate}% over ${s.months} months` : ''}
+                    </p>
+                  </div>
+                  <StatusPill {...st} />
+                </div>
+                <div className="flex flex-wrap items-end justify-between gap-2">
+                  <div>
+                    <Money value={s.balance} className="text-2xl font-bold" />
+                    {s.earned > 0 && <p className="text-xs text-emerald-700 dark:text-emerald-300">+<Money value={s.earned} /> interest earned</p>}
+                  </div>
+                  {s.maturityDate && (
+                    <div className="text-right text-xs text-muted-foreground">
+                      <p>At maturity <Money value={s.atMaturity} className="font-semibold text-foreground" /></p>
+                      <p>{formatDay(s.maturityDate)}</p>
+                    </div>
+                  )}
+                </div>
+                <ProgressBar value={s.progress} label={s.progress != null ? `${Math.round(s.progress * 100)}% of the term` : undefined} />
+              </Link>
+            );
+          })}
+        </Section>
+      )}
+
+      {/* Fixed deposits */}
+      {deposits.length > 0 && (
+        <Section icon={TrendingUp} title="Fixed deposits" tone="text-violet-600">
+          {deposits.map((d) => (
+            <Link key={d.id} href={`/portal/deposits/${d.id}`} className="premium-card block space-y-3 p-4 hover:ring-1 hover:ring-blue-300">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate font-medium">Certificate {d.certificateNumber}</p>
+                  <p className="text-xs text-muted-foreground">{d.rate}% a year · {d.tenureDays} days</p>
+                </div>
+                <StatusPill {...accountStatus(d.status)} />
+              </div>
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                <div>
+                  <Money value={d.principal} className="text-2xl font-bold" />
+                  {d.earned > 0 && <p className="text-xs text-emerald-700 dark:text-emerald-300">+<Money value={d.earned} /> interest so far</p>}
+                </div>
+                <div className="text-right text-xs text-muted-foreground">
+                  <p>You receive <Money value={d.atMaturity} className="font-semibold text-foreground" /></p>
+                  <p>{formatDay(d.maturityDate)}{d.status === 'ACTIVE' ? ` · ${d.daysLeft} days left` : ''}</p>
+                </div>
+              </div>
+              <ProgressBar value={d.progress} />
+            </Link>
+          ))}
+        </Section>
+      )}
+
+      {/* Loans */}
+      {data.loans.length > 0 && (
+        <Section icon={Landmark} title="Loans" tone="text-orange-600">
+          {data.loans.map((l) => (
+            <Link key={l.id} href={`/portal/loans/${l.id}`} className="premium-card block space-y-3 p-4 hover:ring-1 hover:ring-blue-300">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{l.product}</p>
+                  <p className="text-xs text-muted-foreground">{l.loanNumber} · <Money value={l.principal} /> over {l.tenure} months</p>
+                </div>
+                <StatusPill label={l.stage.label} tone={l.stage.tone} />
+              </div>
+              {l.repaying ? (
+                <>
+                  <div className="flex flex-wrap items-end justify-between gap-2">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Still to pay</p>
+                      <Money value={l.outstanding} className="text-2xl font-bold" />
+                      {l.chargesOwed > 0 && <p className="text-xs text-rose-700 dark:text-rose-300">includes <Money value={l.chargesOwed} /> default charges</p>}
+                    </div>
+                    {l.next && (
+                      <div className="text-right text-xs text-muted-foreground">
+                        <p>Next payment <Money value={l.next.amount} className="font-semibold text-foreground" /></p>
+                        <p>{formatDay(l.next.dueDate)}</p>
+                      </div>
+                    )}
+                  </div>
+                  <ProgressBar
+                    value={l.progress}
+                    tone={l.overdue > 0 ? 'red' : 'green'}
+                    label={`${l.instalmentsPaid} of ${l.instalments} instalments paid · ${Math.round(l.progress * 100)}% of the loan repaid`}
+                  />
+                </>
+              ) : (
+                <LoanSteps step={l.stage.step} rejected={l.status === 'REJECTED'} />
+              )}
+            </Link>
+          ))}
+        </Section>
+      )}
+
+      {/* Applications and receipts */}
+      {data.applications.length > 0 && (
+        <Section icon={FileText} title="Applications and receipts" tone="text-indigo-600">
+          <div className="premium-card divide-y">
+            {data.applications.map((a) => (
+              <div key={a.id} className="space-y-2 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-medium">{a.title}</p>
+                    <p className="text-xs text-muted-foreground"><span className="font-mono">{a.reference}</span> · {formatDay(a.submittedAt)}</p>
+                  </div>
+                  {a.status === 'APPROVED' ? <StatusPill label="Approved" tone="good" />
+                    : a.status === 'REJECTED' ? <StatusPill label="Not approved" tone="bad" />
+                    : <StatusPill label="Under review" tone="progress" />}
+                </div>
+                {a.fee && (
+                  <div className="rounded-xl bg-muted/50 p-3 text-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span>{a.fee.basis && a.fee.basis !== 'Registration fee' ? `Processing fee (${a.fee.basis})` : 'Registration fee'}</span>
+                      <span className="font-medium">{FEE_STATE_LABEL[a.fee.state]}</span>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Fee <Money value={a.fee.due} />
+                      {a.fee.discount > 0 && <> · discount <Money value={a.fee.discount} /></>}
+                      {' '}· paid <Money value={a.fee.paid} />
+                      {a.fee.balance > 0 && <> · <span className="font-semibold text-foreground">still owed <Money value={a.fee.balance} /></span></>}
+                    </p>
+                    {a.fee.receipts.map((r) => (
+                      <p key={r.receiptNumber} className="mt-1 flex items-center gap-1.5 text-xs">
+                        <Receipt className="h-3.5 w-3.5" /><span className="font-mono">{r.receiptNumber}</span> · <Money value={r.amount} /> · {formatDay(r.date)}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {/* Money moving */}
+      {data.activity.length > 0 && (
+        <Section icon={Wallet} title="Recent activity" tone="text-slate-600">
+          <div className="premium-card divide-y">
+            {data.activity.map((a) => (
+              <div key={a.id} className="flex items-center gap-3 p-3">
+                <span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-full',
+                  a.direction === 'in' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-500/10 dark:text-slate-300')}>
+                  {a.direction === 'in' ? <ArrowDownLeft className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium">{a.title}</p>
+                  <p className="truncate text-xs text-muted-foreground">{a.detail} · {formatDateTime(a.date)}</p>
+                </div>
+                <span className="shrink-0 text-sm font-semibold tabular-nums">
+                  {a.direction === 'in' ? '+' : '−'}<Money value={a.amount} />
+                </span>
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {/* Messages */}
+      {notices.items.length > 0 && (
+        <Section
+          icon={Bell}
+          title="Messages"
+          tone="text-emerald-600"
+          extra={notices.unread > 0 ? (
+            <Button variant="ghost" size="sm" className="text-xs" onClick={async () => {
+              await markMyNotificationsRead();
+              getMyNotifications(20).then((r) => setNotices(r as never)).catch(() => undefined);
+            }}>
+              Mark {notices.unread} read
+            </Button>
+          ) : undefined}
+        >
           <div className="premium-card divide-y">
             {notices.items.slice(0, 8).map((n) => (
-              <div key={n.id} className={`p-3 ${n.isRead ? '' : 'bg-emerald-50/50'}`}>
+              <div key={n.id} className={cn('p-3', !n.isRead && 'bg-emerald-50/50 dark:bg-emerald-500/5')}>
                 <div className="flex items-start justify-between gap-3">
-                  <p className="text-sm font-medium">{n.title}</p>
-                  <span className="shrink-0 text-[11px] text-muted-foreground">
-                    {formatDateTime(n.createdAt)}
-                  </span>
+                  <p className="text-sm font-medium">{n.title}{!n.isRead && <Badge variant="success" className="ml-2 text-[10px]">New</Badge>}</p>
+                  <span className="shrink-0 text-[11px] text-muted-foreground">{formatDateTime(n.createdAt)}</span>
                 </div>
                 <p className="mt-0.5 text-xs text-muted-foreground">{n.message}</p>
               </div>
             ))}
           </div>
-        </section>
+        </Section>
       )}
 
-      {/* Savings */}
-      <section className="space-y-2">
-        <h2 className="font-semibold flex items-center gap-2"><PiggyBank className="h-4 w-4 text-emerald-600" /> Savings</h2>
-        {data.savings.length === 0 ? (
-          <p className="premium-card p-4 text-sm text-muted-foreground">No savings accounts yet.</p>
-        ) : data.savings.map((s) => (
-          <div key={s.id} className="premium-card p-4">
-            <div className="flex items-center justify-between">
-              <div className="min-w-0">
-                <p className="font-medium truncate">{s.product}</p>
-                <p className="text-xs text-muted-foreground">{s.accountNumber}</p>
-              </div>
-              <Badge variant={statusVariant[s.status] ?? 'secondary'}>{s.status.replace(/_/g, ' ')}</Badge>
-            </div>
-            <div className="mt-2 flex items-end justify-between">
-              <div>
-                <p className="text-lg font-bold">{formatCurrency(s.currentBalance)}</p>
-                {s.interestAccrued > 0 && (
-                  <p className="text-xs text-emerald-600">+{formatCurrency(s.interestAccrued)} interest</p>
-                )}
-              </div>
-              {s.status === 'ACTIVE' && (
-                <WithdrawDialog accountId={s.id} accountNumber={s.accountNumber} balance={s.currentBalance} onDone={load} />
-              )}
-            </div>
-            {s.maturityDate && (
-              <p className="text-xs text-muted-foreground mt-1">
-                Matures {new Date(s.maturityDate).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' })}
-                {s.monthsRemaining != null ? ` · ${s.monthsRemaining} month(s) left` : ''}
-              </p>
-            )}
+      {(pastSavings.length > 0 || pastDeposits.length > 0) && (
+        <Section icon={FileText} title="Closed accounts" tone="text-slate-500">
+          <div className="premium-card divide-y">
+            {pastSavings.map((s) => (
+              <Link key={s.id} href={`/portal/savings/${s.id}`} className="flex items-center justify-between gap-3 p-3 text-sm hover:bg-muted/40">
+                <span className="min-w-0 truncate">{s.product} · {s.accountNumber}</span>
+                <StatusPill {...accountStatus(s.status)} />
+              </Link>
+            ))}
+            {pastDeposits.map((d) => (
+              <Link key={d.id} href={`/portal/deposits/${d.id}`} className="flex items-center justify-between gap-3 p-3 text-sm hover:bg-muted/40">
+                <span className="min-w-0 truncate">Fixed deposit {d.certificateNumber}</span>
+                <StatusPill {...accountStatus(d.status)} />
+              </Link>
+            ))}
           </div>
-        ))}
-      </section>
-
-      {/* Loans */}
-      <section className="space-y-2">
-        <h2 className="font-semibold flex items-center gap-2"><Landmark className="h-4 w-4 text-orange-600" /> Loans</h2>
-        {data.loans.length === 0 ? (
-          <p className="premium-card p-4 text-sm text-muted-foreground">No loans yet.</p>
-        ) : data.loans.map((l) => (
-          <div key={l.id} className="premium-card p-4 flex items-center justify-between">
-            <div className="min-w-0">
-              <p className="font-medium truncate">{l.product}</p>
-              <p className="text-xs text-muted-foreground">{l.loanNumber} · {l.tenure} months @ {l.interestRate}%</p>
-            </div>
-            <div className="text-right shrink-0">
-              <p className="font-semibold">{formatCurrency(l.principalAmount)}</p>
-              <Badge variant={statusVariant[l.status] ?? 'secondary'} className="mt-1">{l.status.replace(/_/g, ' ')}</Badge>
-            </div>
-          </div>
-        ))}
-      </section>
-
-      {/* Fixed deposits */}
-      {data.fixedDeposits.length > 0 && (
-        <section className="space-y-2">
-          <h2 className="font-semibold flex items-center gap-2"><TrendingUp className="h-4 w-4 text-violet-600" /> Fixed Deposits</h2>
-          {data.fixedDeposits.map((f) => (
-            <div key={f.id} className="premium-card p-4 flex items-center justify-between">
-              <div className="min-w-0">
-                <p className="font-medium truncate">{f.certificateNumber}</p>
-                <p className="text-xs text-muted-foreground">
-                  Matures {new Date(f.maturityDate).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' })}
-                </p>
-              </div>
-              <div className="text-right shrink-0">
-                <p className="font-semibold">{formatCurrency(f.maturityAmount)}</p>
-                <Badge variant={statusVariant[f.status] ?? 'secondary'} className="mt-1">{f.status.replace(/_/g, ' ')}</Badge>
-              </div>
-            </div>
-          ))}
-        </section>
+        </Section>
       )}
+
+      <p className="flex items-start gap-2 text-xs text-muted-foreground">
+        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+        These figures come straight from Hy-Link&apos;s records. If anything looks wrong, contact {data.customer.branch ?? 'your branch'}
+        {data.customer.branchPhone ? ` on ${data.customer.branchPhone}` : ''}. Hy-Link staff will never ask for your password.
+      </p>
     </div>
   );
 }
 
-function WithdrawDialog({ accountId, accountNumber, balance, onDone }: {
-  accountId: string; accountNumber: string; balance: number; onDone: () => void;
+function Headline({ label, value, tone, hint }: { label: string; value: number; tone?: 'good' | 'owe'; hint?: string }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className={cn('text-lg font-semibold', tone === 'good' && 'text-emerald-700 dark:text-emerald-300', tone === 'owe' && 'text-rose-700 dark:text-rose-300')}>
+        <Money value={value} />
+      </dd>
+      {hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
+
+function Section({ icon: Icon, title, tone, extra, children }: {
+  icon: React.ComponentType<{ className?: string }>; title: string; tone: string; extra?: React.ReactNode; children: React.ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
-  const [amount, setAmount] = useState('');
-  const [reason, setReason] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  const submit = async () => {
-    setBusy(true);
-    const r = await requestMyWithdrawal({ accountId, amount: parseFloat(amount), reason });
-    setBusy(false);
-    if (r.success) { toast.success(r.message || 'Requested'); setOpen(false); setAmount(''); setReason(''); onDone(); }
-    else toast.error(r.error);
-  };
-
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="rounded-full">
-          <ArrowDownCircle className="h-4 w-4 mr-1" /> Withdraw
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader><DialogTitle>Request Withdrawal</DialogTitle></DialogHeader>
-        <div className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            {accountNumber} · Available {formatCurrency(balance)}
-          </p>
-          <div className="space-y-1.5">
-            <Label>Amount</Label>
-            <Input type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Reason (optional)</Label>
-            <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. School fees" />
-          </div>
-          <p className="text-xs text-muted-foreground">Withdrawal requests are reviewed and approved by staff.</p>
-        </div>
-        <DialogFooter>
-          <Button onClick={submit} disabled={busy || !amount} className="rounded-full">
-            {busy && <Loader2 className="h-4 w-4 mr-1 animate-spin" />} Submit Request
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <section className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="flex items-center gap-2 font-semibold"><Icon className={cn('h-4 w-4', tone)} />{title}</h2>
+        {extra}
+      </div>
+      <div className="space-y-3">{children}</div>
+    </section>
   );
 }
 
-function LoanApplyDialog({ onDone }: { onDone: () => void }) {
-  const [open, setOpen] = useState(false);
-  const [products, setProducts] = useState<LoanProduct[]>([]);
-  const [productId, setProductId] = useState('');
-  const [amount, setAmount] = useState('');
-  const [tenure, setTenure] = useState('');
-  const [purpose, setPurpose] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    if (open && products.length === 0) getPortalLoanProducts().then(setProducts).catch(() => {});
-  }, [open, products.length]);
-
-  const product = products.find((p) => p.id === productId);
-
-  const submit = async () => {
-    setBusy(true);
-    const r = await applyForLoan({ productId, amount: parseFloat(amount), tenure: parseInt(tenure, 10), purpose });
-    setBusy(false);
-    if (r.success) { toast.success(r.message || 'Applied'); setOpen(false); onDone(); }
-    else toast.error(r.error);
-  };
-
+/** A loan not yet paid out: where it is on the way. */
+function LoanSteps({ step, rejected }: { step: number; rejected: boolean }) {
+  const steps = ['Applied', 'Being checked', 'Approved', 'Paid out'];
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm" className="rounded-full"><Plus className="h-4 w-4 mr-1" /> Apply for Loan</Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader><DialogTitle>Apply for a Loan</DialogTitle></DialogHeader>
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <Label>Loan Product</Label>
-            <Select value={productId} onValueChange={setProductId}>
-              <SelectTrigger><SelectValue placeholder="Select a product" /></SelectTrigger>
-              <SelectContent>
-                {products.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>{p.name} — {p.interestRate}% p.a.</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {product && (
-              <p className="text-xs text-muted-foreground">
-                {formatCurrency(product.minAmount)}–{formatCurrency(product.maxAmount)} · {product.minTenure}–{product.maxTenure} months
-              </p>
-            )}
-          </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label>Amount</Label>
-              <Input type="number" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Tenure (months)</Label>
-              <Input type="number" min="1" value={tenure} onChange={(e) => setTenure(e.target.value)} placeholder="12" />
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Purpose (optional)</Label>
-            <Input value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="e.g. Business expansion" />
-          </div>
-          <p className="text-xs text-muted-foreground">Your application is submitted for staff review.</p>
-        </div>
-        <DialogFooter>
-          <Button onClick={submit} disabled={busy || !productId || !amount || !tenure} className="rounded-full">
-            {busy && <Loader2 className="h-4 w-4 mr-1 animate-spin" />} Submit Application
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function ProfileDialog({ data, onDone }: { data: PortalData; onDone: () => void }) {
-  const [open, setOpen] = useState(false);
-  const c = data.customer;
-  const [phone, setPhone] = useState(c?.phone ?? '');
-  const [email, setEmail] = useState(c?.email ?? '');
-  const [address, setAddress] = useState(c?.address ?? '');
-  const [busy, setBusy] = useState(false);
-
-  const submit = async () => {
-    setBusy(true);
-    const r = await updateMyProfile({ phone, email, address });
-    setBusy(false);
-    if (r.success) { toast.success('Profile updated'); setOpen(false); onDone(); }
-    else toast.error(r.error);
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="rounded-full"><User className="h-4 w-4 mr-1" /> Profile</Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader><DialogTitle>My Profile</DialogTitle></DialogHeader>
-        <div className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            {c?.title ? `${c.title} ` : ''}{c?.firstName} {c?.lastName} · {c?.customerNumber}
-          </p>
-          <div className="space-y-1.5"><Label>Phone</Label>
-            <Input value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
-          <div className="space-y-1.5"><Label>Email</Label>
-            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
-          <div className="space-y-1.5"><Label>Address</Label>
-            <Input value={address} onChange={(e) => setAddress(e.target.value)} /></div>
-        </div>
-        <DialogFooter>
-          <Button onClick={submit} disabled={busy} className="rounded-full">
-            {busy && <Loader2 className="h-4 w-4 mr-1 animate-spin" />} Save
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <ol className="flex items-center gap-1.5 text-[11px]">
+      {steps.map((s, i) => (
+        <li key={s} className="flex min-w-0 flex-1 flex-col gap-1">
+          <span className={cn('h-1.5 rounded-full',
+            rejected && i === step ? 'bg-rose-500' : i <= step ? 'bg-blue-600 dark:bg-blue-500' : 'bg-slate-200 dark:bg-slate-700')} />
+          <span className={cn('truncate', i === step ? 'font-medium text-foreground' : 'text-muted-foreground')}>{rejected && i === step ? 'Not approved' : s}</span>
+        </li>
+      ))}
+    </ol>
   );
 }

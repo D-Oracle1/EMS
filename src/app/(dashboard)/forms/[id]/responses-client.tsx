@@ -21,6 +21,7 @@ import { setFormStatus, deleteFormResponse, type getFormResponses } from '@/acti
 import { StatusBadge, AudienceBadge, copyShareLink, useShareUrl } from '../form-bits';
 import { ShareFormButton } from '../share-form-button';
 import { FormQrButton } from '../form-qr-button';
+import { isCustomerPurpose, PURPOSE_INFO } from '@/lib/customer-forms';
 
 type FormData = NonNullable<Awaited<ReturnType<typeof getFormResponses>>>;
 
@@ -111,6 +112,19 @@ export function ResponsesClient({ form }: { form: FormData }) {
           Staff onboarding form.{' '}
           <span className="font-semibold">{form.responses.filter((x) => x.onboardingStatus === 'PENDING').length}</span> waiting for HR.{' '}
           <Link href="/hr/joiners" className="font-medium underline">Review and create accounts</Link>
+        </p>
+      )}
+
+      {isCustomerPurpose(form.purpose) && (
+        <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200">
+          {PURPOSE_INFO[form.purpose].label} {form.purpose === 'GUARANTOR' ? 'form' : 'application form'}.{' '}
+          <span className="font-semibold">{form.responses.filter((x) => x.onboardingStatus === 'PENDING').length}</span> waiting for review.{' '}
+          <Link
+            href={`/applications?kind=${form.purpose === 'GUARANTOR' ? 'LOAN_APPLICATION' : form.purpose}`}
+            className="font-medium underline"
+          >
+            Review applications
+          </Link>
         </p>
       )}
 

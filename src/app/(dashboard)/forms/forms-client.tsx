@@ -5,14 +5,18 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
-  ClipboardList, Plus, Search, Link2, Pencil, BarChart3, CopyPlus, Trash2, Play, Square, Inbox, UserPlus,
+  ClipboardList, Plus, Search, Link2, Pencil, BarChart3, CopyPlus, Trash2, Play, Square, Inbox, UserPlus, Contact, ChevronDown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { StatCard } from '@/components/ui/stat-card';
 import { formatDateTime } from '@/lib/utils';
-import { setFormStatus, deleteForm, duplicateForm, createOnboardingForm, type getForms } from '@/actions/form.actions';
+import { setFormStatus, deleteForm, duplicateForm, createOnboardingForm, createCustomerForm, type getForms } from '@/actions/form.actions';
+import { CUSTOMER_PURPOSES, PURPOSE_INFO, isCustomerPurpose } from '@/lib/customer-forms';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import type { ActionResult } from '@/types';
 import { StatusBadge, AudienceBadge, copyShareLink } from './form-bits';
@@ -59,6 +63,25 @@ export function FormsClient({ forms }: { forms: FormRow[] }) {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" disabled={busy === 'customer'}>
+                <Contact className="mr-2 h-4 w-4" />Customer form<ChevronDown className="ml-1.5 h-4 w-4 opacity-60" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuLabel>New customer application form</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {CUSTOMER_PURPOSES.map((p) => (
+                <DropdownMenuItem
+                  key={p}
+                  onSelect={() => run('customer', () => createCustomerForm(p), (d) => d && router.push(`/forms/${d.id}/edit`))}
+                >
+                  {PURPOSE_INFO[p].title}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button
             variant="outline"
             disabled={busy === 'onboarding'}
@@ -112,6 +135,11 @@ export function FormsClient({ forms }: { forms: FormRow[] }) {
                   {f.purpose === 'STAFF_ONBOARDING' && (
                     <Badge variant="outline" className="gap-1 border-indigo-300 text-indigo-700 dark:text-indigo-300">
                       <UserPlus className="h-3 w-3" />Staff onboarding
+                    </Badge>
+                  )}
+                  {isCustomerPurpose(f.purpose) && (
+                    <Badge variant="outline" className="gap-1 border-emerald-300 text-emerald-700 dark:text-emerald-300">
+                      <Contact className="h-3 w-3" />{PURPOSE_INFO[f.purpose].label}{f.purpose === 'GUARANTOR' ? '' : ' application'}
                     </Badge>
                   )}
                 </div>

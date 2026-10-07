@@ -22,7 +22,7 @@ import {
   Briefcase, GraduationCap, Laptop, Megaphone, Network, ArrowRightLeft,
   ClipboardList, Receipt, HeartHandshake, Package, Percent, Layers,
   CalendarDays, XCircle, LayoutTemplate, Newspaper, ShieldCheck,
-  MonitorSmartphone, Building2, SlidersHorizontal, TrendingUp, Banknote, ListChecks, UserPlus,
+  MonitorSmartphone, Building2, SlidersHorizontal, TrendingUp, Banknote, ListChecks, UserPlus, Inbox,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -54,6 +54,9 @@ export const navItems: NavItem[] = [
 
   // ── Customers ────────────────────────────────────────────────────────────
   { label: 'Customers',      href: '/customers',      icon: Users,          color: 'cyan',    permission: 'CUSTOMERS:READ', section: 'Customers' },
+  // Application forms (savings, partnership, fixed deposit, loan) waiting for
+  // their product's officers (application.actions; lib/customer-forms reviewers).
+  { label: 'Applications',   href: '/applications',   icon: Inbox,          color: 'cyan',    permissions: ['SAVINGS:CREATE', 'SAVINGS:APPROVE', 'FIXED_DEPOSITS:CREATE', 'FIXED_DEPOSITS:MANAGE', 'LOANS:CREATE', 'LOANS:MANAGE_ALL'] },
 
   // ── Lending ──────────────────────────────────────────────────────────────
   { label: 'Loans',          href: '/loans',          icon: Landmark,       color: 'orange',  permissions: ['LOANS:CREATE', 'LOANS:APPROVE', 'LOANS:APPROVE_L1', 'LOANS:APPROVE_L2', 'LOANS:DISBURSE', 'LOANS:REPAYMENT', 'LOANS:COLLECT', 'LOANS:MANAGE_ALL', 'LOANS:RESTRUCTURE'], section: 'Lending' },
@@ -87,6 +90,8 @@ export const navItems: NavItem[] = [
   { label: 'Expenses',         href: '/accounting/expenses',            icon: Banknote,  color: 'sky', anyOf: { permissions: ['ACCOUNTS:JOURNAL_CREATE', 'ADMIN:SYSTEM'], minRoleLevel: 85 } },
   { label: 'Periods',          href: '/accounting/periods',             icon: CalendarDays, color: 'sky', permission: 'ACCOUNTS:PERIOD_CLOSE' },
   { label: 'Reports',          href: '/reports',                        icon: BarChart3, color: 'pink', permission: 'ACCOUNTS:REPORTS_VIEW' },
+  // Application fees and loan default charges collected (fee.actions; lib/fees canViewFeeReport).
+  { label: 'Fees & Charges',   href: '/fees',                           icon: Receipt,   color: 'emerald', anyOf: { permissions: ['ACCOUNTS:REPORTS_VIEW', 'ADMIN:SYSTEM'], minRoleLevel: 70 } },
 
   // ── Human resources ──────────────────────────────────────────────────────
   // Gated on HR permissions throughout. Personal self-service (own profile,
@@ -124,6 +129,8 @@ export const navItems: NavItem[] = [
   { label: 'Audit Logs',          href: '/audit-logs',             icon: Shield,             color: 'slate', permission: 'AUDIT:READ' },
   { label: 'Organisation',        href: '/settings/organisation',  icon: Building2,          color: 'gray',  permission: 'SYSTEM:CONFIG_MANAGE' },
   { label: 'Configuration',       href: '/settings/configuration', icon: SlidersHorizontal,  color: 'gray',  permission: 'SYSTEM:CONFIG_MANAGE' },
+  // What application forms cost: admins at level 85+ (lib/fees canManageFees), not IT.
+  { label: 'Fees',                href: '/settings/fees',          icon: Percent,            color: 'emerald', anyOf: { minRoleLevel: 85, permissions: ['ADMIN:SYSTEM'] } },
   { label: 'Settings',            href: '/settings',               icon: Settings,           color: 'gray',  permission: 'SYSTEM:CONFIG_MANAGE' },
 
   // ── My workspace ─────────────────────────────────────────────────────────

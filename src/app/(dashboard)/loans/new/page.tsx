@@ -46,6 +46,7 @@ import { Separator } from '@/components/ui/separator';
 import { formatCurrency } from '@/lib/utils';
 import { createLoan, getLoanProducts, checkCustomerOutstandingLoans } from '@/actions/loan.actions';
 import { searchCustomers } from '@/actions/customer.actions';
+import { useApplicationPrefill, ApplicationPrefillBanner } from '@/components/application-prefill';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -312,6 +313,20 @@ export default function NewLoanPage() {
   const customerSearchRef = useRef<HTMLDivElement>(null);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Opened from an approved loan application: the borrower, the request and
+  // the guarantors who filled the guarantor form for it.
+  const prefill = useApplicationPrefill((p) => {
+    setCustomerMode('existing');
+    setCustomerId(p.customer.id);
+    setSelectedCustomer(p.customer);
+    if (p.amount) setAmount(String(p.amount));
+    if (p.loan?.tenureMonths) setTenure(String(p.loan.tenureMonths));
+    if (p.loan?.purpose) setPurpose(p.loan.purpose);
+    if (p.loan?.guarantors.length) {
+      setGuarantors(p.loan.guarantors.map((g) => ({ ...blankGuarantor, ...g })));
+    }
+  });
+
   // Schedule preview
   const [preview, setPreview] = useState<{
     schedule: ScheduleItem[];
@@ -575,6 +590,8 @@ export default function NewLoanPage() {
         })),
         owingBypass: owingBypass || undefined,
         owingBypassReason: owingBypass ? owingBypassReason.trim() : undefined,
+        // Still the applicant: the fee they paid upfront stands in for the processing fee.
+        applicationId: prefill && customerMode === 'existing' && customerId === prefill.customer.id ? prefill.id : undefined,
       });
 
       if (result.success && result.data) {
@@ -613,6 +630,18 @@ export default function NewLoanPage() {
           </p>
         </div>
       </div>
+
+      <ApplicationPrefillBanner
+        prefill={prefill}
+        notes={[
+          'Choose the loan product. The applicant asked to repay daily.',
+          prefill?.fee && (prefill.fee.state === 'PAID' || prefill.fee.state === 'WAIVED'
+            ? `The processing fee (${prefill.fee.basis}) was paid upfront on the application, so this loan does not charge it again.`
+            : `The processing fee (${prefill.fee.basis}) is not fully paid: ${formatCurrency(prefill.fee.balance)} is owed. Record it under Applications before creating the loan.`),
+          prefill?.loan && prefill.loan.guarantors.length < 2 &&
+            `Only ${prefill.loan.guarantors.length} of 2 guarantors filled the guarantor form. Add the rest below.`,
+        ]}
+      />
 
       <form onSubmit={handleSubmit}>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

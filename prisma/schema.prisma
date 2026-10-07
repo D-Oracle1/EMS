@@ -56,6 +56,8 @@ model Branch {
   shifts         WorkShift[]
   marketingSales MarketingSale[]
   expenses       Expense[]
+  forms          Form[]
+  feePayments    FeePayment[]
 }
 
 // ============================================================================
@@ -213,6 +215,10 @@ model Staff {
   formResponses                FormResponse[]       @relation("FormRespondent")
   onboardedFrom                FormResponse?        @relation("OnboardedStaff")
   onboardingReviews            FormResponse[]       @relation("OnboardingReviewer")
+  feeDiscountsGiven            FormResponse[]       @relation("FeeDiscountGiver")
+  feePaymentsReceived          FeePayment[]         @relation("FeePaymentReceiver")
+  feePaymentsReversed          FeePayment[]         @relation("FeePaymentReverser")
+  penaltyWaivers               LoanPenaltyWaiver[]
   disciplinaryActions          DisciplinaryAction[] @relation("DisciplinedStaff")
   disciplinaryIssued           DisciplinaryAction[] @relation("DisciplinaryIssuer")
   createdLoans                 Loan[]               @relation("LoanCreatedBy")
@@ -563,6 +569,8 @@ model Customer {
   marketingSales    MarketingSale[]
 
   notifications CustomerNotification[]
+  /// Application forms this customer filled (lib/customer-forms).
+  formResponses FormResponse[]
 
   @@index([customerNumber])
   @@index([phone])
@@ -712,6 +720,10 @@ model Loan {
   restructurings    LoanRestructuring[]
   guarantors        Guarantor[]
   marketingSales    MarketingSale[]
+  /// The application form it was created from, whose fee was paid upfront.
+  application       FormResponse?
+  penaltyCharges    LoanPenaltyCharge[]
+  penaltyWaivers    LoanPenaltyWaiver[]
 
   @@index([loanNumber])
   @@index([customerId])
@@ -936,6 +948,12 @@ model LoanSchedule {
   penaltyPaid   Decimal @default(0) @db.Decimal(18, 2)
   totalPaid     Decimal @default(0) @db.Decimal(18, 2)
 
+  /// Default charges (lib/loan-penalties): accrued daily on the unpaid
+  /// amount once the instalment is past due and its grace period, at the
+  /// product's penaltyRate. Owed = penaltyDue - penaltyPaid - penaltyWaived.
+  penaltyDue    Decimal @default(0) @db.Decimal(18, 2)
+  penaltyWaived Decimal @default(0) @db.Decimal(18, 2)
+
   outstandingBalance Decimal @db.Decimal(18, 2)
 
   status          ScheduleStatus @default(PENDING)
@@ -945,8 +963,9 @@ model LoanSchedule {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  loan       Loan            @relation(fields: [loanId], references: [id])
-  repayments LoanRepayment[]
+  loan           Loan                @relation(fields: [loanId], references: [id])
+  repayments     LoanRepayment[]
+  penaltyCharges LoanPenaltyCharge[]
 
   @@unique([loanId, installmentNumber])
   @@index([dueDate])
@@ -3478,13 +3497,20 @@ enum FormStatus {
 }
 
 /// What a form is for. A staff onboarding form's answers become staff
-/// records once HR approves them.
+/// records once HR approves them; a customer application's become customer
+/// profiles once its officer approves them (lib/customer-forms). A guarantor
+/// stands behind a loan application and is reviewed with it.
 enum FormPurpose {
   GENERAL
   STAFF_ONBOARDING
+  SAVINGS_APPLICATION
+  PARTNERSHIP_APPLICATION
+  FIXED_DEPOSIT_APPLICATION
+  LOAN_APPLICATION
+  GUARANTOR
 }
 
-/// Where an onboarding response stands with HR.
+/// Where an onboarding response or customer application stands with its reviewer.
 enum FormReviewStatus {
   PENDING
   APPROVED
@@ -3514,12 +3540,17 @@ model Form {
   closesAt            DateTime?
   /// First opened; staff are notified once, on this transition.
   publishedAt         DateTime?
+  /// Customer application forms: the branch whose officers receive the
+  /// applications and where approved customers are profiled. Null: any
+  /// branch's officers, and the customer joins the approver's branch.
+  branchId            String?
 
   createdById String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   createdBy Staff          @relation("FormCreator", fields: [createdById], references: [id])
+  branch    Branch?        @relation(fields: [branchId], references: [id])
   responses FormResponse[]
 
   @@index([status])
@@ -3536,19 +3567,140 @@ model FormResponse {
 
   submittedAt DateTime @default(now())
 
-  /// Onboarding forms only: HR's decision, the staff record it created, and who decided.
+  /// Onboarding forms and customer applications: the reviewer's decision,
+  /// the record it created, and who decided.
   onboardingStatus FormReviewStatus?
   onboardedStaffId String?           @unique
   reviewedById     String?
   reviewedAt       DateTime?
   reviewNote       String?
 
-  form           Form   @relation(fields: [formId], references: [id], onDelete: Cascade)
-  staff          Staff? @relation("FormRespondent", fields: [staffId], references: [id])
-  onboardedStaff Staff? @relation("OnboardedStaff", fields: [onboardedStaffId], references: [id])
-  reviewedBy     Staff? @relation("OnboardingReviewer", fields: [reviewedById], references: [id])
+  /// Customer applications: the reference the applicant is given (LA-7K2M9Q).
+  reference      String? @unique
+  /// The customer profile an approved application became, or was linked to.
+  customerId     String?
+  /// A guarantor's form: the loan application it stands behind.
+  guarantorForId String?
+
+  /// The form's fee, fixed when it was submitted (lib/fees): what the admin
+  /// had set then, e.g. 7% of the amount applied for. Null: no fee.
+  feeDue         Decimal?  @db.Decimal(18, 2)
+  /// How the fee was worked out, e.g. "7% of NGN 500,000.00".
+  feeBasis       String?
+  /// Taken off the fee by a manager or admin, with their reason.
+  feeDiscount    Decimal   @default(0) @db.Decimal(18, 2)
+  discountReason String?
+  discountById   String?
+  discountAt     DateTime?
+  /// Loan applications: the loan created from it. Its processing fee was
+  /// paid here, upfront, so the loan does not deduct it again.
+  loanId         String?   @unique
+
+  form           Form           @relation(fields: [formId], references: [id], onDelete: Cascade)
+  staff          Staff?         @relation("FormRespondent", fields: [staffId], references: [id])
+  onboardedStaff Staff?         @relation("OnboardedStaff", fields: [onboardedStaffId], references: [id])
+  reviewedBy     Staff?         @relation("OnboardingReviewer", fields: [reviewedById], references: [id])
+  customer       Customer?      @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  guarantorFor   FormResponse?  @relation("GuarantorFor", fields: [guarantorForId], references: [id], onDelete: SetNull)
+  guarantors     FormResponse[] @relation("GuarantorFor")
+  discountBy     Staff?         @relation("FeeDiscountGiver", fields: [discountById], references: [id])
+  loan           Loan?          @relation(fields: [loanId], references: [id], onDelete: SetNull)
+  feePayments    FeePayment[]
 
   @@index([formId, submittedAt])
   @@index([formId, staffId])
   @@index([onboardingStatus])
+  @@index([customerId])
+  @@index([guarantorForId])
+}
+
+// ============================================================================
+// FEES — application form fees and loan default charges (lib/fees)
+// ============================================================================
+
+enum FeeKind {
+  /// A fixed amount in naira.
+  FLAT
+  /// A percentage of the amount applied for.
+  PERCENT
+}
+
+/// What each kind of application form costs. One row per kind, set by an
+/// admin under Settings > Fees. A form takes the fee in force when it is
+/// submitted (FormResponse.feeDue); changing it later touches no one.
+model ApplicationFee {
+  purpose     FormPurpose @id
+  kind        FeeKind     @default(FLAT)
+  /// Naira for FLAT, percent for PERCENT.
+  amount      Decimal     @db.Decimal(18, 2)
+  isActive    Boolean     @default(true)
+  updatedById String?
+  updatedAt   DateTime    @updatedAt
+}
+
+/// Money received for an application form's fee. Non-refundable, so it is
+/// never deleted: a mistake is reversed, which reverses its ledger entry too.
+model FeePayment {
+  id               String      @id @default(uuid())
+  receiptNumber    String      @unique
+  responseId       String
+  amount           Decimal     @db.Decimal(18, 2)
+  paymentMode      PaymentMode
+  paymentReference String?
+  branchId         String?
+  receivedById     String
+  receivedAt       DateTime    @default(now())
+  journalEntryId   String?
+
+  reversedAt     DateTime?
+  reversedById   String?
+  reversalReason String?
+
+  response   FormResponse @relation(fields: [responseId], references: [id], onDelete: Restrict)
+  branch     Branch?      @relation(fields: [branchId], references: [id])
+  receivedBy Staff        @relation("FeePaymentReceiver", fields: [receivedById], references: [id])
+  reversedBy Staff?       @relation("FeePaymentReverser", fields: [reversedById], references: [id])
+
+  @@index([responseId])
+  @@index([receivedAt])
+  @@index([branchId])
+}
+
+/// One day's default charge on one overdue instalment. The unique
+/// (scheduleId, chargeDate) pair means re-running the daily job can never
+/// charge the same day twice.
+model LoanPenaltyCharge {
+  id            String   @id @default(uuid())
+  loanId        String
+  scheduleId    String
+  chargeDate    DateTime @db.Date
+  /// Unpaid principal and interest the charge was worked out on.
+  overdueAmount Decimal  @db.Decimal(18, 2)
+  /// Percent per day, from the loan's product.
+  rate          Decimal  @db.Decimal(5, 2)
+  amount        Decimal  @db.Decimal(18, 2)
+  createdAt     DateTime @default(now())
+
+  loan     Loan         @relation(fields: [loanId], references: [id])
+  schedule LoanSchedule @relation(fields: [scheduleId], references: [id])
+
+  @@unique([scheduleId, chargeDate])
+  @@index([loanId])
+  @@index([chargeDate])
+}
+
+/// Default charges a manager or admin forgave on a loan, and why.
+model LoanPenaltyWaiver {
+  id         String   @id @default(uuid())
+  loanId     String
+  amount     Decimal  @db.Decimal(18, 2)
+  reason     String
+  waivedById String
+  createdAt  DateTime @default(now())
+
+  loan     Loan  @relation(fields: [loanId], references: [id])
+  waivedBy Staff @relation(fields: [waivedById], references: [id])
+
+  @@index([loanId])
+  @@index([createdAt])
 }
