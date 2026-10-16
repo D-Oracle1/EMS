@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client';
+import { resolveTier } from '@/lib/customer-tier';
 
 /** Shape accepted when auto-registering a customer from another module's form. */
 export interface NewCustomerInput {
@@ -25,6 +26,8 @@ export interface NewCustomerInput {
   nokAddress?: string;
   companyName?: string;
   rcNumber?: string;
+  /** KYC tier 1-3 (lib/customer-tier); left out, it follows the IDs given. */
+  tier?: number | string;
   // Filled by customer application forms (lib/customer-forms).
   maritalStatus?: string;
   alternatePhone?: string;
@@ -38,7 +41,7 @@ export function validateNewCustomer(nc: NewCustomerInput): string | null {
   if (!nc.firstName?.trim() || !nc.lastName?.trim()) return 'New customer requires first and last name';
   if (!nc.phone?.trim()) return 'New customer requires a phone number';
   if (!nc.address?.trim()) return 'New customer requires an address';
-  return null;
+  return resolveTier(nc.tier, nc.bvn, nc.nationalId).error;
 }
 
 /**
@@ -82,6 +85,7 @@ export async function createCustomerInTx(
       passportNumber: nc.passportNumber,
       driversLicense: nc.driversLicense,
       employerAddress: nc.employerAddress,
+      tier: resolveTier(nc.tier, nc.bvn, nc.nationalId).tier,
       branchId: ctx.branchId,
       createdBy: ctx.createdBy,
     },

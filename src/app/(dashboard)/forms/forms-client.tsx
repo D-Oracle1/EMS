@@ -25,7 +25,7 @@ import { FormQrButton } from './form-qr-button';
 
 type FormRow = Awaited<ReturnType<typeof getForms>>[number];
 
-export function FormsClient({ forms }: { forms: FormRow[] }) {
+export function FormsClient({ forms, canManage }: { forms: FormRow[]; canManage: boolean }) {
   const router = useRouter();
   const [search, setSearch] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
@@ -59,7 +59,9 @@ export function FormsClient({ forms }: { forms: FormRow[] }) {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Forms</h1>
           <p className="text-muted-foreground">
-            Build a form, share its link with anyone or with staff, and read every response here
+            {canManage
+              ? 'Build a form, share its link with anyone or with staff, and read every response here'
+              : 'Make your own forms. A customer form you share sends each application to the right officer for approval, credited to you.'}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -72,7 +74,7 @@ export function FormsClient({ forms }: { forms: FormRow[] }) {
             <DropdownMenuContent align="end" className="w-64">
               <DropdownMenuLabel>New customer application form</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              {CUSTOMER_PURPOSES.map((p) => (
+              {CUSTOMER_PURPOSES.filter((p) => canManage || p !== 'GUARANTOR').map((p) => (
                 <DropdownMenuItem
                   key={p}
                   onSelect={() => run('customer', () => createCustomerForm(p), (d) => d && router.push(`/forms/${d.id}/edit`))}
@@ -82,13 +84,15 @@ export function FormsClient({ forms }: { forms: FormRow[] }) {
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button
-            variant="outline"
-            disabled={busy === 'onboarding'}
-            onClick={() => run('onboarding', () => createOnboardingForm(), (d) => d && router.push(`/forms/${d.id}/edit`))}
-          >
-            <UserPlus className="mr-2 h-4 w-4" />New onboarding form
-          </Button>
+          {canManage && (
+            <Button
+              variant="outline"
+              disabled={busy === 'onboarding'}
+              onClick={() => run('onboarding', () => createOnboardingForm(), (d) => d && router.push(`/forms/${d.id}/edit`))}
+            >
+              <UserPlus className="mr-2 h-4 w-4" />New onboarding form
+            </Button>
+          )}
           <Button asChild>
             <Link href="/forms/new"><Plus className="mr-2 h-4 w-4" />New form</Link>
           </Button>

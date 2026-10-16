@@ -22,6 +22,7 @@ import {
   RefreshCcw,
   Trash2,
   Users,
+  Landmark,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -222,6 +223,14 @@ interface LoanData {
     monthlyIncome: number | null;
     bvn: string | null;
     nationalId: string | null;
+  }>;
+  cheques: Array<{
+    id: string;
+    guarantorId: string | null;
+    bankName: string;
+    chequeNumber: string;
+    amount: number | null;
+    chequeDate: Date | string | null;
   }>;
   verifications: Array<{
     id: string;
@@ -546,7 +555,7 @@ export function LoanDetailClient({ loan, user }: LoanDetailClientProps) {
           </CardHeader>
           <CardContent className="space-y-0 divide-y">
             {renderInfoRow('Principal Amount', formatCurrency(loan.principalAmount))}
-            {renderInfoRow('Interest Rate', `${loan.interestRate}% p.a.`)}
+            {renderInfoRow('Interest Rate', `${loan.interestRate}% per month`)}
             {renderInfoRow('Interest Type', loan.product.interestType.replace(/_/g, ' '))}
             {renderInfoRow('Tenure', `${loan.tenure} months`)}
             {renderInfoRow('Monthly Instalment', formatCurrency(loan.monthlyInstalment))}
@@ -647,6 +656,53 @@ export function LoanDetailClient({ loan, user }: LoanDetailClientProps) {
                 </div>
               ))}
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ----------------------------------------------------------------- */}
+      {/* CHEQUES SUBMITTED                                                 */}
+      {/* ----------------------------------------------------------------- */}
+      {loan.cheques.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Landmark className="h-5 w-5" />
+              Cheques Submitted
+            </CardTitle>
+            <CardDescription>
+              {loan.cheques.length} cheque{loan.cheques.length !== 1 ? 's' : ''} handed in for this loan
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>From</TableHead>
+                  <TableHead>Bank</TableHead>
+                  <TableHead>Cheque No.</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead>Date on Cheque</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loan.cheques.map((c) => {
+                  const gi = loan.guarantors.findIndex((g) => g.id === c.guarantorId);
+                  const g = gi === -1 ? null : loan.guarantors[gi];
+                  return (
+                    <TableRow key={c.id}>
+                      <TableCell>
+                        {g ? `Guarantor ${gi + 1}: ${g.firstName} ${g.lastName}` : 'Borrower'}
+                      </TableCell>
+                      <TableCell>{c.bankName}</TableCell>
+                      <TableCell className="font-mono text-xs">{c.chequeNumber}</TableCell>
+                      <TableCell className="text-right">{c.amount != null ? formatCurrency(c.amount) : '—'}</TableCell>
+                      <TableCell>{c.chequeDate ? formatDate(c.chequeDate) : '—'}</TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       )}
@@ -1963,7 +2019,7 @@ function RestructuringDialog({
         <DialogHeader>
           <DialogTitle>Request Loan Restructuring</DialogTitle>
           <DialogDescription>
-            Current tenure: {currentTenure} months &middot; Current rate: {currentRate}% p.a.
+            Current tenure: {currentTenure} months &middot; Current rate: {currentRate}% per month
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -2002,7 +2058,7 @@ function RestructuringDialog({
 
           {showRate && (
             <div className="space-y-2">
-              <Label>New Interest Rate (% p.a.)</Label>
+              <Label>New Interest Rate (% per month)</Label>
               <Input
                 type="number"
                 step="0.01"

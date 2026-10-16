@@ -91,7 +91,7 @@ export function LoanDetailView({ loan: l }: { loan: Loan }) {
       <Panel title="Loan details">
         <Divided>
           <DetailRow label="Amount borrowed"><Amount value={l.principal} /></DetailRow>
-          <DetailRow label="Interest">{l.interestRate}% a year · <Amount value={l.totalInterest} /></DetailRow>
+          <DetailRow label="Interest">{l.interestRate}% a month · <Amount value={l.totalInterest} /></DetailRow>
           <DetailRow label="Each instalment"><Amount value={l.instalmentAmount} /></DetailRow>
           <DetailRow label="Term">{l.tenure} months</DetailRow>
           {l.disbursed && <DetailRow label="Paid out to you"><Amount value={l.disbursed.amount} /> · {shortDay(l.disbursed.date)}</DetailRow>}

@@ -202,7 +202,6 @@ export function CreateFixedSavingsClient({ user }: Props) {
                   <div className="space-y-0.5 text-xs text-muted-foreground">
                     <p>Monthly: {parseFloat(p.monthlyInterestRate ?? 0).toFixed(4)}%</p>
                     <p>Min deposit: NGN {Number(p.minDeposit ?? 0).toLocaleString()}</p>
-                    {p.allowEarlyTermination && <p className="text-orange-600">Early exit allowed</p>}
                   </div>
                 </button>
               ))}

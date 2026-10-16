@@ -109,8 +109,8 @@ function validateLoanProduct(data: Partial<LoanProductInput>): string | null {
     return 'Maximum tenure must be greater than or equal to the minimum tenure';
   }
 
-  if (data.interestRate !== undefined && (data.interestRate <= 0 || data.interestRate > 200)) {
-    return 'Interest rate must be between 0 and 200 percent';
+  if (data.interestRate !== undefined && (data.interestRate <= 0 || data.interestRate > 100)) {
+    return 'Monthly interest rate must be between 0 and 100 percent';
   }
   if (data.processingFee !== undefined && (data.processingFee < 0 || data.processingFee > 100)) {
     return 'Processing fee must be a percentage between 0 and 100';

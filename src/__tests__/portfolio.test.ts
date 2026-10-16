@@ -144,7 +144,7 @@ describe('giving portal access', () => {
     const result = await issuePortalAccess('cus-9');
     expect(result.success).toBe(true);
     const password = result.data!.password;
-    expect(password).toMatch(/^Hylink@/);
+    expect(password).toMatch(/^[A-Z2-9]{6}$/);
     expect(result.data!.signInWith).toEqual(['08031234567']);
     const saved = h.updates[0].data;
     expect(saved).toMatchObject({ portalEnabled: true, mustResetPassword: true, portalFailedAttempts: 0 });

@@ -142,8 +142,8 @@ export async function createFixedSavingsProduct(data: {
         monthlyInterestRate,
         interestCalculationMethod: data.interestCalculationMethod ?? 'COMPOUND',
         interestEligibilityDelayMonths: data.interestEligibilityDelayMonths ?? 0,
-        allowEarlyTermination: data.allowEarlyTermination ?? false,
-        defaultTerminationPenaltyRate: data.defaultTerminationPenaltyRate,
+        allowEarlyTermination: false,
+        defaultTerminationPenaltyRate: null,
         minDeposit: data.minimumDeposit,
         minBalance: data.minimumDeposit,
         maxBalance: data.maximumDeposit,
@@ -225,8 +225,8 @@ export async function updateFixedSavingsProduct(
     if (data.description !== undefined) updates.description = data.description;
     if (data.interestCalculationMethod !== undefined) updates.interestCalculationMethod = data.interestCalculationMethod;
     if (data.interestEligibilityDelayMonths !== undefined) updates.interestEligibilityDelayMonths = data.interestEligibilityDelayMonths;
-    if (data.allowEarlyTermination !== undefined) updates.allowEarlyTermination = data.allowEarlyTermination;
-    if (data.defaultTerminationPenaltyRate !== undefined) updates.defaultTerminationPenaltyRate = data.defaultTerminationPenaltyRate;
+    if (data.allowEarlyTermination !== undefined) updates.allowEarlyTermination = false;
+    if (data.defaultTerminationPenaltyRate !== undefined) updates.defaultTerminationPenaltyRate = null;
     if (data.minimumDeposit !== undefined) { updates.minDeposit = data.minimumDeposit; updates.minBalance = data.minimumDeposit; }
     if (data.maximumDeposit !== undefined) updates.maxBalance = data.maximumDeposit;
     if (data.promoName !== undefined) updates.promoName = data.promoName.trim() || null;
@@ -845,7 +845,15 @@ export async function processMaturedAccounts(): Promise<ActionResult<{ matured: 
 // PART 3 — EARLY TERMINATION SYSTEM
 // ============================================================================
 
+/** Savings no longer offer early termination; new requests are refused. */
+const EARLY_TERMINATION_WITHDRAWN = true;
+
 export async function requestEarlyTermination(accountId: string): Promise<ActionResult<{ terminationId: string }>> {
+  // Early termination has been withdrawn from savings: a fixed-term plan runs
+  // to maturity. Requests already on file can still be decided and paid.
+  if (EARLY_TERMINATION_WITHDRAWN) {
+    return { success: false, error: 'Early termination is not available. Fixed savings run to maturity.' };
+  }
   try {
     const user = await requireAnyPermission(['SAVINGS:DEPOSIT', 'SAVINGS:READ']);
 
@@ -1170,7 +1178,7 @@ export async function seedFixedSavingsProducts(): Promise<ActionResult> {
         create: {
           code: p.code, name: p.name, description: p.description, savingsType: 'FIXED',
           durationMonths: p.durationMonths, totalInterestRate: p.totalInterestRate, monthlyInterestRate: monthlyRate,
-          allowEarlyTermination: p.allowEarlyTermination, defaultTerminationPenaltyRate: p.defaultTerminationPenaltyRate,
+          allowEarlyTermination: false, defaultTerminationPenaltyRate: null,
           minDeposit: p.minimumDeposit, minBalance: p.minimumDeposit, maxBalance: p.maximumDeposit,
           interestRate: monthlyRate, allowWithdrawal: false, isActive: true, createdById: user.id,
         },

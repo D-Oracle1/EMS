@@ -280,12 +280,53 @@ export function customerFormTemplate(purpose: CustomerPurpose): FormQuestion[] {
         ...locked(['dateOfBirth', 'gender', 'maritalStatus']), kids(), religion(), ...origin(),
         ...NEXT_OF_KIN.map((f) => ({ ...f, id: newQuestionId() })),
         ...locked(['idType', 'idNumber']), idCopy(), referral(), passport(),
+        ...GUARANTOR_CHEQUE_QUESTIONS.map((f) => ({ ...f, options: f.options?.slice() })),
         declare(
           'I understand that as guarantor I am to make the payment in a case where the borrower fails to pay or cannot be ' +
           'reached. I understand the registration fee of ₦2,000 is non-refundable.'
         ),
       ];
   }
+}
+
+// ─── Guarantor cheques ──────────────────────────────────────────────────────
+
+/** The cheque questions every guarantor form asks, by fixed id. */
+export const GUARANTOR_CHEQUE_QUESTIONS: FormQuestion[] = [
+  q('chequesSubmitted', 'MULTIPLE_CHOICE', 'Are you submitting cheques for this loan?', false, { options: ['Yes', 'No'] }),
+  q('chequeBank', 'SHORT_TEXT', 'Bank the cheques are drawn on'),
+  q('chequeNumbers', 'PARAGRAPH', 'Cheque numbers', false, {
+    help: 'One cheque per line, with the amount if it is written, e.g. 00012345 - 50000',
+  }),
+];
+
+/**
+ * A guarantor form's questions with the cheque questions in, before the
+ * declaration, for forms published before they existed. Other kinds of form
+ * come back as they are.
+ */
+export function withGuarantorCheques(purpose: unknown, questions: FormQuestion[]): FormQuestion[] {
+  if (purpose !== 'GUARANTOR') return questions;
+  const have = new Set(questions.map((x) => x.id));
+  const missing = GUARANTOR_CHEQUE_QUESTIONS.filter((x) => !have.has(x.id)).map((x) => ({ ...x, options: x.options?.slice() }));
+  if (missing.length === 0) return questions;
+  const at = questions.findIndex((x) => x.type === 'CHECKBOXES' && x.label === 'Declaration');
+  return at === -1 ? [...questions, ...missing] : [...questions.slice(0, at), ...missing, ...questions.slice(at)];
+}
+
+/** The cheques a guarantor listed, as loan-form rows. */
+export function guarantorCheques(answers: Answers): { bankName: string; chequeNumber: string; amount: string; chequeDate: string }[] {
+  if (text(answers, 'chequesSubmitted') === 'No') return [];
+  const bankName = text(answers, 'chequeBank');
+  return text(answers, 'chequeNumbers')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [num, ...rest] = line.split(/\s+[-–—:]\s*|\s*[–—:]\s+/);
+      const amount = rest.join(' ').replace(/[^\d.]/g, '');
+      return { bankName, chequeNumber: num.trim(), amount, chequeDate: '' };
+    });
 }
 
 export const CUSTOMER_FORM_DESCRIPTION: Record<CustomerPurpose, string> = {
@@ -499,6 +540,7 @@ export function guarantorDetails(answers: Answers) {
     occupation: d.occupation ?? '',
     employer: d.employer ?? '',
     nationalId: d.nationalId ?? '',
+    cheques: guarantorCheques(answers),
   };
 }
 

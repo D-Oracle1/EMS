@@ -47,7 +47,9 @@ vi.mock('bcryptjs', async (importOriginal) => {
 
 import { issueLoginDetails, getLoginDirectory } from '@/actions/auth.actions';
 import { auditLog } from '@/lib/audit';
-import { generateTempPassword, issueTempPassword, recoverTempPassword } from '@/lib/temp-password';
+import { generateTempPassword, issueTempPassword, recoverTempPasswords } from '@/lib/temp-password';
+
+const recoverTempPassword = (id: string, at: Date | null) => recoverTempPasswords(id, at)[0] ?? null;
 
 const admin = {
   id: 'admin-1', email: 'admin@x.com', roleCode: 'SUPER_ADMIN',
@@ -67,10 +69,10 @@ beforeEach(() => {
 });
 
 describe('generateTempPassword', () => {
-  it('carries the prefix and a body of unambiguous characters', () => {
+  it('is six capital letters and digits that cannot be mistaken for each other', () => {
     const pw = generateTempPassword();
-    expect(pw).toMatch(/^Hylink@[a-zA-Z2-9]{8}$/);
-    expect(pw.slice(7)).not.toMatch(/[0O1lI]/);
+    expect(pw).toMatch(/^[A-Z2-9]{6}$/);
+    expect(pw).not.toMatch(/[0O1I]/);
   });
 
   it('does not repeat', () => {
@@ -171,6 +173,16 @@ describe('recoverTempPassword', () => {
 
   it('returns nothing without an issue time', () => {
     expect(recoverTempPassword('s1', null)).toBeNull();
+  });
+
+  it('issues the short format', () => {
+    expect(issueTempPassword('s1').password).toMatch(/^[A-Z2-9]{6}$/);
+  });
+
+  it('still recognises a password issued in the older long format', () => {
+    const { issuedAt } = issueTempPassword('s1');
+    const [, legacy] = recoverTempPasswords('s1', issuedAt);
+    expect(legacy).toMatch(/^Hylink@[a-zA-Z2-9]{8}$/);
   });
 });
 

@@ -4,6 +4,8 @@ import { LoanStatus, ScheduleStatus } from '@prisma/client';
 import Decimal from 'decimal.js';
 import { prisma, withTransaction } from '@/lib/prisma';
 import { branchForNewRecord, branchScopeFor, inScope } from '@/lib/branch-scope';
+import { resolveTier } from '@/lib/customer-tier';
+import { cleanCheques, type ChequeInput, type CleanCheque } from '@/lib/loan-cheques';
 import { postLoanRepayment } from '@/lib/money-posting';
 import { requirePermission, requireAnyPermission, getSession } from '@/lib/auth-utils';
 import { auditLog } from '@/lib/audit';
@@ -126,6 +128,7 @@ export async function getLoan(id: string) {
       schedule: { orderBy: { installmentNumber: 'asc' } },
       repayments: { orderBy: { collectedAt: 'desc' } },
       guarantors: { orderBy: { createdAt: 'asc' } },
+      cheques: { orderBy: { createdAt: 'asc' } },
       restructurings: {
         include: {
           requestedBy: { select: { firstName: true, lastName: true } },
@@ -200,6 +203,10 @@ export async function getLoan(id: string) {
     guarantors: loan.guarantors.map((g) => ({
       ...g,
       monthlyIncome: g.monthlyIncome?.toNumber() ?? null,
+    })),
+    cheques: loan.cheques.map((c) => ({
+      ...c,
+      amount: c.amount?.toNumber() ?? null,
     })),
     verifications: loan.verifications.map((v) => ({
       ...v,
@@ -282,6 +289,8 @@ export interface NewCustomerInput {
   nokAddress?: string;
   companyName?: string;
   rcNumber?: string;
+  /** KYC tier 1-3 (lib/customer-tier). */
+  tier?: number | string;
 }
 
 export interface GuarantorInput {
@@ -300,6 +309,8 @@ export interface GuarantorInput {
   monthlyIncome?: number;
   bvn?: string;
   nationalId?: string;
+  /** Cheques this guarantor handed in. */
+  cheques?: ChequeInput[];
 }
 
 export async function createLoan(data: {
@@ -313,6 +324,8 @@ export async function createLoan(data: {
   collateralDetails?: string;
   guarantorDetails?: string;
   guarantors?: GuarantorInput[];
+  /** Cheques the borrower handed in. */
+  cheques?: ChequeInput[];
   branchId?: string;
   owingBypass?: boolean;
   owingBypassReason?: string;
@@ -365,6 +378,8 @@ export async function createLoan(data: {
       if (!nc.address?.trim()) {
         return { success: false, error: 'New customer requires an address' };
       }
+      const tierError = resolveTier(nc.tier, nc.bvn, nc.nationalId).error;
+      if (tierError) return { success: false, error: tierError };
       customerName = `${nc.firstName.trim()} ${nc.lastName.trim()}`;
     } else {
       if (!customerId) {
@@ -436,6 +451,15 @@ export async function createLoan(data: {
       : 0;
     const totalFees = processingFee + insuranceFee;
 
+    const borrowerCheques = cleanCheques(data.cheques, 'Borrower cheque');
+    if (borrowerCheques.error) return { success: false, error: borrowerCheques.error };
+    const guarantorCheques: CleanCheque[][] = [];
+    for (const [i, g] of (data.guarantors ?? []).entries()) {
+      const c = cleanCheques(g.cheques, `Guarantor ${i + 1} cheque`);
+      if (c.error) return { success: false, error: c.error };
+      guarantorCheques.push(c.cheques);
+    }
+
     const branchId = await branchForNewRecord(user, { requested: data.branchId, customerId: customerId || null });
     if (registerNewCustomer && !branchId) {
       return { success: false, error: 'No branch to book this customer to. Ask an administrator to post you to a branch.' };
@@ -468,6 +492,7 @@ export async function createLoan(data: {
             monthlyIncome: nc.monthlyIncome,
             bvn: nc.bvn,
             nationalId: nc.nationalId,
+            tier: resolveTier(nc.tier, nc.bvn, nc.nationalId).tier,
             nokName: nc.nokName,
             nokRelationship: nc.nokRelationship,
             nokPhone: nc.nokPhone,
@@ -509,9 +534,9 @@ export async function createLoan(data: {
 
       // Create guarantors
       if (data.guarantors?.length) {
-        for (const g of data.guarantors) {
+        for (const [gi, g] of data.guarantors.entries()) {
           if (!g.firstName?.trim() || !g.lastName?.trim() || !g.phone?.trim()) continue;
-          await tx.guarantor.create({
+          const guarantor = await tx.guarantor.create({
             data: {
               loanId: newLoan.id,
               title: g.title,
@@ -531,7 +556,18 @@ export async function createLoan(data: {
               nationalId: g.nationalId,
             },
           });
+          if (guarantorCheques[gi]?.length) {
+            await tx.loanCheque.createMany({
+              data: guarantorCheques[gi].map((c) => ({ ...c, loanId: newLoan.id, guarantorId: guarantor.id })),
+            });
+          }
         }
+      }
+
+      if (borrowerCheques.cheques.length) {
+        await tx.loanCheque.createMany({
+          data: borrowerCheques.cheques.map((c) => ({ ...c, loanId: newLoan.id })),
+        });
       }
 
       // Create schedule

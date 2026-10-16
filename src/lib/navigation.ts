@@ -67,7 +67,6 @@ export const navItems: NavItem[] = [
   { label: 'Savings',        href: '/savings',            icon: PiggyBank,   color: 'emerald', permissions: ['SAVINGS:CREATE', 'SAVINGS:TRANSACT', 'SAVINGS:DEPOSIT', 'SAVINGS:WITHDRAW', 'SAVINGS:APPROVE'], section: 'Savings' },
   { label: 'Accounts',       href: '/savings/accounts',   icon: BookOpen,    color: 'emerald', permissions: ['SAVINGS:CREATE', 'SAVINGS:TRANSACT', 'SAVINGS:DEPOSIT', 'SAVINGS:WITHDRAW', 'SAVINGS:APPROVE'] },
   { label: 'Withdrawals',    href: '/savings/withdrawals',icon: ArrowRightLeft, color: 'teal', permissions: ['SAVINGS:WITHDRAW', 'SAVINGS:APPROVE'] },
-  { label: 'Terminations',   href: '/savings/terminations', icon: XCircle,   color: 'rose',    permissions: ['SAVINGS:APPROVE', 'SAVINGS:TRANSACT'] },
   { label: 'Savings Reports',href: '/savings/reports',    icon: BarChart3,   color: 'teal',    permissions: ['SAVINGS:CREATE', 'SAVINGS:TRANSACT', 'SAVINGS:DEPOSIT', 'SAVINGS:WITHDRAW', 'SAVINGS:APPROVE'] },
   { label: 'Savings Products', href: '/settings/savings-products', icon: Package, color: 'emerald', permissions: ['SETTINGS:MANAGE', 'SYSTEM:CONFIG_MANAGE'] },
 
@@ -81,6 +80,9 @@ export const navItems: NavItem[] = [
   // record company sales (lib/marketing-access). The server applies the same
   // rule, reading the target switch fresh from the database.
   { label: 'Sales',            href: '/marketing', icon: TrendingUp, color: 'fuchsia', section: 'Marketing', anyOf: { departments: ['MARKETING'], onSalesTarget: true, minRoleLevel: 85, permissions: ['ADMIN:SYSTEM', 'ACCOUNTS:JOURNAL_POST'] } },
+  // The Business Service Consultants / Social Media dashboard: the department,
+  // and level 85+ (canOpenBusinessServices in lib/business-services).
+  { label: 'Business Services', href: '/business-services', icon: Briefcase, color: 'indigo', anyOf: { departments: ['BSC_SOCIAL'], minRoleLevel: 85, permissions: ['ADMIN:SYSTEM'] } },
 
   // ── Accounting ───────────────────────────────────────────────────────────
   { label: 'Accounting',       href: '/accounting',                     icon: BookOpen,  color: 'sky', permissions: ['ACCOUNTS:COA_MANAGE', 'ACCOUNTS:JOURNAL_CREATE', 'ACCOUNTS:REPORTS_VIEW'], section: 'Accounting' },
@@ -122,8 +124,6 @@ export const navItems: NavItem[] = [
   // holds SYSTEM:CONFIG_MANAGE and must not reach it. The server applies the
   // same rule (canOpenBranchesConsole in lib/branch-scope).
   { label: 'Branches',            href: '/branches',               icon: Building2,          color: 'indigo', section: 'Security & Admin', anyOf: { minRoleLevel: 85, permissions: ['ADMIN:SYSTEM'] } },
-  // Form builder and responses: the same admins (canManageForms in lib/forms).
-  { label: 'Forms',               href: '/forms',                  icon: ClipboardList,      color: 'teal',  anyOf: { minRoleLevel: 85, permissions: ['ADMIN:SYSTEM'] } },
   { label: 'Roles & Permissions', href: '/settings/roles',         icon: ShieldCheck,        color: 'rose',  permissions: ['SYSTEM:USER_MANAGE', 'ADMIN:SYSTEM'] },
   { label: 'Active Sessions',     href: '/settings/sessions',      icon: MonitorSmartphone,  color: 'rose',  permission: 'SYSTEM:USER_MANAGE' },
   { label: 'Audit Logs',          href: '/audit-logs',             icon: Shield,             color: 'slate', permission: 'AUDIT:READ' },
@@ -143,6 +143,9 @@ export const navItems: NavItem[] = [
   { label: 'Leave',          href: '/hr/leave',         icon: CalendarOff,color: 'amber' },
   { label: 'Announcements',  href: '/hr/announcements', icon: Megaphone,  color: 'fuchsia' },
   { label: 'My Forms',       href: '/my-forms',         icon: ListChecks, color: 'teal' },
+  // Form builder: everyone builds their own forms; managers (canManageForms
+  // in lib/forms) see and run all of them. Their own, so no permission.
+  { label: 'Forms',          href: '/forms',            icon: ClipboardList, color: 'teal' },
   { label: 'Documents',      href: '/documents',        icon: FileText,   color: 'rose',    permission: 'DOCUMENTS:READ' },
   { label: 'Notifications',  href: '/notifications',    icon: Bell,       color: 'fuchsia' },
 ];

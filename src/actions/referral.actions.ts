@@ -31,7 +31,12 @@ export async function getMyFormLinks() {
       select: { employeeId: true, onSalesTarget: true, department: { select: { code: true } } },
     }),
     prisma.form.findMany({
-      where: { status: 'OPEN', purpose: { in: ['SAVINGS_APPLICATION', 'PARTNERSHIP_APPLICATION', 'FIXED_DEPOSIT_APPLICATION', 'LOAN_APPLICATION'] } },
+      where: {
+        status: 'OPEN',
+        purpose: { in: ['SAVINGS_APPLICATION', 'PARTNERSHIP_APPLICATION', 'FIXED_DEPOSIT_APPLICATION', 'LOAN_APPLICATION'] },
+        // Company forms, and this staff member's own; never another's own form.
+        OR: [{ personal: false }, { createdById: user.id }],
+      },
       orderBy: [{ purpose: 'asc' }, { title: 'asc' }],
       select: { id: true, slug: true, title: true, purpose: true, status: true, closesAt: true, branch: { select: { name: true } } },
     }),

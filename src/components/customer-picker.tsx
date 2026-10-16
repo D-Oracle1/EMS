@@ -14,6 +14,7 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { searchCustomers } from '@/actions/customer.actions';
 import type { NewCustomerInput } from '@/lib/customer-registration';
+import { CustomerTierField, tierFormProblem, tierRequires } from '@/components/customer-tier-field';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -43,6 +44,7 @@ export interface NewCustomerData {
   nokAddress: string;
   companyName: string;
   rcNumber: string;
+  tier: string;
 }
 
 export const blankNewCustomer: NewCustomerData = {
@@ -69,6 +71,7 @@ export const blankNewCustomer: NewCustomerData = {
   nokAddress: '',
   companyName: '',
   rcNumber: '',
+  tier: '',
 };
 
 export interface CustomerSelection {
@@ -96,7 +99,7 @@ export function validateCustomerSelection(sel: CustomerSelection): string | null
   if (!nc.phone.trim()) return 'New customer requires a phone number';
   if (!nc.address.trim()) return 'New customer requires an address';
   if (nc.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nc.email)) return 'New customer email is invalid';
-  return null;
+  return tierFormProblem(nc.tier, nc.bvn, nc.nationalId);
 }
 
 /** Map a selection to the { customerId?, newCustomer? } shape server actions expect. */
@@ -131,6 +134,7 @@ export function toActionCustomer(sel: CustomerSelection): {
       nokAddress: nc.nokAddress.trim() || undefined,
       companyName: nc.companyName.trim() || undefined,
       rcNumber: nc.rcNumber.trim() || undefined,
+      tier: nc.tier ? Number(nc.tier) : undefined,
     },
   };
 }
@@ -418,17 +422,21 @@ export function CustomerPicker({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <CustomerTierField value={nc.tier} onChange={(v) => updateNew('tier', v)} />
             <div className="space-y-1.5">
               <Label>Occupation</Label>
               <Input value={nc.occupation} onChange={(e) => updateNew('occupation', e.target.value)} placeholder="Occupation" />
             </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>BVN</Label>
+              <Label>BVN{(tierRequires(nc.tier).bvn || tierRequires(nc.tier).either) && <span className="text-destructive"> *</span>}</Label>
               <Input value={nc.bvn} onChange={(e) => updateNew('bvn', e.target.value)} placeholder="11-digit BVN" maxLength={11} />
             </div>
             <div className="space-y-1.5">
-              <Label>National ID (NIN)</Label>
+              <Label>National ID (NIN){(tierRequires(nc.tier).nin || tierRequires(nc.tier).either) && <span className="text-destructive"> *</span>}</Label>
               <Input value={nc.nationalId} onChange={(e) => updateNew('nationalId', e.target.value)} placeholder="National ID" />
             </div>
           </div>

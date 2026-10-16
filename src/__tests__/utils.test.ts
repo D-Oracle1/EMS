@@ -144,29 +144,29 @@ describe('getPeriodDateRange', () => {
 // ---------------------------------------------------------------------------
 describe('calculateReducingBalanceSchedule', () => {
   const principal = 100_000;
-  const annualRate = 24; // 24% p.a. = 2% per month
+  const monthlyRate = 2; // 2% a month
   const tenureMonths = 12;
   const startDate = new Date('2024-01-01');
 
   it('generates the correct number of installments', () => {
-    const { schedule } = calculateReducingBalanceSchedule(principal, annualRate, tenureMonths, startDate);
+    const { schedule } = calculateReducingBalanceSchedule(principal, monthlyRate, tenureMonths, startDate);
     expect(schedule).toHaveLength(12);
   });
 
   it('outstanding balance reaches zero at the end', () => {
-    const { schedule } = calculateReducingBalanceSchedule(principal, annualRate, tenureMonths, startDate);
+    const { schedule } = calculateReducingBalanceSchedule(principal, monthlyRate, tenureMonths, startDate);
     expect(schedule[schedule.length - 1].outstandingBalance).toBeCloseTo(0, 1);
   });
 
   it('total repayment equals principal plus total interest', () => {
     const { totalRepayment, totalInterest } = calculateReducingBalanceSchedule(
-      principal, annualRate, tenureMonths, startDate
+      principal, monthlyRate, tenureMonths, startDate
     );
     expect(totalRepayment).toBeCloseTo(principal + totalInterest, 2);
   });
 
   it('each installment has positive principal and interest', () => {
-    const { schedule } = calculateReducingBalanceSchedule(principal, annualRate, tenureMonths, startDate);
+    const { schedule } = calculateReducingBalanceSchedule(principal, monthlyRate, tenureMonths, startDate);
     for (const row of schedule) {
       expect(row.principalDue).toBeGreaterThan(0);
       expect(row.interestDue).toBeGreaterThan(0);
@@ -175,8 +175,13 @@ describe('calculateReducingBalanceSchedule', () => {
   });
 
   it('installment numbers are sequential starting from 1', () => {
-    const { schedule } = calculateReducingBalanceSchedule(principal, annualRate, tenureMonths, startDate);
+    const { schedule } = calculateReducingBalanceSchedule(principal, monthlyRate, tenureMonths, startDate);
     schedule.forEach((row, i) => expect(row.installmentNumber).toBe(i + 1));
+  });
+
+  it('reads the rate as monthly: the first month charges 2% of the principal', () => {
+    const { schedule } = calculateReducingBalanceSchedule(principal, monthlyRate, tenureMonths, startDate);
+    expect(schedule[0].interestDue).toBe(2_000);
   });
 });
 
@@ -185,29 +190,30 @@ describe('calculateReducingBalanceSchedule', () => {
 // ---------------------------------------------------------------------------
 describe('calculateFlatRateSchedule', () => {
   const principal = 120_000;
-  const annualRate = 18; // 18% p.a.
+  const monthlyRate = 1.5; // 1.5% a month
   const tenureMonths = 6;
   const startDate = new Date('2024-01-01');
 
   it('generates the correct number of installments', () => {
-    const { schedule } = calculateFlatRateSchedule(principal, annualRate, tenureMonths, startDate);
+    const { schedule } = calculateFlatRateSchedule(principal, monthlyRate, tenureMonths, startDate);
     expect(schedule).toHaveLength(6);
   });
 
-  it('total interest = principal × rate × (tenure/12)', () => {
-    const { totalInterest } = calculateFlatRateSchedule(principal, annualRate, tenureMonths, startDate);
-    const expected = principal * (annualRate / 100) * (tenureMonths / 12);
+  it('total interest = principal × monthly rate × tenure', () => {
+    const { totalInterest } = calculateFlatRateSchedule(principal, monthlyRate, tenureMonths, startDate);
+    const expected = principal * (monthlyRate / 100) * tenureMonths;
+    expect(expected).toBe(10_800);
     expect(totalInterest).toBeCloseTo(expected, 2);
   });
 
   it('outstanding balance reaches zero at the end', () => {
-    const { schedule } = calculateFlatRateSchedule(principal, annualRate, tenureMonths, startDate);
+    const { schedule } = calculateFlatRateSchedule(principal, monthlyRate, tenureMonths, startDate);
     expect(schedule[schedule.length - 1].outstandingBalance).toBeCloseTo(0, 1);
   });
 
   it('monthly instalment is consistent across all periods', () => {
     const { schedule, monthlyInstalment } = calculateFlatRateSchedule(
-      principal, annualRate, tenureMonths, startDate
+      principal, monthlyRate, tenureMonths, startDate
     );
     // All but last installment should equal monthlyInstalment
     for (let i = 0; i < schedule.length - 1; i++) {
@@ -217,7 +223,7 @@ describe('calculateFlatRateSchedule', () => {
 
   it('total repayment equals principal plus total interest', () => {
     const { totalRepayment, totalInterest } = calculateFlatRateSchedule(
-      principal, annualRate, tenureMonths, startDate
+      principal, monthlyRate, tenureMonths, startDate
     );
     expect(totalRepayment).toBeCloseTo(principal + totalInterest, 2);
   });

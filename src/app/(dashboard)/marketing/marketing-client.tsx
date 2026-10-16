@@ -477,7 +477,7 @@ function LeaderboardPanel({ access }: { access: Access }) {
   const loading = !board || board.month !== month;
 
   const medal = (rank: number) =>
-    rank === 1 ? 'text-amber-500' : rank === 2 ? 'text-slate-400' : rank === 3 ? 'text-orange-600' : 'text-transparent';
+    rank === 1 ? 'text-amber-500' : rank === 2 ? 'text-slate-500 dark:text-slate-300' : rank === 3 ? 'text-orange-600' : 'text-transparent';
 
   return (
     <Card>

@@ -536,6 +536,8 @@ model Customer {
   profilePhoto String?
   status       CustomerStatus @default(ACTIVE)
   riskRating   RiskRating     @default(MEDIUM)
+  /// KYC tier (lib/customer-tier): 1 no BVN or NIN, 2 either, 3 both.
+  tier         Int            @default(1)
 
   kycVerified   Boolean   @default(false)
   kycVerifiedAt DateTime?
@@ -616,7 +618,7 @@ model LoanProduct {
   minTenure Int // In months
   maxTenure Int
 
-  interestRate Decimal      @db.Decimal(5, 2) // Annual rate
+  interestRate Decimal      @db.Decimal(7, 4) // Monthly rate, % of the loan each month
   interestType InterestType @default(FLAT)
 
   processingFee Decimal  @db.Decimal(5, 2) // Percentage
@@ -658,7 +660,7 @@ model Loan {
 
   // Loan Terms
   principalAmount Decimal @db.Decimal(18, 2)
-  interestRate    Decimal @db.Decimal(5, 2)
+  interestRate    Decimal @db.Decimal(7, 4) // Monthly rate
   tenure          Int // Months
 
   processingFee Decimal @db.Decimal(18, 2)
@@ -720,6 +722,7 @@ model Loan {
   verificationTasks VerificationTask[]
   restructurings    LoanRestructuring[]
   guarantors        Guarantor[]
+  cheques           LoanCheque[]
   marketingSales    MarketingSale[]
   /// The application form it was created from, whose fee was paid upfront.
   application       FormResponse?
@@ -784,11 +787,31 @@ model Guarantor {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  loan     Loan      @relation(fields: [loanId], references: [id], onDelete: Cascade)
-  customer Customer? @relation(fields: [customerId], references: [id])
+  loan     Loan         @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  customer Customer?    @relation(fields: [customerId], references: [id])
+  cheques  LoanCheque[]
 
   @@index([loanId])
   @@index([customerId])
+}
+
+// Cheques handed in as security for a loan, by the borrower or by one of the
+// loan's guarantors (guarantorId set).
+model LoanCheque {
+  id           String    @id @default(uuid())
+  loanId       String
+  guarantorId  String?
+  bankName     String
+  chequeNumber String
+  amount       Decimal?  @db.Decimal(18, 2)
+  chequeDate   DateTime?
+  createdAt    DateTime  @default(now())
+
+  loan      Loan       @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  guarantor Guarantor? @relation(fields: [guarantorId], references: [id], onDelete: Cascade)
+
+  @@index([loanId])
+  @@index([guarantorId])
 }
 
 // Loan Verification Reports
@@ -1034,12 +1057,12 @@ model LoanRestructuring {
 
   // Previous terms snapshot (audit)
   previousTenure             Int
-  previousInterestRate       Decimal @db.Decimal(5, 2)
+  previousInterestRate       Decimal @db.Decimal(7, 4)
   previousOutstandingBalance Decimal @db.Decimal(18, 2)
 
   // New terms
   newTenure       Int?
-  newInterestRate Decimal? @db.Decimal(5, 2)
+  newInterestRate Decimal? @db.Decimal(7, 4)
 
   // Write-off
   writeOffAmount Decimal? @db.Decimal(18, 2)
@@ -3549,6 +3572,10 @@ model Form {
   /// applications and where approved customers are profiled. Null: any
   /// branch's officers, and the customer joins the approver's branch.
   branchId            String?
+  /// Made by a staff member for their own clients rather than by a form
+  /// manager: only its maker (and managers) see it, and every application
+  /// through it is credited to its maker.
+  personal            Boolean   @default(false)
 
   createdById String
   createdAt   DateTime @default(now())

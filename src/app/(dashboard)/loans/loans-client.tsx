@@ -300,7 +300,7 @@ export function LoansClient({
                       <TableCell className="text-right font-medium">
                         {formatCurrency(loan.principalAmount)}
                       </TableCell>
-                      <TableCell className="text-right">{loan.interestRate}%</TableCell>
+                      <TableCell className="text-right">{loan.interestRate}% /mo</TableCell>
                       <TableCell className="text-center">{loan.tenure}m</TableCell>
                       <TableCell>
                         <Badge variant={statusConf.variant}>{statusConf.label}</Badge>

@@ -102,6 +102,7 @@ interface Customer {
   monthlyIncome: number;
   bvn?: string | null;
   nationalId?: string | null;
+  tier?: number;
   nokName?: string | null;
   nokRelationship?: string | null;
   nokPhone?: string | null;
@@ -453,6 +454,7 @@ function OverviewTab({ customer }: { customer: Customer }) {
             <InfoItem icon={Building} label="Employer" value={customer.employer || '-'} />
             <InfoItem icon={CreditCard} label="BVN" value={customer.bvn || '-'} />
             <InfoItem icon={CreditCard} label="National ID" value={customer.nationalId || '-'} />
+            <InfoItem icon={CreditCard} label="Customer Tier" value={customer.tier ? `Tier ${customer.tier}` : '-'} />
             {customer.customerType === 'CORPORATE' && (
               <>
                 <InfoItem icon={Building} label="Company Name" value={customer.companyName || '-'} />
@@ -533,7 +535,7 @@ function LoansTab({ loans }: { loans: Loan[] }) {
                 </TableCell>
                 <TableCell>{loan.product?.name || '-'}</TableCell>
                 <TableCell>{formatCurrency(loan.principalAmount)}</TableCell>
-                <TableCell>{loan.interestRate}%</TableCell>
+                <TableCell>{loan.interestRate}% /mo</TableCell>
                 <TableCell>{loan.tenure} months</TableCell>
                 <TableCell>{formatCurrency(loan.totalRepayment)}</TableCell>
                 <TableCell>{getStatusBadge(loan.status)}</TableCell>

@@ -35,7 +35,7 @@ import {
   type FormQuestion, type Answers,
 } from '@/lib/forms';
 import {
-  isCustomerPurpose, enforceCustomerFields, customerFormTemplate, applicantDetails, makeReference,
+  isCustomerPurpose, enforceCustomerFields, customerFormTemplate, applicantDetails, makeReference, withGuarantorCheques,
   normalizeReference, PURPOSE_INFO, GUARANTORS_REQUIRED, CUSTOMER_FORM_DESCRIPTION, CUSTOMER_FORM_CONFIRMATION,
   applicationTerms, type CustomerPurpose,
 } from '@/lib/customer-forms';
@@ -73,6 +73,39 @@ async function requireManager(): Promise<SessionUser> {
   return user;
 }
 
+/** Any signed-in staff member: everyone may build forms of their own. */
+async function requireStaffMember(): Promise<SessionUser> {
+  const { user } = await getSession();
+  if ((user.userType ?? 'staff') !== 'staff') throw new Error('Permission denied');
+  return user;
+}
+
+/**
+ * A form this staff member may manage: any form for a form manager, otherwise
+ * only one they made themselves. Anyone else is told it does not exist.
+ */
+async function requireFormAccess(formId: string): Promise<{ user: SessionUser; manager: boolean }> {
+  const user = await requireStaffMember();
+  if (canManageForms(user)) return { user, manager: true };
+  const form = await prisma.form.findUnique({ where: { id: formId }, select: { createdById: true } });
+  if (!form || form.createdById !== user.id) throw new Error('Form not found');
+  return { user, manager: false };
+}
+
+/** Kinds of form only managers make: staff onboarding, and the guarantor form every loan's guarantors are sent to. */
+const MANAGER_ONLY_PURPOSES: FormPurpose[] = ['STAFF_ONBOARDING', 'GUARANTOR'];
+
+/**
+ * The branch a staff member's own customer form routes to: where they are
+ * posted, or any branch for head-office staff. Undefined for a form manager,
+ * who chooses.
+ */
+async function ownFormBranch(user: SessionUser, manager: boolean): Promise<string | null | undefined> {
+  if (manager) return undefined;
+  const me = await prisma.staff.findUnique({ where: { id: user.id }, select: { branchId: true } });
+  return me?.branchId ?? null;
+}
+
 /** The signed-in staff member, if any. Customers on the portal are not staff. */
 async function currentStaff(): Promise<SessionUser | null> {
   const session = await auth();
@@ -96,14 +129,16 @@ export interface FormInput {
 
 export async function getFormAccess() {
   const user = await currentStaff();
-  return { canManage: !!user && canManageForms(user) };
+  return { canManage: !!user && canManageForms(user), canCreate: !!user };
 }
 
 // ─── Admin ──────────────────────────────────────────────────────────────────
 
+/** Every form for a form manager; a staff member's own forms for anyone else. */
 export async function getForms() {
-  await requireManager();
+  const user = await requireStaffMember();
   const forms = await prisma.form.findMany({
+    where: canManageForms(user) ? {} : { createdById: user.id },
     orderBy: { updatedAt: 'desc' },
     include: {
       createdBy: { select: { firstName: true, lastName: true } },
@@ -129,10 +164,16 @@ export async function getForms() {
 }
 
 export async function getFormForEdit(id: string) {
-  await requireManager();
+  let manager: boolean;
+  try {
+    ({ manager } = await requireFormAccess(id));
+  } catch {
+    return null;
+  }
   const f = await prisma.form.findUnique({ where: { id }, include: { _count: { select: { responses: true } } } });
   if (!f) return null;
-  const branches = isCustomerPurpose(f.purpose)
+  // A staff member's own forms go to their own branch's officers, so only managers choose.
+  const branches = isCustomerPurpose(f.purpose) && manager
     ? await prisma.branch.findMany({ where: { isActive: true }, select: { id: true, name: true }, orderBy: { name: 'asc' } })
     : [];
   return {
@@ -153,7 +194,7 @@ export async function getFormForEdit(id: string) {
   };
 }
 
-async function cleanInput(data: FormInput, purpose: FormPurpose = 'GENERAL') {
+async function cleanInput(data: FormInput, purpose: FormPurpose = 'GENERAL', ownBranch?: string | null) {
   const title = (data.title ?? '').trim().slice(0, LIMITS.title);
   if (!title) throw new Error('Give the form a title');
   const onboarding = purpose === 'STAFF_ONBOARDING';
@@ -177,7 +218,7 @@ async function cleanInput(data: FormInput, purpose: FormPurpose = 'GENERAL') {
     questions: (
       onboarding ? enforceOnboardingFields(questions) : customer ? enforceCustomerFields(purpose, questions) : questions
     ) as unknown as Prisma.InputJsonValue,
-    ...(customer ? { branchId: await formBranch(data.branchId) } : {}),
+    ...(customer ? { branchId: ownBranch !== undefined ? ownBranch : await formBranch(data.branchId) } : {}),
   };
 }
 
@@ -192,10 +233,12 @@ async function formBranch(id: string | null | undefined): Promise<string | null>
 /** Creates a form (no id) or saves changes to one. New forms start as drafts. */
 export async function saveForm(data: FormInput, id?: string): Promise<ActionResult<{ id: string }>> {
   try {
-    const user = await requireManager();
+    const { user, manager } = id
+      ? await requireFormAccess(id)
+      : await requireStaffMember().then((u) => ({ user: u, manager: canManageForms(u) }));
     const existing = id ? await prisma.form.findUnique({ where: { id }, select: { id: true, purpose: true } }) : null;
     if (id && !existing) return { success: false, error: 'Form not found' };
-    const values = await cleanInput(data, existing?.purpose);
+    const values = await cleanInput(data, existing?.purpose, await ownFormBranch(user, manager));
 
     if (id) {
       await prisma.form.update({ where: { id }, data: values satisfies Prisma.FormUncheckedUpdateInput });
@@ -207,7 +250,7 @@ export async function saveForm(data: FormInput, id?: string): Promise<ActionResu
     }
 
     const form = await prisma.form.create({
-      data: { ...values, slug: makeSlug(values.title), createdById: user.id },
+      data: { ...values, slug: makeSlug(values.title), createdById: user.id, personal: !manager },
     });
     await auditLog({
       userId: user.id, action: 'CREATE', module: 'FORMS', entityType: 'FORM', entityId: form.id,
@@ -260,11 +303,18 @@ export async function createOnboardingForm(): Promise<ActionResult<{ id: string 
  */
 export async function createCustomerForm(purpose: CustomerPurpose): Promise<ActionResult<{ id: string }>> {
   try {
-    const user = await requireManager();
+    const user = await requireStaffMember();
+    const manager = canManageForms(user);
     if (!isCustomerPurpose(purpose)) return { success: false, error: 'Unknown kind of form' };
+    if (!manager && MANAGER_ONLY_PURPOSES.includes(purpose)) {
+      return { success: false, error: 'Only form managers can create this kind of form' };
+    }
     const info = PURPOSE_INFO[purpose];
     const form = await prisma.form.create({
       data: {
+        personal: !manager,
+        // A staff member's own form goes to the officers of their branch.
+        ...(manager ? {} : { branchId: (await ownFormBranch(user, false)) ?? null }),
         title: info.title,
         slug: makeSlug(info.title),
         description: CUSTOMER_FORM_DESCRIPTION[purpose],
@@ -301,6 +351,19 @@ async function applicationReviewerIds(purpose: CustomerPurpose, branchId: string
     select: { id: true },
   });
   return rows.map((r) => r.id);
+}
+
+/**
+ * Who an application through this form is credited to: the staff member whose
+ * personal link it came by, else the maker of a staff member's own form.
+ */
+async function referrerFor(form: { personal: boolean; createdById: string }, by?: string | null) {
+  const viaLink = by ? await findReferrer(by) : null;
+  if (viaLink || !form.personal) return viaLink;
+  return prisma.staff.findFirst({
+    where: { id: form.createdById, status: 'ACTIVE', isDeleted: false },
+    select: { id: true, firstName: true, lastName: true, employeeId: true },
+  });
 }
 
 /** The guarantor form a loan applicant's guarantors are sent to: the newest one open. */
@@ -346,7 +409,7 @@ async function staffCreatorIds(): Promise<string[]> {
 /** Opens, closes or returns a form to draft. Opening a staff form the first time tells every staff member. */
 export async function setFormStatus(id: string, status: 'DRAFT' | 'OPEN' | 'CLOSED'): Promise<ActionResult> {
   try {
-    const user = await requireManager();
+    const { user, manager } = await requireFormAccess(id);
     if (!['DRAFT', 'OPEN', 'CLOSED'].includes(status)) return { success: false, error: 'Unknown status' };
     const form = await prisma.form.findUnique({ where: { id } });
     if (!form) return { success: false, error: 'Form not found' };
@@ -365,7 +428,8 @@ export async function setFormStatus(id: string, status: 'DRAFT' | 'OPEN' | 'CLOS
       },
     });
 
-    if (firstOpening && form.audience === 'STAFF') {
+    // Only a form manager's staff form is announced to every staff member.
+    if (firstOpening && form.audience === 'STAFF' && manager) {
       const staff = await prisma.staff.findMany({
         where: { status: 'ACTIVE', isDeleted: false, id: { not: user.id } },
         select: { id: true },
@@ -393,7 +457,7 @@ export async function setFormStatus(id: string, status: 'DRAFT' | 'OPEN' | 'CLOS
 
 export async function deleteForm(id: string): Promise<ActionResult> {
   try {
-    const user = await requireManager();
+    const { user } = await requireFormAccess(id);
     const form = await prisma.form.findUnique({
       where: { id },
       include: { _count: { select: { responses: true } }, responses: { select: { answers: true } } },
@@ -417,7 +481,7 @@ export async function deleteForm(id: string): Promise<ActionResult> {
 /** A copy of a form's questions and settings as a new draft, with no responses. */
 export async function duplicateForm(id: string): Promise<ActionResult<{ id: string }>> {
   try {
-    const user = await requireManager();
+    const { user, manager } = await requireFormAccess(id);
     const form = await prisma.form.findUnique({ where: { id } });
     if (!form) return { success: false, error: 'Form not found' };
     const title = `${form.title} (copy)`.slice(0, LIMITS.title);
@@ -433,6 +497,7 @@ export async function duplicateForm(id: string): Promise<ActionResult<{ id: stri
         branchId: form.branchId,
         questions: form.questions as Prisma.InputJsonValue,
         createdById: user.id,
+        personal: !manager,
       },
     });
     return { success: true, message: 'Copy created', data: { id: copy.id } };
@@ -442,7 +507,11 @@ export async function duplicateForm(id: string): Promise<ActionResult<{ id: stri
 }
 
 export async function getFormResponses(id: string) {
-  await requireManager();
+  try {
+    await requireFormAccess(id);
+  } catch {
+    return null;
+  }
   const form = await prisma.form.findUnique({
     where: { id },
     include: {
@@ -477,9 +546,11 @@ export async function getFormResponses(id: string) {
 
 export async function deleteFormResponse(id: string): Promise<ActionResult> {
   try {
-    const user = await requireManager();
-    const response = await prisma.formResponse.findUnique({ where: { id }, include: { form: { select: { title: true } } } });
-    if (!response) return { success: false, error: 'Response not found' };
+    const user = await requireStaffMember();
+    const response = await prisma.formResponse.findUnique({ where: { id }, include: { form: { select: { title: true, createdById: true } } } });
+    if (!response || (!canManageForms(user) && response.form.createdById !== user.id)) {
+      return { success: false, error: 'Response not found' };
+    }
     if (await prisma.feePayment.count({ where: { responseId: id } })) {
       return { success: false, error: 'A fee payment is recorded against this response, so it cannot be deleted' };
     }
@@ -571,12 +642,13 @@ export async function getPublicForm(slug: string, app?: string, by?: string): Pr
     state: 'open',
     preview,
     form: {
-      title: form.title, description: form.description, audience: form.audience, questions: readQuestions(form.questions),
+      title: form.title, description: form.description, audience: form.audience,
+      questions: withGuarantorCheques(form.purpose, readQuestions(form.questions)),
       purpose: form.purpose,
     },
     respondent: staff ? fullName(staff) : null,
     guaranteeing,
-    sharedBy: by && isCustomerPurpose(form.purpose) ? fullName(await findReferrer(by)) : null,
+    sharedBy: isCustomerPurpose(form.purpose) ? fullName(await referrerFor(form, by)) : null,
   };
 }
 
@@ -635,7 +707,7 @@ export async function submitFormResponse(
     if (payloadSize > MAX_PAYLOAD) return { success: false, error: 'The response is too long' };
 
     // The slug ties every attached file to this form's own upload folder.
-    const result = validateAnswers(readQuestions(form.questions), answers, form.slug);
+    const result = validateAnswers(withGuarantorCheques(form.purpose, readQuestions(form.questions)), answers, form.slug);
     if (!result.ok) {
       return { success: false, error: 'Some answers need attention', data: { errors: result.errors } };
     }
@@ -673,8 +745,9 @@ export async function submitFormResponse(
       guaranteeing = `${d.firstName} ${d.lastName}`.trim();
     }
 
-    // A staff member's personal link: credit them. An unknown code is ignored, not an error.
-    const referrer = customer && by ? await findReferrer(by) : null;
+    // A staff member's personal link: credit them. An unknown code is ignored,
+    // not an error. On a staff member's own form, its maker is the referrer.
+    const referrer = customer ? await referrerFor(form, by) : null;
 
     // The fee in force now is the one this applicant owes, whatever it is changed to later.
     const fee = customer ? computeFee(await feeSettingFor(customer), applicationTerms(customer, result.answers).amount) : null;

@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { createCustomer } from '@/actions/customer.actions';
+import { CustomerTierField, tierFormProblem, tierRequires } from '@/components/customer-tier-field';
 
 interface FormData {
   customerType: string;
@@ -47,6 +48,7 @@ interface FormData {
   monthlyIncome: string;
   bvn: string;
   nationalId: string;
+  tier: string;
   nokName: string;
   nokRelationship: string;
   nokPhone: string;
@@ -73,6 +75,7 @@ const initialFormData: FormData = {
   monthlyIncome: '',
   bvn: '',
   nationalId: '',
+  tier: '',
   nokName: '',
   nokRelationship: '',
   nokPhone: '',
@@ -115,6 +118,9 @@ export default function NewCustomerPage() {
       newErrors.companyName = 'Company name is required for corporate customers';
     }
 
+    const tierProblem = tierFormProblem(form.tier, form.bvn, form.nationalId);
+    if (tierProblem) newErrors.tier = tierProblem;
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -145,6 +151,7 @@ export default function NewCustomerPage() {
         monthlyIncome: form.monthlyIncome ? parseFloat(form.monthlyIncome) : undefined,
         bvn: form.bvn.trim() || undefined,
         nationalId: form.nationalId.trim() || undefined,
+        tier: Number(form.tier),
         nokName: form.nokName.trim() || undefined,
         nokRelationship: form.nokRelationship.trim() || undefined,
         nokPhone: form.nokPhone.trim() || undefined,
@@ -485,10 +492,19 @@ export default function NewCustomerPage() {
               Identity Documents
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <CustomerTierField value={form.tier} onChange={(v) => updateField('tier', v)} />
+                {errors.tier && <p className="text-xs text-destructive mt-1">{errors.tier}</p>}
+              </div>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="bvn">BVN (Bank Verification Number)</Label>
+                <Label htmlFor="bvn">
+                  BVN (Bank Verification Number)
+                  {(tierRequires(form.tier).bvn || tierRequires(form.tier).either) && <span className="text-destructive"> *</span>}
+                </Label>
                 <Input
                   id="bvn"
                   value={form.bvn}
@@ -499,7 +515,10 @@ export default function NewCustomerPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="nationalId">National ID (NIN)</Label>
+                <Label htmlFor="nationalId">
+                  National ID (NIN)
+                  {(tierRequires(form.tier).nin || tierRequires(form.tier).either) && <span className="text-destructive"> *</span>}
+                </Label>
                 <Input
                   id="nationalId"
                   value={form.nationalId}

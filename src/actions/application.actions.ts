@@ -31,7 +31,7 @@ import { provisionCustomerLogin } from '@/lib/customer-auth';
 import { answerText, readFiles, readQuestions, type Answers, type FileAnswer } from '@/lib/forms';
 import {
   applicantDetails, applicationTerms, canReviewPurpose, guarantorDetails, isApplicantPurpose, isCustomerPurpose,
-  phoneKey, reviewablePurposes, normalizeReference, fixedDepositTerms, PURPOSE_INFO, GUARANTORS_REQUIRED,
+  phoneKey, reviewablePurposes, normalizeReference, fixedDepositTerms, PURPOSE_INFO, GUARANTORS_REQUIRED, withGuarantorCheques,
   type ApplicantDetails, type CustomerPurpose,
 } from '@/lib/customer-forms';
 import { feeSummaries, type FeeSummary } from '@/lib/fee-ledger';
@@ -191,7 +191,7 @@ export async function getApplications(kind: ApplicantPurpose, status: ReviewStat
           status: g.onboardingStatus,
           submittedAt: g.submittedAt.toISOString(),
           details: guarantorDetails(ga),
-          answered: answeredList(g.form.questions, ga),
+          answered: answeredList(withGuarantorCheques('GUARANTOR', readQuestions(g.form.questions)), ga),
           reviewedBy: fullName(g.reviewedBy),
           reviewNote: g.reviewNote,
           fee: feeOf(g.id),
@@ -220,7 +220,7 @@ export async function getUnlinkedGuarantors() {
       reference: g.reference,
       submittedAt: g.submittedAt.toISOString(),
       details: guarantorDetails(ga),
-      answered: answeredList(g.form.questions, ga),
+      answered: answeredList(withGuarantorCheques('GUARANTOR', readQuestions(g.form.questions)), ga),
       fee: fee && fee.state !== 'NONE' ? fee : null,
     };
   });
@@ -532,7 +532,7 @@ export async function getCustomerApplications(customerId: string) {
         formTitle: r.form.title,
         submittedAt: r.submittedAt.toISOString(),
         reviewedBy: fullName(r.reviewedBy),
-        answers: readQuestions(r.form.questions)
+        answers: withGuarantorCheques(r.form.purpose, readQuestions(r.form.questions))
           .filter((q) => answers[q.id] != null)
           .map((q) => {
             const files = q.type === 'FILE' ? readFiles(answers[q.id]) : null;

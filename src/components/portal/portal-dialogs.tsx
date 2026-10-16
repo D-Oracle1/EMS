@@ -110,7 +110,7 @@ export function LoanApplyDialog({ onDone, trigger }: { onDone: () => void; trigg
               <SelectTrigger><SelectValue placeholder="Select a product" /></SelectTrigger>
               <SelectContent>
                 {products.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>{p.name} — {p.interestRate}% p.a.</SelectItem>
+                  <SelectItem key={p.id} value={p.id}>{p.name} — {p.interestRate}% monthly</SelectItem>
                 ))}
               </SelectContent>
             </Select>

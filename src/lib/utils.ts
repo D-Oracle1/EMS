@@ -117,11 +117,12 @@ export function getPeriodDateRange(year: number, month: number): { start: Date; 
 }
 
 /**
- * Calculate reducing balance loan schedule
+ * Calculate reducing balance loan schedule. Loan rates are monthly: 2 means
+ * 2% of the balance each month.
  */
 export function calculateReducingBalanceSchedule(
   principal: number,
-  annualRate: number,
+  monthlyRatePercent: number,
   tenureMonths: number,
   startDate: Date
 ): {
@@ -137,7 +138,7 @@ export function calculateReducingBalanceSchedule(
   totalRepayment: number;
   monthlyInstalment: number;
 } {
-  const monthlyRate = new Decimal(annualRate).div(100).div(12);
+  const monthlyRate = new Decimal(monthlyRatePercent).div(100);
   const P = new Decimal(principal);
 
   // EMI = P * r * (1+r)^n / ((1+r)^n - 1)
@@ -181,11 +182,12 @@ export function calculateReducingBalanceSchedule(
 }
 
 /**
- * Calculate flat rate loan schedule
+ * Calculate flat rate loan schedule. Loan rates are monthly: 2 means 2% of the
+ * principal each month.
  */
 export function calculateFlatRateSchedule(
   principal: number,
-  annualRate: number,
+  monthlyRatePercent: number,
   tenureMonths: number,
   startDate: Date
 ): {
@@ -202,7 +204,7 @@ export function calculateFlatRateSchedule(
   monthlyInstalment: number;
 } {
   const P = new Decimal(principal);
-  const totalInterest = P.times(annualRate).div(100).times(tenureMonths).div(12).toDecimalPlaces(2);
+  const totalInterest = P.times(monthlyRatePercent).div(100).times(tenureMonths).toDecimalPlaces(2);
   const totalRepayment = P.plus(totalInterest);
   const monthlyInstalment = totalRepayment.div(tenureMonths).toDecimalPlaces(2);
   const monthlyPrincipal = P.div(tenureMonths).toDecimalPlaces(2);

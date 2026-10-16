@@ -285,6 +285,7 @@ async function main() {
     { name: 'Management', code: 'MANAGEMENT' },
     { name: 'Information Technology', code: 'IT' },
     { name: 'Marketing', code: 'MARKETING' },
+    { name: 'Business Service Consultant / Social Media', code: 'BSC_SOCIAL' },
   ];
 
   let adminDeptId = '';

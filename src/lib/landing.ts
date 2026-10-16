@@ -76,15 +76,29 @@ export function isMarketingFocused(user: LandingUser | null | undefined): boolea
   );
 }
 
+/**
+ * True for a Business Service Consultant / Social Media staff member whose
+ * work is their clients alone: in that department and holding no operational
+ * or HR permissions. Their Business Services page is their dashboard.
+ */
+export function isBusinessServicesFocused(user: LandingUser | null | undefined): boolean {
+  if (user?.departmentCode !== 'BSC_SOCIAL') return false;
+  const permissions = user.permissions ?? [];
+  return !permissions.some(
+    (p) => p.startsWith('HR:') || OPERATIONAL_MODULES.some((m) => p.startsWith(`${m}:`))
+  );
+}
+
 /** Whether the generic dashboard would only duplicate (or be empty for) this user. */
 export function hidesGenericDashboard(user: LandingUser | null | undefined): boolean {
-  return isHrFocused(user) || isMarketingFocused(user);
+  return isHrFocused(user) || isMarketingFocused(user) || isBusinessServicesFocused(user);
 }
 
 /** The path a user should be sent to on sign-in, or when hitting the app root. */
 export function resolveLandingPath(user: LandingUser | null | undefined): string {
   if (user?.userType === 'customer') return '/portal';
   if (isMarketingFocused(user)) return '/marketing';
+  if (isBusinessServicesFocused(user)) return '/business-services';
   if (isHrFocused(user)) return '/hr';
   if (isCmsFocused(user)) return '/cms/content';
   return '/dashboard';

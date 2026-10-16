@@ -2,7 +2,7 @@
  * Forms.
  *
  * The lines this file holds:
- *  - Only admins (level 85+ or the superuser) build forms and read responses.
+ *  - Form managers (level 85+ or the superuser) run every form; staff run their own (forms-ownership.test.ts).
  *  - A question list is cleaned before it is saved: unknown types, empty
  *    questions and choice questions without options are refused.
  *  - An answer is checked against the form's own questions, on the page and

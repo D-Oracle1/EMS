@@ -135,11 +135,6 @@ export function FixedSavingsAccountsClient({ user }: Props) {
           <p className="text-muted-foreground">Manage fixed-term savings accounts with interest accrual</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {user.permissions.includes('SAVINGS:APPROVE') && (
-            <Button variant="outline" asChild>
-              <Link href="/savings/terminations">Terminations</Link>
-            </Button>
-          )}
           {user.permissions.includes('SAVINGS:CREATE') && (
             <Button asChild>
               <Link href="/savings/create">
@@ -153,7 +148,7 @@ export function FixedSavingsAccountsClient({ user }: Props) {
 
       {/* Stats */}
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <StatCard title="Active Accounts" color="emerald" value={stats.activeAccounts} />
           <StatCard
             title="Total Deposits"
@@ -164,11 +159,6 @@ export function FixedSavingsAccountsClient({ user }: Props) {
             title="Accrued Interest"
             color="teal"
             value={formatCurrency(stats.totalAccruedInterest)}
-          />
-          <StatCard
-            title="Pending Terminations"
-            color="amber"
-            value={stats.pendingTerminations}
           />
         </div>
       )}
@@ -190,7 +180,6 @@ export function FixedSavingsAccountsClient({ user }: Props) {
                 <SelectItem value="ALL">All Statuses</SelectItem>
                 <SelectItem value="ACTIVE">Active</SelectItem>
                 <SelectItem value="MATURED">Matured</SelectItem>
-                <SelectItem value="TERMINATION_REQUESTED">Termination Requested</SelectItem>
                 <SelectItem value="TERMINATED">Terminated</SelectItem>
                 <SelectItem value="COMPLETED">Completed</SelectItem>
               </SelectContent>

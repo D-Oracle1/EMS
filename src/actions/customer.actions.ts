@@ -6,6 +6,7 @@ import { auditLog } from '@/lib/audit';
 import { generateReference } from '@/lib/utils';
 import { provisionCustomerLogin } from '@/lib/customer-auth';
 import { branchForNewRecord, branchScopeFor, inScope } from '@/lib/branch-scope';
+import { resolveTier, tierFromIds } from '@/lib/customer-tier';
 import type { ActionResult } from '@/types';
 
 /**
@@ -215,9 +216,13 @@ export async function createCustomer(data: {
   companyName?: string;
   rcNumber?: string;
   branchId?: string;
+  tier?: number | string;
 }): Promise<ActionResult<{ id: string; customerNumber: string }>> {
   try {
     const user = await requirePermission('CUSTOMERS:CREATE');
+
+    const { tier, error: tierError } = resolveTier(data.tier, data.bvn, data.nationalId);
+    if (tierError) return { success: false, error: tierError };
 
     const customerNumber = await generateReference('CUSTOMER');
     const branchId = await branchForNewRecord(user, { requested: data.branchId });
@@ -252,6 +257,7 @@ export async function createCustomer(data: {
         nokAddress: data.nokAddress,
         companyName: data.companyName,
         rcNumber: data.rcNumber,
+        tier,
         branchId,
         createdBy: user.id,
       },
@@ -303,6 +309,7 @@ export async function quickCreateCustomer(data: {
         email: data.email || undefined,
         nationalId: data.nationalId || undefined,
         address: 'To be verified',
+        tier: tierFromIds(null, data.nationalId),
         branchId,
         createdBy: user.id,
       },
@@ -337,7 +344,7 @@ const ALLOWED_UPDATE_FIELDS = [
   'dateOfBirth', 'gender', 'occupation', 'employer', 'monthlyIncome',
   'bvn', 'nationalId',
   'nokName', 'nokRelationship', 'nokPhone', 'nokAddress',
-  'companyName', 'rcNumber',
+  'companyName', 'rcNumber', 'tier',
 ] as const;
 
 export async function updateCustomer(
@@ -355,6 +362,15 @@ export async function updateCustomer(
       if (key in data) {
         sanitized[key] = data[key];
       }
+    }
+
+    // The tier must still hold with the IDs as they will stand after the edit.
+    if ('tier' in sanitized || 'bvn' in sanitized || 'nationalId' in sanitized) {
+      const bvn = ('bvn' in sanitized ? sanitized.bvn : existing.bvn) as string | null;
+      const nin = ('nationalId' in sanitized ? sanitized.nationalId : existing.nationalId) as string | null;
+      const { tier, error } = resolveTier('tier' in sanitized ? sanitized.tier : existing.tier, bvn, nin);
+      if (error) return { success: false, error };
+      sanitized.tier = tier;
     }
 
     await prisma.customer.update({

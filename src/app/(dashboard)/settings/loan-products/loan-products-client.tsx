@@ -306,7 +306,7 @@ export function LoanProductsClient({ user }: LoanProductsClientProps) {
                     {product.minTenure}–{product.maxTenure} mo
                   </TableCell>
                   <TableCell>
-                    <div className="font-medium tabular-nums">{product.interestRate}%</div>
+                    <div className="font-medium tabular-nums">{product.interestRate}% /mo</div>
                     <div className="text-xs text-muted-foreground">
                       {product.interestType.replace('_', ' ').toLowerCase()}
                     </div>
@@ -470,7 +470,7 @@ export function LoanProductsClient({ user }: LoanProductsClientProps) {
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="p-rate">Annual Interest Rate (%)</Label>
+                <Label htmlFor="p-rate">Monthly Interest Rate (%)</Label>
                 <Input
                   id="p-rate"
                   type="number"
@@ -478,7 +478,7 @@ export function LoanProductsClient({ user }: LoanProductsClientProps) {
                   value={form.interestRate}
                   onChange={(e) => setForm({ ...form, interestRate: e.target.value })}
                   disabled={editingInUse}
-                  placeholder="24"
+                  placeholder="2"
                 />
               </div>
               <div className="space-y-2">

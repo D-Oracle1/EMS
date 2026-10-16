@@ -47,6 +47,8 @@ import { formatCurrency } from '@/lib/utils';
 import { createLoan, getLoanProducts, checkCustomerOutstandingLoans } from '@/actions/loan.actions';
 import { searchCustomers } from '@/actions/customer.actions';
 import { useApplicationPrefill, ApplicationPrefillBanner } from '@/components/application-prefill';
+import { CustomerTierField, tierFormProblem, tierRequires } from '@/components/customer-tier-field';
+import { ChequesEditor, toChequeInputs, type ChequeRow } from '@/components/cheques-editor';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -102,6 +104,7 @@ interface NewCustomerForm {
   nokAddress: string;
   companyName: string;
   rcNumber: string;
+  tier: string;
 }
 
 const blankNewCustomer: NewCustomerForm = {
@@ -128,6 +131,7 @@ const blankNewCustomer: NewCustomerForm = {
   nokAddress: '',
   companyName: '',
   rcNumber: '',
+  tier: '',
 };
 
 interface GuarantorForm {
@@ -146,6 +150,8 @@ interface GuarantorForm {
   monthlyIncome: string;
   bvn: string;
   nationalId: string;
+  /** Cheques this guarantor handed in. */
+  cheques: ChequeRow[];
 }
 
 const blankGuarantor: GuarantorForm = {
@@ -164,6 +170,7 @@ const blankGuarantor: GuarantorForm = {
   monthlyIncome: '',
   bvn: '',
   nationalId: '',
+  cheques: [],
 };
 
 // Helper to handle Prisma Decimal or plain number
@@ -180,10 +187,10 @@ function toNum(val: { toNumber?: () => number } | number | null | undefined): nu
 
 function calcReducingBalance(
   principal: number,
-  annualRate: number,
+  monthlyRate: number,
   months: number
 ): { schedule: ScheduleItem[]; totalInterest: number; totalRepayment: number; monthlyInstalment: number } {
-  const r = annualRate / 100 / 12;
+  const r = monthlyRate / 100;
   const emi =
     r > 0
       ? (principal * r * Math.pow(1 + r, months)) / (Math.pow(1 + r, months) - 1)
@@ -224,10 +231,10 @@ function calcReducingBalance(
 
 function calcFlatRate(
   principal: number,
-  annualRate: number,
+  monthlyRate: number,
   months: number
 ): { schedule: ScheduleItem[]; totalInterest: number; totalRepayment: number; monthlyInstalment: number } {
-  const totalInterest = +((principal * annualRate * months) / 100 / 12).toFixed(2);
+  const totalInterest = +((principal * monthlyRate * months) / 100).toFixed(2);
   const totalRepayment = +(principal + totalInterest).toFixed(2);
   const monthlyInstalment = +(totalRepayment / months).toFixed(2);
   const monthlyPrincipal = +(principal / months).toFixed(2);
@@ -284,6 +291,8 @@ export default function NewLoanPage() {
 
   // Multiple guarantors
   const [guarantors, setGuarantors] = useState<GuarantorForm[]>([]);
+  // Cheques the borrower handed in
+  const [borrowerCheques, setBorrowerCheques] = useState<ChequeRow[]>([]);
 
   const updateNewCustomer = (field: keyof NewCustomerForm, value: string) =>
     setNewCustomer((prev) => ({ ...prev, [field]: value }));
@@ -291,8 +300,10 @@ export default function NewLoanPage() {
   const addGuarantor = () => setGuarantors((prev) => [...prev, { ...blankGuarantor }]);
   const removeGuarantor = (index: number) =>
     setGuarantors((prev) => prev.filter((_, i) => i !== index));
-  const updateGuarantor = (index: number, field: keyof GuarantorForm, value: string) =>
+  const updateGuarantor = (index: number, field: Exclude<keyof GuarantorForm, 'cheques'>, value: string) =>
     setGuarantors((prev) => prev.map((g, i) => (i === index ? { ...g, [field]: value } : g)));
+  const updateGuarantorCheques = (index: number, cheques: ChequeRow[]) =>
+    setGuarantors((prev) => prev.map((g, i) => (i === index ? { ...g, cheques } : g)));
 
   // Outstanding loans bypass state
   const [outstandingLoans, setOutstandingLoans] = useState<Array<{ id: string; loanNumber: string; principalAmount: number; status: string }>>([]);
@@ -478,6 +489,8 @@ export default function NewLoanPage() {
       if (newCustomer.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newCustomer.email)) {
         return 'New customer email address is invalid';
       }
+      const tierProblem = tierFormProblem(newCustomer.tier, newCustomer.bvn, newCustomer.nationalId);
+      if (tierProblem) return tierProblem;
     }
 
     if (!amount || parseFloat(amount) <= 0) return 'Please enter a valid amount';
@@ -563,6 +576,7 @@ export default function NewLoanPage() {
                 nokAddress: newCustomer.nokAddress.trim() || undefined,
                 companyName: newCustomer.companyName.trim() || undefined,
                 rcNumber: newCustomer.rcNumber.trim() || undefined,
+                tier: newCustomer.tier ? Number(newCustomer.tier) : undefined,
               }
             : undefined,
         productId,
@@ -587,7 +601,9 @@ export default function NewLoanPage() {
           monthlyIncome: g.monthlyIncome ? parseFloat(g.monthlyIncome) : undefined,
           bvn: g.bvn.trim() || undefined,
           nationalId: g.nationalId.trim() || undefined,
+          cheques: toChequeInputs(g.cheques),
         })),
+        cheques: toChequeInputs(borrowerCheques),
         owingBypass: owingBypass || undefined,
         owingBypassReason: owingBypass ? owingBypassReason.trim() : undefined,
         // Still the applicant: the fee they paid upfront stands in for the processing fee.
@@ -671,7 +687,7 @@ export default function NewLoanPage() {
                       <SelectContent>
                         {products.map((p) => (
                           <SelectItem key={p.id} value={p.id}>
-                            {p.name} ({p.code}) - {toNum(p.interestRate)}% p.a.
+                            {p.name} ({p.code}) - {toNum(p.interestRate)}% monthly
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -1046,8 +1062,20 @@ export default function NewLoanPage() {
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <CustomerTierField
+                        value={newCustomer.tier}
+                        onChange={(v) => updateNewCustomer('tier', v)}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div className="space-y-1.5">
-                        <Label>BVN</Label>
+                        <Label>
+                          BVN
+                          {(tierRequires(newCustomer.tier).bvn || tierRequires(newCustomer.tier).either) && (
+                            <span className="text-destructive"> *</span>
+                          )}
+                        </Label>
                         <Input
                           value={newCustomer.bvn}
                           onChange={(e) => updateNewCustomer('bvn', e.target.value)}
@@ -1056,7 +1084,12 @@ export default function NewLoanPage() {
                         />
                       </div>
                       <div className="space-y-1.5">
-                        <Label>National ID (NIN)</Label>
+                        <Label>
+                          National ID (NIN)
+                          {(tierRequires(newCustomer.tier).nin || tierRequires(newCustomer.tier).either) && (
+                            <span className="text-destructive"> *</span>
+                          )}
+                        </Label>
                         <Input
                           value={newCustomer.nationalId}
                           onChange={(e) => updateNewCustomer('nationalId', e.target.value)}
@@ -1205,18 +1238,18 @@ export default function NewLoanPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Interest Rate (% p.a.)</Label>
+                  <Label>Interest Rate (% per month)</Label>
                   <Input
                     type="number"
                     step="0.01"
                     min="0"
                     value={interestRate}
                     onChange={(e) => setInterestRate(e.target.value)}
-                    placeholder="Annual rate"
+                    placeholder="Monthly rate"
                   />
                   {selectedProduct && (
                     <p className="text-xs text-muted-foreground">
-                      Product default: {toNum(selectedProduct.interestRate)}%
+                      Product default: {toNum(selectedProduct.interestRate)}% per month
                     </p>
                   )}
                 </div>
@@ -1249,6 +1282,22 @@ export default function NewLoanPage() {
                   />
                 </div>
 
+              </CardContent>
+            </Card>
+
+            {/* Borrower's cheques */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Landmark className="h-5 w-5" />
+                  Cheques Submitted
+                </CardTitle>
+                <CardDescription>
+                  Cheques the borrower handed in for this loan. Add one row per cheque.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ChequesEditor title="Borrower's Cheques" value={borrowerCheques} onChange={setBorrowerCheques} />
               </CardContent>
             </Card>
 
@@ -1462,6 +1511,13 @@ export default function NewLoanPage() {
                         />
                       </div>
                     </div>
+
+                    <Separator />
+                    <ChequesEditor
+                      title="Cheques Submitted by this Guarantor"
+                      value={g.cheques}
+                      onChange={(rows) => updateGuarantorCheques(index, rows)}
+                    />
                   </div>
                 ))}
 

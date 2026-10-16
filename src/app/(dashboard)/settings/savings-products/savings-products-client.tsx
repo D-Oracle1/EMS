@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useTransition } from 'react';
-import { PlusCircle, Settings, Edit2, PowerOff, Power, Trash2, Sparkles, Loader2, CheckCircle, XCircle, Database } from 'lucide-react';
+import { PlusCircle, Settings, Edit2, PowerOff, Power, Trash2, Sparkles, Loader2, Database } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -158,8 +158,7 @@ export function SavingsProductsClient({ user }: SavingsProductsClientProps) {
         maximumDeposit: form.maximumDeposit ? parseFloat(form.maximumDeposit) : undefined,
         interestCalculationMethod: form.interestCalculationMethod as 'MATURITY_ONLY' | 'MONTHLY_ALLOCATION' | 'FLAT' | 'COMPOUND',
         interestEligibilityDelayMonths: parseInt(form.interestEligibilityDelayMonths) || 0,
-        allowEarlyTermination: form.allowEarlyTermination,
-        defaultTerminationPenaltyRate: form.defaultTerminationPenaltyRate ? parseFloat(form.defaultTerminationPenaltyRate) : undefined,
+        allowEarlyTermination: false,
         promoActive: form.promoActive,
         promoName: form.promoName.trim() || undefined,
         promoTotalInterestRate: form.promoTotalInterestRate ? parseFloat(form.promoTotalInterestRate) : undefined,
@@ -297,8 +296,6 @@ export function SavingsProductsClient({ user }: SavingsProductsClientProps) {
                   <TableHead className="text-center">Monthly Rate</TableHead>
                   <TableHead className="text-right">Min Deposit</TableHead>
                   <TableHead className="text-right">Max Deposit</TableHead>
-                  <TableHead className="text-center">Early Exit</TableHead>
-                  <TableHead className="text-center">Penalty %</TableHead>
                   <TableHead className="text-center">Accounts</TableHead>
                   <TableHead className="text-center">Status</TableHead>
                   {canManage && <TableHead className="text-center">Actions</TableHead>}
@@ -307,14 +304,14 @@ export function SavingsProductsClient({ user }: SavingsProductsClientProps) {
               <TableBody>
                 {isPending && (
                   <TableRow>
-                    <TableCell colSpan={12} className="text-center py-8">
+                    <TableCell colSpan={10} className="text-center py-8">
                       <Loader2 className="h-5 w-5 animate-spin mx-auto" />
                     </TableCell>
                   </TableRow>
                 )}
                 {!isPending && products.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={12} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
                       No fixed savings products configured. Click &quot;New Product&quot; or &quot;Seed Defaults&quot;.
                     </TableCell>
                   </TableRow>
@@ -345,10 +342,6 @@ export function SavingsProductsClient({ user }: SavingsProductsClientProps) {
                     <TableCell className="text-center text-sm">{parseFloat(p.monthlyInterestRate ?? 0).toFixed(4)}%</TableCell>
                     <TableCell className="text-right">NGN {Number(p.minDeposit ?? 0).toLocaleString()}</TableCell>
                     <TableCell className="text-right">{p.maxBalance ? `NGN ${Number(p.maxBalance).toLocaleString()}` : '—'}</TableCell>
-                    <TableCell className="text-center">
-                      {p.allowEarlyTermination ? <CheckCircle className="h-4 w-4 text-green-600 mx-auto" /> : <XCircle className="h-4 w-4 text-muted-foreground mx-auto" />}
-                    </TableCell>
-                    <TableCell className="text-center">{p.defaultTerminationPenaltyRate ? `${p.defaultTerminationPenaltyRate}%` : '—'}</TableCell>
                     <TableCell className="text-center">
                       <Badge variant={p.usageCount > 0 ? 'default' : 'secondary'}>{p.usageCount}</Badge>
                     </TableCell>
@@ -432,7 +425,6 @@ export function SavingsProductsClient({ user }: SavingsProductsClientProps) {
                     <span className="text-muted-foreground">Monthly Rate:</span><span>{parseFloat(p.monthlyInterestRate ?? 0).toFixed(4)}%</span>
                     <span className="text-muted-foreground">Min Deposit:</span><span>NGN {Number(p.minDeposit ?? 0).toLocaleString()}</span>
                     <span className="text-muted-foreground">Accounts:</span><span>{p.usageCount}</span>
-                    <span className="text-muted-foreground">Early Exit:</span><span>{p.allowEarlyTermination ? 'Yes' : 'No'}</span>
                   </div>
                   {canManage && p.isActive && (
                     <div className="flex gap-2 pt-2">
@@ -571,35 +563,6 @@ export function SavingsProductsClient({ user }: SavingsProductsClientProps) {
               </div>
             </div>
 
-            <Separator />
-            <p className="text-sm font-medium">Early Termination</p>
-
-            <div className="flex items-center justify-between rounded-lg border p-4">
-              <div>
-                <p className="font-medium">Allow Early Termination</p>
-                <p className="text-sm text-muted-foreground">Permit clients to request termination before maturity</p>
-              </div>
-              <Switch
-                checked={form.allowEarlyTermination}
-                onCheckedChange={(v) => setForm((f) => ({ ...f, allowEarlyTermination: v }))}
-              />
-            </div>
-
-            {form.allowEarlyTermination && (
-              <div className="space-y-1.5">
-                <Label>Default Penalty Rate (% of approved interest)</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={100}
-                  step={0.1}
-                  placeholder="e.g. 5"
-                  value={form.defaultTerminationPenaltyRate}
-                  onChange={(e) => setForm((f) => ({ ...f, defaultTerminationPenaltyRate: e.target.value }))}
-                />
-                <p className="text-xs text-muted-foreground">Admin can override per request. Used as a guide only.</p>
-              </div>
-            )}
 
             <Separator />
 

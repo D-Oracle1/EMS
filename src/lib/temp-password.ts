@@ -20,12 +20,15 @@ import { createHmac, randomInt } from 'crypto';
  */
 
 /**
- * Letters and digits that cannot be mistaken for one another when a password
- * is read off a screen or a phone message: no 0/O, 1/l/I.
+ * Capital letters and digits that cannot be mistaken for one another when a
+ * password is read off a screen or a phone message: no 0/O, 1/I. Six of them,
+ * such as "K7QM2X": short to type, and replaced at first sign-in.
  */
-const ALPHABET = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-const PREFIX = 'Hylink@';
-const BODY_LENGTH = 8;
+const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const LENGTH = 6;
+
+/** The longer format issued before, "Hylink@k7Qm2x9p", still recognised on lookup. */
+const LEGACY = { alphabet: 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789', prefix: 'Hylink@', length: 8 };
 
 function secret(): string | null {
   return process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || null;
@@ -44,21 +47,21 @@ function marker(key: string, staffId: string, seconds: number): number {
   return hmac(key, `m:${staffId}:${seconds}`).readUInt16BE(0) % 1000;
 }
 
-function derive(key: string, staffId: string, issuedAtMs: number): string {
+function derive(key: string, staffId: string, issuedAtMs: number, format = { alphabet: ALPHABET, prefix: '', length: LENGTH }): string {
   const bytes = hmac(key, `p:${staffId}:${issuedAtMs}`);
   let body = '';
-  for (let i = 0; i < BODY_LENGTH; i++) body += ALPHABET[bytes[i] % ALPHABET.length];
-  return PREFIX + body;
+  for (let i = 0; i < format.length; i++) body += format.alphabet[bytes[i] % format.alphabet.length];
+  return format.prefix + body;
 }
 
 /**
- * A one-time password that cannot be looked up again, such as
- * "Hylink@k7Qm2x9p". Used when no app secret is configured.
+ * A one-time password that cannot be looked up again, such as "K7QM2X".
+ * Used when no app secret is configured, and for customer portal logins.
  */
-export function generateTempPassword(prefix = PREFIX, length = BODY_LENGTH): string {
+export function generateTempPassword(length = LENGTH): string {
   let body = '';
   for (let i = 0; i < length; i++) body += ALPHABET[randomInt(ALPHABET.length)];
-  return prefix + body;
+  return body;
 }
 
 /**
@@ -75,16 +78,17 @@ export function issueTempPassword(staffId: string, now = new Date()): { password
 }
 
 /**
- * The temporary password issued at `issuedAt`, or null when that time was not
+ * The temporary passwords that may have been issued at `issuedAt`: the short
+ * format, then the longer one issued before. Empty when that time was not
  * written by issueTempPassword (or the app secret has changed since). The
- * caller must confirm the result against the stored hash before showing it.
+ * caller must confirm a candidate against the stored hash before showing it.
  */
-export function recoverTempPassword(staffId: string, issuedAt: Date | null | undefined): string | null {
+export function recoverTempPasswords(staffId: string, issuedAt: Date | null | undefined): string[] {
   const key = secret();
-  if (!key || !issuedAt) return null;
+  if (!key || !issuedAt) return [];
 
   const ms = issuedAt.getTime();
   const seconds = Math.floor(ms / 1000);
-  if (ms - seconds * 1000 !== marker(key, staffId, seconds)) return null;
-  return derive(key, staffId, ms);
+  if (ms - seconds * 1000 !== marker(key, staffId, seconds)) return [];
+  return [derive(key, staffId, ms), derive(key, staffId, ms, LEGACY)];
 }

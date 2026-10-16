@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/auth-utils';
 import { auditLog } from '@/lib/audit';
-import { issueTempPassword, recoverTempPassword } from '@/lib/temp-password';
+import { issueTempPassword, recoverTempPasswords } from '@/lib/temp-password';
 import type { ActionResult } from '@/types';
 
 export async function changePassword(
@@ -316,12 +316,13 @@ export async function getLoginDirectory(): Promise<ActionResult<LoginDirectoryEn
         if (s.mustChangePassword) {
           // Only shown when it still opens the account: re-derived, then
           // checked against the stored hash.
-          const candidate = recoverTempPassword(s.id, s.passwordChangedAt);
-          if (candidate && (await bcrypt.compare(candidate, s.passwordHash))) {
-            state = 'PENDING';
-            tempPassword = candidate;
-          } else {
-            state = 'NOT_SAVED';
+          state = 'NOT_SAVED';
+          for (const candidate of recoverTempPasswords(s.id, s.passwordChangedAt)) {
+            if (await bcrypt.compare(candidate, s.passwordHash)) {
+              state = 'PENDING';
+              tempPassword = candidate;
+              break;
+            }
           }
         }
         return {

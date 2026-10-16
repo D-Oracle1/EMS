@@ -98,7 +98,6 @@ const savingsNav = [
   { label: 'Overview', href: '/savings/dashboard' },
   { label: 'Accounts', href: '/savings' },
   { label: 'Withdrawals', href: '/savings/withdrawals' },
-  { label: 'Terminations', href: '/savings/terminations' },
   { label: 'Reports', href: '/savings/reports' },
 ];
 
