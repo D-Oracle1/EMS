@@ -13,7 +13,7 @@
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/auth-utils';
 import { isAcceptingResponses, type Answers } from '@/lib/forms';
-import { applicantDetails, applicationTerms, isApplicantPurpose, PURPOSE_INFO, type CustomerPurpose } from '@/lib/customer-forms';
+import { applicantDetails, applicationTerms, isApplicantPurpose, isCustomerPurpose, PURPOSE_INFO, type CustomerPurpose } from '@/lib/customer-forms';
 import { isSeller } from '@/lib/referrals';
 
 async function requireStaff() {
@@ -22,7 +22,12 @@ async function requireStaff() {
   return user;
 }
 
-/** The open customer forms this staff member can share, and their own referral code. */
+/**
+ * The company's open customer forms this staff member can share (savings,
+ * partnership, fixed deposit, loan and guarantor), and their own referral
+ * code. Applicant forms carry the code, so the client is credited to them; the
+ * guarantor form does not, as a guarantor is not a client they bring in.
+ */
 export async function getMyFormLinks() {
   const user = await requireStaff();
   const [me, forms] = await Promise.all([
@@ -33,7 +38,7 @@ export async function getMyFormLinks() {
     prisma.form.findMany({
       where: {
         status: 'OPEN',
-        purpose: { in: ['SAVINGS_APPLICATION', 'PARTNERSHIP_APPLICATION', 'FIXED_DEPOSIT_APPLICATION', 'LOAN_APPLICATION'] },
+        purpose: { in: ['SAVINGS_APPLICATION', 'PARTNERSHIP_APPLICATION', 'FIXED_DEPOSIT_APPLICATION', 'LOAN_APPLICATION', 'GUARANTOR'] },
         // Company forms, and this staff member's own; never another's own form.
         OR: [{ personal: false }, { createdById: user.id }],
       },
@@ -45,8 +50,15 @@ export async function getMyFormLinks() {
     code: me?.employeeId ?? null,
     earnsCommission: !!me && isSeller(me),
     forms: forms
-      .filter((f) => isAcceptingResponses(f) && isApplicantPurpose(f.purpose))
-      .map((f) => ({ id: f.id, slug: f.slug, title: f.title, kind: PURPOSE_INFO[f.purpose as CustomerPurpose].label, branch: f.branch?.name ?? null })),
+      .filter((f) => isAcceptingResponses(f) && isCustomerPurpose(f.purpose))
+      .map((f) => ({
+        id: f.id,
+        slug: f.slug,
+        title: f.title,
+        kind: PURPOSE_INFO[f.purpose as CustomerPurpose].label,
+        branch: f.branch?.name ?? null,
+        credited: isApplicantPurpose(f.purpose),
+      })),
   };
 }
 

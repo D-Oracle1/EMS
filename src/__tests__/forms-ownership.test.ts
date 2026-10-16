@@ -1,14 +1,13 @@
 /**
- * Every staff member builds their own forms.
+ * Staff work from the company's forms; form managers build them.
  *
  * The lines this file holds:
- *  - A staff member sees and runs only the forms they made; form managers
- *    (level 85+ or the superuser) see and run every form.
- *  - A staff member's form is marked personal. A customer form they make goes
- *    to their own branch's officers, and an application through it is
- *    credited to them even without their ?by= link.
- *  - Onboarding and guarantor forms stay with form managers, and only a
- *    manager's staff form is announced to every staff member.
+ *  - Only form managers (level 85+ or the superuser) create forms, so staff
+ *    share the company's savings, loan, fixed deposit and guarantor forms
+ *    rather than making copies.
+ *  - A form a staff member made earlier (marked personal) stays theirs alone,
+ *    and an application through it is credited to them.
+ *  - Only a manager's staff form is announced to every staff member.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
@@ -92,28 +91,17 @@ describe('who sees which forms', () => {
 });
 
 describe('making forms', () => {
-  it("marks a staff member's new form as personal", async () => {
-    const result = await saveForm({ title: 'My survey', audience: 'PUBLIC', questions: [] });
-    expect(result.success).toBe(true);
-    expect(h.created).toMatchObject({ createdById: 'staff-1', personal: true });
-  });
-
-  it("does not mark a manager's form as personal", async () => {
-    h.session = manager;
-    await saveForm({ title: 'Company survey', audience: 'PUBLIC', questions: [] });
-    expect(h.created.personal).toBe(false);
-  });
-
-  it("sends a staff member's savings form to their own branch's officers", async () => {
-    const result = await createCustomerForm('SAVINGS_APPLICATION');
-    expect(result.success).toBe(true);
-    expect(h.created).toMatchObject({ purpose: 'SAVINGS_APPLICATION', personal: true, branchId: 'branch-ikeja' });
-  });
-
-  it('keeps guarantor and onboarding forms with form managers', async () => {
-    expect((await createCustomerForm('GUARANTOR')).success).toBe(false);
+  it('is for form managers only', async () => {
+    expect((await saveForm({ title: 'My survey', audience: 'PUBLIC', questions: [] })).success).toBe(false);
+    expect((await createCustomerForm('SAVINGS_APPLICATION')).success).toBe(false);
     expect((await createOnboardingForm()).success).toBe(false);
+    expect(h.created).toBeNull();
+  });
+
+  it("makes a manager's form a company form", async () => {
     h.session = manager;
+    expect((await saveForm({ title: 'Company survey', audience: 'PUBLIC', questions: [] })).success).toBe(true);
+    expect(h.created.personal).toBe(false);
     expect((await createCustomerForm('GUARANTOR')).success).toBe(true);
   });
 });

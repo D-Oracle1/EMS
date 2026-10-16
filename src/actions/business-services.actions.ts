@@ -4,9 +4,9 @@
  * Business Service Consultants / Social Media dashboard — Server Actions
  * Hylink Finance Limited EMS
  *
- * A consultant's own clients (who applied through their forms and links, and
- * what each became), the forms they made, and for the department's heads,
- * every consultant's figures (lib/business-services).
+ * A consultant's own clients (who applied through their links to the company
+ * forms, and what each became), the forms to share, and for the department's
+ * heads, every consultant's figures (lib/business-services).
  */
 
 import { prisma } from '@/lib/prisma';
@@ -15,39 +15,18 @@ import {
   BSC_DEPARTMENT_CODE, canOpenBusinessServices, referralTotals, seesBusinessServicesTeam,
 } from '@/lib/business-services';
 import { getMyFormLinks, getMyReferrals } from '@/actions/referral.actions';
-import { isAcceptingResponses, readQuestions } from '@/lib/forms';
-import { PURPOSE_INFO, isCustomerPurpose } from '@/lib/customer-forms';
 
 export async function getBusinessServicesDashboard() {
   const { user } = await getSession();
   if (!canOpenBusinessServices(user)) return null;
 
-  const [referrals, links, forms] = await Promise.all([
-    getMyReferrals(),
-    getMyFormLinks(),
-    prisma.form.findMany({
-      where: { createdById: user.id },
-      orderBy: { updatedAt: 'desc' },
-      take: 20,
-      include: { _count: { select: { responses: true } } },
-    }),
-  ]);
+  const [referrals, links] = await Promise.all([getMyReferrals(), getMyFormLinks()]);
 
   return {
     viewer: { name: `${user.firstName} ${user.lastName}`, inDepartment: user.departmentCode === BSC_DEPARTMENT_CODE },
     totals: referralTotals(referrals),
     referrals,
     links,
-    forms: forms.map((f) => ({
-      id: f.id,
-      slug: f.slug,
-      title: f.title,
-      kind: isCustomerPurpose(f.purpose) ? PURPOSE_INFO[f.purpose].label : 'General',
-      status: f.status,
-      accepting: isAcceptingResponses(f),
-      questionCount: readQuestions(f.questions).length,
-      responseCount: f._count.responses,
-    })),
     team: seesBusinessServicesTeam(user) ? await teamFigures() : null,
   };
 }

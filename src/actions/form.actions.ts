@@ -73,7 +73,7 @@ async function requireManager(): Promise<SessionUser> {
   return user;
 }
 
-/** Any signed-in staff member: everyone may build forms of their own. */
+/** Any signed-in staff member. */
 async function requireStaffMember(): Promise<SessionUser> {
   const { user } = await getSession();
   if ((user.userType ?? 'staff') !== 'staff') throw new Error('Permission denied');
@@ -91,9 +91,6 @@ async function requireFormAccess(formId: string): Promise<{ user: SessionUser; m
   if (!form || form.createdById !== user.id) throw new Error('Form not found');
   return { user, manager: false };
 }
-
-/** Kinds of form only managers make: staff onboarding, and the guarantor form every loan's guarantors are sent to. */
-const MANAGER_ONLY_PURPOSES: FormPurpose[] = ['STAFF_ONBOARDING', 'GUARANTOR'];
 
 /**
  * The branch a staff member's own customer form routes to: where they are
@@ -127,6 +124,10 @@ export interface FormInput {
   branchId?: string | null;
 }
 
+/**
+ * canManage: builds and runs every form. canCreate: opens Forms at all, which
+ * every staff member does, to share the company's forms (CompanyForms).
+ */
 export async function getFormAccess() {
   const user = await currentStaff();
   return { canManage: !!user && canManageForms(user), canCreate: !!user };
@@ -233,9 +234,8 @@ async function formBranch(id: string | null | undefined): Promise<string | null>
 /** Creates a form (no id) or saves changes to one. New forms start as drafts. */
 export async function saveForm(data: FormInput, id?: string): Promise<ActionResult<{ id: string }>> {
   try {
-    const { user, manager } = id
-      ? await requireFormAccess(id)
-      : await requireStaffMember().then((u) => ({ user: u, manager: canManageForms(u) }));
+    // New forms are a form manager's: staff share the company's own forms.
+    const { user, manager } = id ? await requireFormAccess(id) : { user: await requireManager(), manager: true };
     const existing = id ? await prisma.form.findUnique({ where: { id }, select: { id: true, purpose: true } }) : null;
     if (id && !existing) return { success: false, error: 'Form not found' };
     const values = await cleanInput(data, existing?.purpose, await ownFormBranch(user, manager));
@@ -303,18 +303,11 @@ export async function createOnboardingForm(): Promise<ActionResult<{ id: string 
  */
 export async function createCustomerForm(purpose: CustomerPurpose): Promise<ActionResult<{ id: string }>> {
   try {
-    const user = await requireStaffMember();
-    const manager = canManageForms(user);
+    const user = await requireManager();
     if (!isCustomerPurpose(purpose)) return { success: false, error: 'Unknown kind of form' };
-    if (!manager && MANAGER_ONLY_PURPOSES.includes(purpose)) {
-      return { success: false, error: 'Only form managers can create this kind of form' };
-    }
     const info = PURPOSE_INFO[purpose];
     const form = await prisma.form.create({
       data: {
-        personal: !manager,
-        // A staff member's own form goes to the officers of their branch.
-        ...(manager ? {} : { branchId: (await ownFormBranch(user, false)) ?? null }),
         title: info.title,
         slug: makeSlug(info.title),
         description: CUSTOMER_FORM_DESCRIPTION[purpose],
@@ -481,7 +474,7 @@ export async function deleteForm(id: string): Promise<ActionResult> {
 /** A copy of a form's questions and settings as a new draft, with no responses. */
 export async function duplicateForm(id: string): Promise<ActionResult<{ id: string }>> {
   try {
-    const { user, manager } = await requireFormAccess(id);
+    const user = await requireManager();
     const form = await prisma.form.findUnique({ where: { id } });
     if (!form) return { success: false, error: 'Form not found' };
     const title = `${form.title} (copy)`.slice(0, LIMITS.title);
@@ -497,7 +490,6 @@ export async function duplicateForm(id: string): Promise<ActionResult<{ id: stri
         branchId: form.branchId,
         questions: form.questions as Prisma.InputJsonValue,
         createdById: user.id,
-        personal: !manager,
       },
     });
     return { success: true, message: 'Copy created', data: { id: copy.id } };
