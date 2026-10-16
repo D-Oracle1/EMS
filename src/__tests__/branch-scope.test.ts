@@ -8,7 +8,11 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-const h = vi.hoisted(() => ({ branchOf: {} as Record<string, string | null> }));
+const h = vi.hoisted(() => ({
+  branchOf: {} as Record<string, string | null>,
+  customerBranch: {} as Record<string, string | null>,
+  branches: [] as { id: string; code: string }[],
+}));
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {
@@ -17,12 +21,18 @@ vi.mock('@/lib/prisma', () => ({
         where.id in h.branchOf ? { branchId: h.branchOf[where.id] } : null
       ),
     },
+    customer: {
+      findUnique: vi.fn(async ({ where }: any) =>
+        where.id in h.customerBranch ? { branchId: h.customerBranch[where.id] } : null
+      ),
+    },
+    branch: { findMany: vi.fn(async () => h.branches) },
   },
 }));
 
 import {
   seesAllBranches, branchScopeFor, staffScopeFor, inScope, ALL_BRANCHES_ROLE_LEVEL, NO_BRANCH,
-  canOpenBranchesConsole,
+  canOpenBranchesConsole, branchForNewRecord,
 } from '@/lib/branch-scope';
 
 const viewer = (id: string, overrides: Partial<{ permissions: string[]; roleLevel: number }> = {}) => ({
@@ -34,6 +44,8 @@ const viewer = (id: string, overrides: Partial<{ permissions: string[]; roleLeve
 
 beforeEach(() => {
   h.branchOf = { manager: 'branch-a', officer: 'branch-b', hq: null, hr: 'branch-a' };
+  h.customerBranch = { 'cust-a': 'branch-a', 'cust-none': null };
+  h.branches = [{ id: 'branch-a', code: 'IKJ' }, { id: 'branch-hq', code: 'HQ' }];
 });
 
 describe('seesAllBranches', () => {
@@ -120,5 +132,33 @@ describe('inScope', () => {
 
   it('hides head-office records from branch staff', () => {
     expect(inScope('branch-a', null)).toBe(false);
+  });
+});
+
+describe('branchForNewRecord', () => {
+  it('uses the branch the form asked for', async () => {
+    expect(await branchForNewRecord({ id: 'officer' }, { requested: 'branch-x', customerId: 'cust-a' })).toBe('branch-x');
+  });
+
+  it("books an existing customer's account to the customer's branch", async () => {
+    expect(await branchForNewRecord({ id: 'officer' }, { customerId: 'cust-a' })).toBe('branch-a');
+  });
+
+  it("falls back to the creator's posting, read from the database", async () => {
+    expect(await branchForNewRecord({ id: 'officer' }, { customerId: 'cust-none' })).toBe('branch-b');
+  });
+
+  it('books head-office staff with no posting to HQ', async () => {
+    expect(await branchForNewRecord({ id: 'hq' })).toBe('branch-hq');
+  });
+
+  it('uses the only active branch when there is just one', async () => {
+    h.branches = [{ id: 'branch-a', code: 'IKJ' }];
+    expect(await branchForNewRecord({ id: 'hq' })).toBe('branch-a');
+  });
+
+  it('gives null when there are several branches and no HQ', async () => {
+    h.branches = [{ id: 'branch-a', code: 'IKJ' }, { id: 'branch-b', code: 'VI' }];
+    expect(await branchForNewRecord({ id: 'hq' })).toBeNull();
   });
 });

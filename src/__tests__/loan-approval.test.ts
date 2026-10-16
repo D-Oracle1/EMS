@@ -118,6 +118,7 @@ vi.mock('@/lib/branch-scope', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/branch-scope')>()),
   branchScopeFor: vi.fn(async () => null),
   staffScopeFor: vi.fn(async () => null),
+  branchForNewRecord: vi.fn(async (_u: unknown, o?: { requested?: string | null }) => o?.requested || 'br-1'),
 }));
 vi.mock('@/lib/approval-history', () => ({ recordApprovalHistory: vi.fn(async () => undefined) }));
 vi.mock('@/lib/email', () => ({ notifyCustomerByEmail: vi.fn(async () => undefined) }));

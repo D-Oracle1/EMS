@@ -33,6 +33,7 @@ vi.mock('@/lib/auth-utils', () => ({
 }));
 vi.mock('@/lib/branch-scope', () => ({
   branchScopeFor: vi.fn(async () => h.scope),
+  branchForNewRecord: vi.fn(async (_u: unknown, o?: { requested?: string | null }) => o?.requested || 'branch-a'),
   inScope: (scope: string | null, b: string | null) => scope === null || scope === b,
 }));
 vi.mock('@/lib/audit', () => ({ auditLog: vi.fn(async () => undefined) }));

@@ -51,6 +51,10 @@ vi.mock('@/lib/auth-utils', () => ({
   requireAnyPermission: vi.fn(),
   getSession: vi.fn(),
 }));
+vi.mock('@/lib/branch-scope', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/branch-scope')>()),
+  branchForNewRecord: vi.fn(async (_u: unknown, o?: { requested?: string | null }) => o?.requested || 'br-1'),
+}));
 vi.mock('@/lib/audit', () => ({ auditLog: vi.fn(async () => undefined) }));
 vi.mock('@/lib/approval-history', () => ({ recordApprovalHistory: vi.fn(async () => undefined) }));
 vi.mock('@/lib/email', () => ({ notifyCustomerByEmail: vi.fn(async () => undefined) }));

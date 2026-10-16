@@ -96,3 +96,38 @@ export async function staffScopeFor(
 export function inScope(scope: string | null, recordBranchId: string | null | undefined): boolean {
   return scope === null || recordBranchId === scope;
 }
+
+/**
+ * The branch a new customer, loan or account is booked to.
+ *
+ * In order: the branch the form asked for; the existing customer's branch
+ * (an account belongs where its customer banks); the creator's current
+ * posting, read from the database so a posting made after sign-in counts;
+ * and for head-office staff with no posting, the company's only active
+ * branch, or else the HQ branch. Null only when none of these exist.
+ */
+export async function branchForNewRecord(
+  user: Pick<SessionUser, 'id'>,
+  opts: { requested?: string | null; customerId?: string | null } = {}
+): Promise<string | null> {
+  if (opts.requested) return opts.requested;
+
+  if (opts.customerId) {
+    const customer = await prisma.customer.findUnique({
+      where: { id: opts.customerId },
+      select: { branchId: true },
+    });
+    if (customer?.branchId) return customer.branchId;
+  }
+
+  const staff = await prisma.staff.findUnique({ where: { id: user.id }, select: { branchId: true } });
+  if (staff?.branchId) return staff.branchId;
+
+  const active = await prisma.branch.findMany({
+    where: { isActive: true },
+    select: { id: true, code: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  if (active.length === 1) return active[0].id;
+  return active.find((b) => b.code === 'HQ')?.id ?? null;
+}

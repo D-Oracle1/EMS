@@ -28,11 +28,20 @@ export function formatCurrency(amount: number | string | Decimal): string {
   }).format(num);
 }
 
+/** A date from a Date, an ISO string or nothing; null when there is none or it is invalid. */
+function toDate(date: Date | string | null | undefined): Date | null {
+  if (date == null || date === '') return null;
+  const d = date instanceof Date ? date : new Date(date);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 /**
- * Format date for display
+ * Format date for display. A missing or invalid date reads "—" rather than
+ * crashing the page.
  */
-export function formatDate(date: Date | string): string {
-  const d = typeof date === 'string' ? new Date(date) : date;
+export function formatDate(date: Date | string | null | undefined): string {
+  const d = toDate(date);
+  if (!d) return '—';
   return d.toLocaleDateString('en-NG', {
     year: 'numeric',
     month: 'short',
@@ -45,8 +54,9 @@ export function formatDate(date: Date | string): string {
  * seconds. The one place the app decides how a time reads; every clock,
  * timestamp and clock-in time goes through it.
  */
-export function formatTime(date: Date | string, opts: { seconds?: boolean } = {}): string {
-  const d = typeof date === 'string' ? new Date(date) : date;
+export function formatTime(date: Date | string | null | undefined, opts: { seconds?: boolean } = {}): string {
+  const d = toDate(date);
+  if (!d) return '—';
   return d.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',
@@ -68,8 +78,9 @@ export function timeParts(date: Date, opts: { seconds?: boolean } = {}): { time:
 /**
  * Format date and time: "2 Oct 2026, 4:16 PM".
  */
-export function formatDateTime(date: Date | string, opts: { seconds?: boolean } = {}): string {
-  const d = typeof date === 'string' ? new Date(date) : date;
+export function formatDateTime(date: Date | string | null | undefined, opts: { seconds?: boolean } = {}): string {
+  const d = toDate(date);
+  if (!d) return '—';
   return `${formatDate(d)}, ${formatTime(d, opts)}`;
 }
 

@@ -2,7 +2,7 @@
 
 import Decimal from 'decimal.js';
 import { prisma, withTransaction } from '@/lib/prisma';
-import { branchScopeFor, inScope } from '@/lib/branch-scope';
+import { branchForNewRecord, branchScopeFor, inScope } from '@/lib/branch-scope';
 import { requirePermission, requireAnyPermission } from '@/lib/auth-utils';
 import { auditLog } from '@/lib/audit';
 import { generateReference } from '@/lib/utils';
@@ -158,12 +158,12 @@ export async function createFixedDeposit(data: {
     const registerNew = !data.customerId && !!data.newCustomer;
     let customerId = data.customerId?.trim() || '';
     let customerName: string;
-    const branchId = data.branchId || user.branchId;
+    const branchId = await branchForNewRecord(user, { requested: data.branchId, customerId: customerId || null });
 
     if (registerNew) {
       const err = validateNewCustomer(data.newCustomer!);
       if (err) return { success: false, error: err };
-      if (!branchId) return { success: false, error: 'No branch assigned. Cannot register a new customer.' };
+      if (!branchId) return { success: false, error: 'No branch to book this customer to. Ask an administrator to post you to a branch.' };
       customerName = `${data.newCustomer!.firstName.trim()} ${data.newCustomer!.lastName.trim()}`;
     } else {
       if (!customerId) return { success: false, error: 'Please select an existing customer or enter new customer details' };

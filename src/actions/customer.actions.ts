@@ -5,7 +5,7 @@ import { requirePermission, getSession } from '@/lib/auth-utils';
 import { auditLog } from '@/lib/audit';
 import { generateReference } from '@/lib/utils';
 import { provisionCustomerLogin } from '@/lib/customer-auth';
-import { branchScopeFor, inScope } from '@/lib/branch-scope';
+import { branchForNewRecord, branchScopeFor, inScope } from '@/lib/branch-scope';
 import type { ActionResult } from '@/types';
 
 /**
@@ -220,10 +220,10 @@ export async function createCustomer(data: {
     const user = await requirePermission('CUSTOMERS:CREATE');
 
     const customerNumber = await generateReference('CUSTOMER');
-    const branchId = data.branchId || user.branchId;
+    const branchId = await branchForNewRecord(user, { requested: data.branchId });
 
     if (!branchId) {
-      return { success: false, error: 'No branch assigned. Please contact your administrator.' };
+      return { success: false, error: 'No branch to book this customer to. Ask an administrator to post you to a branch.' };
     }
 
     const customer = await prisma.customer.create({
@@ -289,6 +289,7 @@ export async function quickCreateCustomer(data: {
 }): Promise<ActionResult<{ id: string; customerNumber: string; firstName: string; lastName: string }>> {
   try {
     const user = await requirePermission('CUSTOMERS:CREATE');
+    const branchId = await branchForNewRecord(user);
 
     const customerNumber = await generateReference('CUSTOMER');
 
@@ -302,7 +303,7 @@ export async function quickCreateCustomer(data: {
         email: data.email || undefined,
         nationalId: data.nationalId || undefined,
         address: 'To be verified',
-        branchId: user.branchId,
+        branchId,
         createdBy: user.id,
       },
     });

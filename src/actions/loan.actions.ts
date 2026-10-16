@@ -3,7 +3,7 @@
 import { LoanStatus, ScheduleStatus } from '@prisma/client';
 import Decimal from 'decimal.js';
 import { prisma, withTransaction } from '@/lib/prisma';
-import { branchScopeFor, inScope } from '@/lib/branch-scope';
+import { branchForNewRecord, branchScopeFor, inScope } from '@/lib/branch-scope';
 import { postLoanRepayment } from '@/lib/money-posting';
 import { requirePermission, requireAnyPermission, getSession } from '@/lib/auth-utils';
 import { auditLog } from '@/lib/audit';
@@ -436,9 +436,9 @@ export async function createLoan(data: {
       : 0;
     const totalFees = processingFee + insuranceFee;
 
-    const branchId = data.branchId || user.branchId;
+    const branchId = await branchForNewRecord(user, { requested: data.branchId, customerId: customerId || null });
     if (registerNewCustomer && !branchId) {
-      return { success: false, error: 'No branch assigned. Cannot register a new customer.' };
+      return { success: false, error: 'No branch to book this customer to. Ask an administrator to post you to a branch.' };
     }
 
     const loanNumber = await generateReference('LOAN');
